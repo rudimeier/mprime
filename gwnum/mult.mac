@@ -1,0 +1,164 @@
+; Copyright 1998-2007 - Mersenne Research, Inc.  All rights reserved
+; Author:  George Woltman
+; Email: woltman@alum.mit.edu
+;
+; These macros take the basic FFT building blocks and build even
+; larger building blocks.
+;
+
+pf MACRO stmt:vararg
+	IFDEF PFETCH
+	&stmt
+	ENDIF
+	ENDM
+
+prefetch64 MACRO x
+	IFDEF PFETCH
+	prefetcht1 x
+	prefetcht1 x[32]
+	ENDIF
+	ENDM
+
+prefetch32 MACRO x
+	IFDEF PFETCH
+	prefetcht1 x
+	ENDIF
+	ENDM
+
+; *************** macros to expand 4 types of fft macros ******************
+
+;;
+;; Generate the 4 types of FFTs for the given run length.
+;; The 4 types are:
+;;	1) forward FFT,
+;;	2) square (forward FFT, multiply, inverse FFT)
+;;	3) multiply (forward FFT src1, multiply by src2, inverse FFT)
+;;	4) multiply (multiply src1 by src2, inverse FFT)
+;;
+
+fft	MACRO fft_length
+	LOCAL	common_label
+	type1	common_label, &fft_length, _1
+	type2	common_label, &fft_length, _2
+	type3	common_label, &fft_length, _3
+	type4	common_label, &fft_length, _4
+	purge	fft&fft_length
+	ENDM
+
+fftclm	MACRO fft_length, clm
+	LOCAL	common_label
+	type1	common_label, &fft_length, _1, clm
+	type2	common_label, &fft_length, _2, clm
+	type3	common_label, &fft_length, _3, clm
+	type4	common_label, &fft_length, _4, clm
+	ENDM
+
+;;
+;; Perform an FFT in preparation for a later multiply
+;; Do the forward FFT
+;;
+
+type1	MACRO common_label, fft_length, suffix, clm
+	PROCFP	fft&fft_length&clm&suffix
+	ad_prolog 0,0,rbx,rbp,rsi,rdi
+	mov	esi, DESTARG
+	mov	ebx, SRCARG
+	sub	ebx, esi
+	mov	DIST_TO_FFTSRCARG, ebx
+	IF EXPANDING GE 2
+	mov	ffttype, 1
+	jmp	common_label
+	ELSE
+	fft&fft_length 1
+	ENDIF
+	ENDPP	fft&fft_length&clm&suffix
+	ENDM
+
+;;
+;; Square a number mod 2**p-1
+;; Do the forward FFT, squaring, and inverse FFT
+;;
+
+type2	MACRO common_label, fft_length, suffix, clm
+	PROCFP	fft&fft_length&clm&suffix
+	ad_prolog 0,0,rbx,rbp,rsi,rdi
+	mov	esi, DESTARG
+	sub	ebx, ebx
+	mov	DIST_TO_FFTSRCARG, ebx
+	IF EXPANDING GE 2
+	mov	ffttype, 2
+common_label:
+	IFB <clm>
+	fft&fft_length
+	ELSE
+	fft&fft_length clm
+	ENDIF
+	ELSE
+	fft&fft_length 2
+	ENDIF
+	ENDPP	fft&fft_length&clm&suffix
+	ENDM
+
+;;
+;; Multiply two numbers mod 2**p-1.  One of the input numbers (SRCARG) must
+;; have already been passed through gw_fft.
+;; Do the forward FFT, multiply, and inverse FFT
+;;
+
+type3	MACRO common_label, fft_length, suffix, clm
+	PROCFP	fft&fft_length&clm&suffix
+	ad_prolog 0,0,rbx,rbp,rsi,rdi
+	mov	esi, DESTARG
+	sub	ebx, ebx
+	mov	DIST_TO_FFTSRCARG, ebx
+	mov	ebp, SRCARG
+	sub	ebp, esi
+	mov	DIST_TO_MULSRCARG, ebp
+	IF EXPANDING GE 2
+	mov	ffttype, 3
+	jmp	common_label
+	ELSE
+	fft&fft_length 3
+	ENDIF
+	ENDPP	fft&fft_length&clm&suffix
+	ENDM
+
+;;
+;; Multiply two numbers mod 2**p-1.  Both of the input numbers must
+;; have already been passed through gw_fft.
+;; Do the multiply and inverse FFT
+;;
+
+type4	MACRO common_label, fft_length, suffix, clm
+	PROCFP	fft&fft_length&clm&suffix
+	ad_prolog 0,0,rbx,rbp,rsi,rdi
+	mov	esi, DESTARG
+	mov	ebx, SRC2ARG
+	sub	ebx, esi
+	mov	DIST_TO_FFTSRCARG, ebx
+	mov	ebp, SRCARG
+	sub	ebp, esi
+	mov	DIST_TO_MULSRCARG, ebp
+	IF EXPANDING GE 2
+	mov	ffttype, 4
+	jmp	common_label
+	ELSE
+	fft&fft_length 4
+	ENDIF
+	ENDPP	fft&fft_length&clm&suffix
+	ENDM
+
+; Return from a type 1 FFT
+
+fft_1_ret MACRO
+	ad_epilog 0,0,rbx,rbp,rsi,rdi
+	ENDM
+
+; Return from a type 3 FFT - either jump to the common
+; error check or normalization code
+
+fft_3_ret MACRO
+	mov	eax, NORMRTN
+	call	eax
+	ad_epilog 0,0,rbx,rbp,rsi,rdi
+	ENDM

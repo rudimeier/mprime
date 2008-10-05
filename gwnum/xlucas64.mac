@@ -1,0 +1,81 @@
+; Copyright 2001-2005 - Mersenne Research, Inc.  All rights reserved
+; Author:  George Woltman
+; Email: woltman@alum.mit.edu
+;
+; These macros implement 64-bit SSE2 optimized versions of macros found
+; in xlucas.mac.  We make use of the 8 extra registers.
+
+xfive_reals_fft_preload MACRO
+	movapd	xmm8, XMM_P618		;; (.588/.951)
+	movapd	xmm9, XMM_P309		;; .309
+	movapd	xmm10, XMM_P951		;; .951
+	movapd	xmm11, XMM_P588		;; .588
+	movapd	xmm12, XMM_M809		;; -.809
+	movapd	xmm13, XMM_M262		;; (-.809/.309)
+	movapd	xmm14, XMM_M162		;; (-.951/.588)
+	movapd	xmm15, XMM_M382		;; (.309/-.809)
+ENDM
+x5r_fft MACRO r1, r2, r3, r4, r5, t1, t2, t3
+	movapd	t1, r5			;; 0-5 Copy R5
+	addpd	r5, r2			;; 1-4 T1 = R2 + R5
+	movapd	t2, r4			;; 2-7 Copy R4
+	addpd	r4, r3			;; 3-5 T2 = R3 + R4
+	movapd	t3, r1			;; 4-9 newR2 = R1
+	subpd	r2, t1			;; 6-9 T3 = R2 - R5
+	movapd	t1, r1			;; 7-12 newR3 = R1
+	subpd	r3, t2			;; 8-11 T4 = R3 - R4
+	movapd	t2, xmm8		;; 9-14 const (.588/.951)
+	addpd	r1, r5			;; 10-13 newR1 = R1 + T1
+	mulpd	r5, xmm9		;; 11-16 T1 = T1 * .309
+	mulpd	r2, xmm10		;; 13-18 T3 = T3 * .951 (new I2)
+	addpd	r1, r4			;; 14-17 newR1 = newR1 + T2
+	mulpd	r3, xmm11		;; 15-20 T4 = T4 * .588
+	addpd	t3, r5			;; 17-20 newR2 = newR2 + T1
+	mulpd	r4, xmm12		;; 18-23 T2 = T2 * -.809
+	mulpd	r5, xmm13		;; 20-25 T1 = T1 * (-.809/.309)
+	mulpd	t2, r2			;; 22-27 T3 = T3 * (.588/.951)
+	addpd	r2, r3			;; 23-26 newI2 = newI2 + T4
+	mulpd	r3, xmm14		;; 24-29 T4 = T4 * (-.951/.588)
+	addpd	t3, r4			;; 25-28 newR2 = newR2 + T2
+	mulpd	r4, xmm15		;; 26-31 T2 = T2 * (.309/-.809)
+	addpd	t1, r5			;; 27-30 newR3 = newR3 + T1
+	addpd	t2, r3			;; 30-33 T3 = T3 + T4 (final I3)
+	addpd	t1, r4			;; 32-35 newR3 = newR3 + T2
+	ENDM
+
+xfive_reals_unfft_preload MACRO
+	movapd	xmm8, XMM_P309		;; Load .309
+	movapd	xmm9, XMM_M809		;; Load -.809
+	movapd	xmm10, XMM_P951		;; Load 0.951
+	movapd	xmm11, XMM_P588		;; Load 0.588
+ENDM
+x5r_unfft MACRO r1, r2, r3, r4, r5, t1, t2, t3, mem1
+	movapd	t1, xmm8		;; Load .309
+	mulpd	t1, r2			;; 1-6 R2*.309
+	movapd	t2, xmm9		;; Load -.809
+	mulpd	t2, r2			;; 3-8 R2*-.809
+	addpd	r2, r4			;; 4-7 R2+R3
+	movapd	t3, xmm9		;; Load -.809
+	mulpd	t3, r4			;; 5-10 R3*-.809
+	addpd	r2, r1			;; 6-9 R1+R2+R3 (final R1)
+	mulpd	r4, xmm8		;; 7-12 R3*.309
+	addpd	t1, r1			;; 8-11 R1 + R2*.309
+	movapd	mem1, r2		;; Save final R1
+	movapd	r2, xmm10		;; Load 0.951
+	mulpd	r2, r3	 		;; 9-14 I2*.951
+	addpd	t2, r1			;; 10-13 R1 + R2*-.809
+	movapd	r1, xmm11		;; Load 0.588
+	mulpd	r1, r5			;; 11-16 I3*.588
+	addpd	t1, t3			;; 12-15 R1 + R2*.309 - R3*.809
+	mulpd	r3, xmm11		;; 13-18 I2*.588
+	addpd	t2, r4			;; 14-17 R1 - R2*.809 + R3*.309
+	mulpd	r5, xmm10		;; 15-20 I3*-.951
+	movapd	t3, t1			;; 16-21 R1 + R2*.309 - R3*.809
+	addpd	r2, r1			;; 17-20 I2*.951 + I3*.588
+	movapd	r4, t2			;; 18-23 R1 - R2*.809 + R3*.309
+	subpd	r3, r5			;; 21-24 I2*.588 - I3*.951
+	addpd	t1, r2			;; 23-26 final R2
+	subpd	t3, r2			;; 25-28 final R5
+	addpd	t2, r3			;; 27-30 final R3
+	subpd	r4, r3			;; 29-31 final R4
+	ENDM

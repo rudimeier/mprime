@@ -1,0 +1,2 @@
+/incremental:no /out:ntprime.exe service main prime ..\prime95\factor32 ..\gwnum\gwnum.lib libcmt.lib kernel32.lib user32.lib gdi32.lib wsock32.lib advapi32.lib wininet.lib
+

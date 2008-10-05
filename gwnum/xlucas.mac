@@ -1,0 +1,4499 @@
+; Copyright 2001-2006 - Mersenne Research, Inc.  All rights reserved
+; Author:  George Woltman
+; Email: woltman@alum.mit.edu
+;
+; These macros implement Pentium 4 optimized versions of macros found
+; in lucas.mac.
+;
+; Often there are 4 variants of the macro.  One that
+; does an FFT only, one that does FFT-square-inverseFFT, one that does
+; FFT-multiply-inverseFFT, and one that does multiply-inverseFFT.
+
+
+; *************** utility macros ******************
+
+multwos	MACRO	r
+;	mulsd	r, XMM_TWO
+	addsd	r, r
+	ENDM
+
+mulhalfs MACRO	r
+	mulsd	r, XMM_HALF
+	ENDM
+
+; No noticeable difference between these two identical unpack instructions.
+; The P4 optimization manual lists a 2 clock latency difference
+unpckhi MACRO dest, src
+	unpckhpd dest, src
+;;	punpckhqdq dest, src
+	ENDM
+
+; No noticeable difference between these two identical unpack instructions.
+; The P4 optimization manual lists a different execution unit
+unpcklo MACRO dest, src
+	unpcklpd dest, src
+;;	punpcklqdq dest, src
+	ENDM
+
+;; Macros that load or store register(s) shuffling the data
+
+low_load MACRO reg, mem1, mem2
+	IFDEF AMD
+	movhpd	reg, Q mem2
+	movlpd	reg, Q mem1
+	ELSE
+	movapd	reg, mem1
+	unpcklo reg, Q mem2
+	ENDIF
+	ENDM
+
+high_load MACRO reg, mem1, mem2
+	IFDEF AMD
+	movhpd	reg, Q mem2[8]
+	movlpd	reg, Q mem1[8]
+	ELSE
+	movapd	reg, mem2
+	movlpd	reg, Q mem1[8]
+	ENDIF
+	ENDM
+
+shuffle_load MACRO reglo, reghi, mem1, mem2
+	IFDEF AMD
+	movhpd	reglo, Q mem2
+	movlpd	reglo, Q mem1
+	movhpd	reghi, Q mem2[8]
+	movlpd	reghi, Q mem1[8]
+	ELSE
+	movapd	reglo, mem1
+	movapd	reghi, mem2
+	unpcklo	reglo, reghi
+	movlpd	reghi, Q mem1[8]
+	ENDIF
+	ENDM
+
+shuffle_store MACRO mem1, mem2, reglo, reghi
+	movsd	Q mem1, reglo
+	movsd	Q mem1[8], reghi
+	unpckhi reglo, reghi
+	movapd	mem2, reglo
+	ENDM
+
+;; Macros that do a complex squaring or multiplication
+
+xs_complex_square MACRO real, imag, tmp
+	movsd	tmp, imag
+	mulsd	tmp, tmp		;; imag * imag
+	mulsd	imag, real		;; imag * real
+	mulsd	real, real		;; real * real
+	subsd	real, tmp		;; real^2 - imag^2 (new real)
+	addsd	imag, imag		;; imag * real * 2 (new imag)
+	ENDM
+
+xs_complex_mult MACRO real1, imag1, real2, imag2, tmp1, tmp2
+	movsd	tmp1, real1
+	movsd	tmp2, imag1
+	mulsd	real1, real2		;; real1 * real2
+	mulsd	tmp2, imag2		;; imag1 * imag2
+	mulsd	tmp1, imag2		;; real1 * imag2
+	mulsd	imag1, real2		;; real2 * imag1
+	subsd	real1, tmp2		;; real1*real2-imag1*imag2 (new real)
+	addsd	imag1, tmp1		;; real1*imag2+real2*imag1 (new imag)
+	ENDM
+
+xp_complex_square MACRO real, imag, tmp
+	movapd	tmp, imag
+	mulpd	imag, real		;; imag * real
+	mulpd	real, real		;; real * real
+	mulpd	tmp, tmp		;; imag * imag
+	addpd	imag, imag		;; imag * real * 2 (new imag)
+	subpd	real, tmp		;; real^2 - imag^2 (new real)
+	ENDM
+
+xp_complex_mult MACRO real1, imag1, real2, imag2, tmp1, tmp2
+	movapd	tmp1, real1
+	movapd	tmp2, imag1
+	mulpd	real1, real2		;; real1 * real2
+	mulpd	tmp2, imag2		;; imag1 * imag2
+	mulpd	tmp1, imag2		;; real1 * imag2
+	mulpd	imag1, real2		;; real2 * imag1
+	subpd	real1, tmp2		;; real1*real2-imag1*imag2 (new real)
+	addpd	imag1, tmp1		;; real1*imag2+real2*imag1 (new imag)
+	ENDM
+
+
+;************************************************************
+; These macros implement the first 3 FFT and last 3 inverse
+; FFT levels.  They support 5, 6, 7, or 8 inputs.
+; The s macros swizzle their inputs (used in one pass FFTs).
+; The x macros do not swizzle their inputs (two pass FFTs).
+;************************************************************
+
+s2cl_eight_reals_first_fft MACRO srcreg,srcinc,d1
+	shuffle_load xmm0,xmm2,[srcreg][rbx],[srcreg+16][rbx] ;; R1,R3
+	shuffle_load xmm1,xmm3,[srcreg+d1][rbx],[srcreg+d1+16][rbx] ;; R2,R4
+	shuffle_load xmm4,xmm6,[srcreg+32][rbx],[srcreg+48][rbx] ;; R5,R7
+	shuffle_load xmm5,xmm7,[srcreg+d1+32][rbx],[srcreg+d1+48][rbx] ;; R6,R8
+	x8r_fft
+	movapd	[srcreg], xmm7
+	movapd	[srcreg+16], xmm6
+	movapd	[srcreg+32], xmm4
+	movapd	[srcreg+48], xmm5
+	movapd	[srcreg+d1], xmm1
+	movapd	[srcreg+d1+16], xmm3
+	movapd	[srcreg+d1+32], xmm0
+	movapd	[srcreg+d1+48], xmm2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x2cl_eight_reals_first_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg][rbx]
+	movapd	xmm1, [srcreg+d1][rbx]
+	movapd	xmm2, [srcreg+16][rbx]
+	movapd	xmm3, [srcreg+d1+16][rbx]
+	movapd	xmm4, [srcreg+32][rbx]
+	movapd	xmm5, [srcreg+d1+32][rbx]
+	movapd	xmm6, [srcreg+48][rbx]
+	movapd	xmm7, [srcreg+d1+48][rbx]
+	x8r_fft
+	movapd	[srcreg], xmm7
+	movapd	[srcreg+16], xmm6
+	movapd	[srcreg+32], xmm4
+	movapd	[srcreg+48], xmm5
+	movapd	[srcreg+d1], xmm1
+	movapd	[srcreg+d1+16], xmm3
+	movapd	[srcreg+d1+32], xmm0
+	movapd	[srcreg+d1+48], xmm2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x2cl_eight_reals_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]
+	movapd	xmm1, [srcreg+d1]
+	movapd	xmm2, [srcreg+16]
+	movapd	xmm3, [srcreg+d1+16]
+	movapd	xmm4, [srcreg+32]
+	movapd	xmm5, [srcreg+d1+32]
+	movapd	xmm6, [srcreg+48]
+	movapd	xmm7, [srcreg+d1+48]
+	x8r_fft
+	movapd	[srcreg], xmm7
+	movapd	[srcreg+16], xmm6
+	movapd	[srcreg+32], xmm4
+	movapd	[srcreg+48], xmm5
+	movapd	[srcreg+d1], xmm1
+	movapd	[srcreg+d1+16], xmm3
+	movapd	[srcreg+d1+32], xmm0
+	movapd	[srcreg+d1+48], xmm2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+g2cl_eight_reals_first_fft MACRO srcreg,srcinc,d1,dstreg,dstinc,e1
+	movapd	xmm0, [srcreg][rbx]
+	movapd	xmm1, [srcreg+d1][rbx]
+	movapd	xmm2, [srcreg+16][rbx]
+	movapd	xmm3, [srcreg+d1+16][rbx]
+	movapd	xmm4, [srcreg+32][rbx]
+	movapd	xmm5, [srcreg+d1+32][rbx]
+	movapd	xmm6, [srcreg+48][rbx]
+	movapd	xmm7, [srcreg+d1+48][rbx]
+	lea	srcreg, [srcreg+srcinc]
+	x8r_fft
+	movapd	[dstreg], xmm7
+	movapd	[dstreg+16], xmm6
+	movapd	[dstreg+32], xmm4
+	movapd	[dstreg+48], xmm5
+	movapd	[dstreg+e1], xmm1
+	movapd	[dstreg+e1+16], xmm3
+	movapd	[dstreg+e1+32], xmm0
+	movapd	[dstreg+e1+48], xmm2
+	lea	dstreg, [dstreg+dstinc]
+	ENDM
+x8r_fft MACRO
+	subpd	xmm3, xmm7		;; new R8 = R4 - R8
+	multwo	xmm7
+	addpd	xmm7, xmm3		;; new R4 = R4 + R8
+	subpd	xmm1, xmm5		;; new R6 = R2 - R6
+	multwo	xmm5
+	addpd	xmm5, xmm1		;; new R2 = R2 + R6
+	 mulpd	xmm3, XMM_SQRTHALF	;; R8 = R8 * square root
+	 mulpd	xmm1, XMM_SQRTHALF	;; R6 = R6 * square root
+	subpd	xmm0, xmm4		;; new R5 = R1 - R5
+	multwo	xmm4
+	addpd	xmm4, xmm0		;; new R1 = R1 + R5
+	 subpd	xmm5, xmm7		;; R2 = R2 - R4 (new & final R4)
+	 multwo	xmm7			;; R4 = R4 * 2
+	subpd	xmm2, xmm6		;; new R7 = R3 - R7
+	multwo	xmm6
+	addpd	xmm6, xmm2		;; new R3 = R3 + R7
+	 subpd	xmm1, xmm3		;; R6 = R6 - R8 (Real part)
+	 multwo	xmm3			;; R8 = R8 * 2
+	 subpd	xmm4, xmm6		;; R1 = R1 - R3 (new & final R3)
+	 multwo	xmm6			;; R3 = R3 * 2
+	 addpd	xmm7, xmm5		;; R4 = R2 + R4 (new R2)
+	addpd	xmm3, xmm1		;; R8 = R6 + R8 (Imaginary part)
+	subpd	xmm0, xmm1		;; R5 = R5 - R6 (final R7)
+	multwo	xmm1			;; R6 = R6 * 2
+	 addpd	xmm6, xmm4		;; R3 = R1 + R3 (new R1)
+	subpd	xmm2, xmm3		;; R7 = R7 - R8 (final R8)
+	multwo	xmm3			;; R8 = R8 * 2
+	subpd	xmm6, xmm7		;; R1 = R1 - R2 (final R2)
+	multwo	xmm7			;; R2 = R2 * 2
+	addpd	xmm1, xmm0		;; R6 = R5 + R6 (final R5)
+	addpd	xmm3, xmm2		;; R8 = R7 + R8 (final R6)
+	addpd	xmm7, xmm6		;; R2 = R1 + R2 (final R1)
+	ENDM
+
+;; Macro to operate on 4 64-byte cache lines.  It does the last
+;; three inverse FFT levels of a one pass FFT.
+x4cl_eight_reals_last_unfft MACRO srcreg,srcinc,d1,d2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	movapd	xmm6, [srcreg+d2+d1]	;; R7
+	movapd	xmm7, [srcreg+d2+d1+32]	;; R8
+	x8r_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg], xmm6		;; Save R1
+	movapd	[srcreg+d2], xmm4	;; Save R2
+	movapd	[srcreg+32], xmm2	;; Save R5
+	movapd	[srcreg+d2+32], xmm3	;; Save R6
+	movapd	xmm6, [srcreg+16]	;; R1
+	movapd	xmm4, [srcreg+48]	;; R2
+	movapd	xmm2, [srcreg+d2+16]	;; R5
+	movapd	xmm3, [srcreg+d2+48]	;; R6
+	movapd	[srcreg+16], xmm7	;; Save R3
+	movapd	[srcreg+d2+16], xmm5	;; Save R4
+	movapd	[srcreg+48], xmm1	;; Save R7
+	movapd	[srcreg+d2+48], xmm0	;; Save R8
+	movapd	xmm7, [srcreg+d1+16]	;; R3
+	movapd	xmm5, [srcreg+d1+48]	;; R4
+	movapd	xmm1, [srcreg+d2+d1+16]	;; R7
+	movapd	xmm0, [srcreg+d2+d1+48]	;; R8
+	x8r_unfft xmm6, xmm4, xmm7, xmm5, xmm2, xmm3, xmm1, xmm0
+	movapd	[srcreg+d1], xmm1	;; Save R1
+	movapd	[srcreg+d2+d1], xmm2	;; Save R2
+	movapd	[srcreg+d1+16], xmm0	;; Save R3
+	movapd	[srcreg+d2+d1+16], xmm3	;; Save R4
+	movapd	[srcreg+d1+32], xmm7	;; Save R5
+	movapd	[srcreg+d2+d1+32], xmm5	;; Save R6
+	movapd	[srcreg+d1+48], xmm4	;; Save R7
+	movapd	[srcreg+d2+d1+48], xmm6	;; Save R8
+	bump	srcreg, srcinc
+	ENDM
+x8r_unfft MACRO r1, r2, r3, r4, r5, r6, r7, r8
+	subpd	r6, r8			;; new R8 = R6 - R8		;1-4
+	multwo	r8
+	addpd	r8, r6			;; new R7 = R6 + R8		;3-6
+	subpd	r5, r7			;; new R6 = R5 - R7		;5-8
+	multwo	r7
+	addpd	r7, r5			;; new R5 = R5 + R7		;7-10
+	subpd	r1, r2			;; new R2 = R1 - R2		;9-12
+	multwo	r2
+	addpd	r2, r1			;; new R1 = R1 + R2		;11-14
+	subpd	r6, r5			;; R8 = R8 - R6			;13-16
+	multwo	r5
+	addpd	r5, r6			;; R6 = R6 + R8			;15-18
+	subpd	r1, r4			;; R2 = R2 - R4 (new R4)	;17-20
+	mulpd	r6, XMM_SQRTHALF	;; R8 = R8 * square root of 1/2	;18-23
+	multwo	r4			;; R4 = R4 * 2			;20-25
+	mulpd	r5, XMM_SQRTHALF	;; R6 = R6 * square root of 1/2	;22-27
+	subpd	r2, r3			;; R1 = R1 - R3 (new R3)	;19-22
+	multwo	r3			;; R3 = R3 * 2			;24-29
+	addpd	r4, r1			;; R4 = R2 + R4 (new R2)	;27-30
+	subpd	r1, r6			;; newR4 = newR4-newR8(final R8);
+	multwo	r6			;; R8 = R8 * 2			;
+	addpd	r3, r2			;; R3 = R1 + R3 (new R1)	;
+	subpd	r2, r8			;; R3 = R3 - R7 (final R7)	;
+	multwo	r8			;; R7 = R7 * 2			;
+	subpd	r4, r5			;; R2 = R2 - R6 (final R6)	;
+	multwo	r5			;; R6 = R6 * 2			;
+	subpd	r3, r7			;; R1 = R1 - R5 (final R5)	;
+	multwo	r7			;; R5 = R5 * 2			;
+	addpd	r6, r1			;; R8 = R4 + R8 (final R4)	;
+	addpd	r8, r2			;; R7 = R3 + R7 (final R3)	;
+	addpd	r5, r4			;; R6 = R2 + R6 (final R2)	;
+	addpd	r7, r3			;; R5 = R1 + R5 (final R1)	;
+	ENDM
+
+xfive_reals_fft_preload MACRO
+ENDM
+s5cl_five_reals_first_fft MACRO srcreg,srcinc,d1
+	shuffle_load xmm0,xmm7,[srcreg][rbx],[srcreg+16][rbx] ;; R1,R1
+	movapd	[srcreg+16],xmm7		;; Save it
+	shuffle_load xmm1,xmm2,[srcreg+3*d1][rbx],[srcreg+3*d1+16][rbx] ;;R2,R3
+	shuffle_load xmm3,xmm4,[srcreg+d1+32][rbx],[srcreg+d1+48][rbx] ;; R4,R5
+	x5r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg], xmm0			;; Save R1
+	shuffle_load xmm0,xmm2,[srcreg+d1][rbx],[srcreg+d1+16][rbx] ;; R1,R2
+	movapd	[srcreg+d1], xmm7		;; Save R2
+	movapd	[srcreg+d1+16], xmm1		;; Save R3
+	movapd	[srcreg+d1+32], xmm5		;; Save R4
+	movapd	[srcreg+d1+48], xmm6		;; Save R5
+	shuffle_load xmm1,xmm7,[srcreg+32][rbx],[srcreg+48][rbx] ;; R3,R3
+	movapd	[srcreg+48],xmm7		;; Save it
+	shuffle_load xmm3,xmm4,[srcreg+3*d1+32][rbx],[srcreg+3*d1+48][rbx];;R4,R5
+	x5r_fft xmm0, xmm2, xmm1, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+32], xmm0		;; Save R1
+	movapd	[srcreg+3*d1], xmm7		;; Save R2
+	movapd	[srcreg+3*d1+16], xmm2		;; Save R3
+	movapd	[srcreg+3*d1+32], xmm5		;; Save R4
+	movapd	[srcreg+3*d1+48], xmm6		;; Save R5
+
+	movapd	xmm0, [srcreg+16]		;; R1
+	shuffle_load xmm1,xmm2,[srcreg+4*d1][rbx],[srcreg+4*d1+16][rbx];;R2,R3
+	shuffle_load xmm3,xmm4,[srcreg+2*d1+32][rbx],[srcreg+2*d1+48][rbx];;R4,R5
+	x5r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+16], xmm0		;; Save R1
+	shuffle_load xmm0,xmm2,[srcreg+2*d1][rbx],[srcreg+2*d1+16][rbx];;R1,R2
+	movapd	[srcreg+2*d1], xmm7		;; Save R2
+	movapd	[srcreg+2*d1+16], xmm1		;; Save R3
+	movapd	[srcreg+2*d1+32], xmm5		;; Save R4
+	movapd	[srcreg+2*d1+48], xmm6		;; Save R5
+	movapd	xmm1, [srcreg+48]		;; R3
+	shuffle_load xmm3,xmm4,[srcreg+4*d1+32][rbx],[srcreg+4*d1+48][rbx];;R4,R5
+	x5r_fft xmm0, xmm2, xmm1, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+48], xmm0		;; Save R1
+	movapd	[srcreg+4*d1], xmm7		;; Save R2
+	movapd	[srcreg+4*d1+16], xmm2		;; Save R3
+	movapd	[srcreg+4*d1+32], xmm5		;; Save R4
+	movapd	[srcreg+4*d1+48], xmm6		;; Save R5
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x5cl_five_reals_first_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg][rbx]
+	movapd	xmm1, [srcreg+3*d1][rbx]
+	movapd	xmm2, [srcreg+3*d1+16][rbx]
+	movapd	xmm3, [srcreg+d1+32][rbx]
+	movapd	xmm4, [srcreg+d1+48][rbx]
+	x5r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	xmm2, [srcreg+d1][rbx]	;; Load R1
+	movapd	xmm3, [srcreg+d1+16][rbx] ;; Load R2
+	movapd	[srcreg], xmm0		;; Save R1
+	movapd	[srcreg+d1], xmm7	;; Save R2
+	movapd	[srcreg+d1+16], xmm1	;; Save R3
+	movapd	[srcreg+d1+32], xmm5	;; Save R4
+	movapd	[srcreg+d1+48], xmm6	;; Save R5
+	movapd	xmm0, [srcreg+32][rbx]	;; Load R3
+	movapd	xmm1, [srcreg+3*d1+32][rbx] ;; Load R4
+	movapd	xmm4, [srcreg+3*d1+48][rbx] ;; Load R5
+	x5r_fft xmm2, xmm3, xmm0, xmm1, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+32], xmm2	;; Save R1
+	movapd	[srcreg+3*d1], xmm7	;; Save R2
+	movapd	[srcreg+3*d1+16], xmm3	;; Save R3
+	movapd	[srcreg+3*d1+32], xmm5	;; Save R4
+	movapd	[srcreg+3*d1+48], xmm6	;; Save R5
+
+	movapd	xmm0, [srcreg+16][rbx]
+	movapd	xmm1, [srcreg+4*d1][rbx]
+	movapd	xmm2, [srcreg+4*d1+16][rbx]
+	movapd	xmm3, [srcreg+2*d1+32][rbx]
+	movapd	xmm4, [srcreg+2*d1+48][rbx]
+	x5r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	xmm2, [srcreg+2*d1][rbx] ;; Load R1
+	movapd	xmm3, [srcreg+2*d1+16][rbx] ;; Load R2
+	movapd	[srcreg+16], xmm0	;; Save R1
+	movapd	[srcreg+2*d1], xmm7	;; Save R2
+	movapd	[srcreg+2*d1+16], xmm1	;; Save R3
+	movapd	[srcreg+2*d1+32], xmm5	;; Save R4
+	movapd	[srcreg+2*d1+48], xmm6	;; Save R5
+	movapd	xmm0, [srcreg+48][rbx]	;; Load R3
+	movapd	xmm1, [srcreg+4*d1+32][rbx] ;; Load R4
+	movapd	xmm4, [srcreg+4*d1+48][rbx] ;; Load R5
+	x5r_fft xmm2, xmm3, xmm0, xmm1, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+48], xmm2	;; Save R1
+	movapd	[srcreg+4*d1], xmm7	;; Save R2
+	movapd	[srcreg+4*d1+16], xmm3	;; Save R3
+	movapd	[srcreg+4*d1+32], xmm5	;; Save R4
+	movapd	[srcreg+4*d1+48], xmm6	;; Save R5
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x5cl_five_reals_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]
+	movapd	xmm1, [srcreg+3*d1]
+	movapd	xmm2, [srcreg+3*d1+16]
+	movapd	xmm3, [srcreg+d1+32]
+	movapd	xmm4, [srcreg+d1+48]
+	x5r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	xmm2, [srcreg+d1]	;; Load R1
+	movapd	xmm3, [srcreg+d1+16]	;; Load R2
+	movapd	[srcreg], xmm0		;; Save R1
+	movapd	[srcreg+d1], xmm7	;; Save R2
+	movapd	[srcreg+d1+16], xmm1	;; Save R3
+	movapd	[srcreg+d1+32], xmm5	;; Save R4
+	movapd	[srcreg+d1+48], xmm6	;; Save R5
+	movapd	xmm0, [srcreg+32]	;; Load R3
+	movapd	xmm1, [srcreg+3*d1+32]	;; Load R4
+	movapd	xmm4, [srcreg+3*d1+48]	;; Load R5
+	x5r_fft xmm2, xmm3, xmm0, xmm1, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+32], xmm2	;; Save R1
+	movapd	[srcreg+3*d1], xmm7	;; Save R2
+	movapd	[srcreg+3*d1+16], xmm3	;; Save R3
+	movapd	[srcreg+3*d1+32], xmm5	;; Save R4
+	movapd	[srcreg+3*d1+48], xmm6	;; Save R5
+
+	movapd	xmm0, [srcreg+16]
+	movapd	xmm1, [srcreg+4*d1]
+	movapd	xmm2, [srcreg+4*d1+16]
+	movapd	xmm3, [srcreg+2*d1+32]
+	movapd	xmm4, [srcreg+2*d1+48]
+	x5r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	xmm2, [srcreg+2*d1]	;; Load R1
+	movapd	xmm3, [srcreg+2*d1+16]	;; Load R2
+	movapd	[srcreg+16], xmm0	;; Save R1
+	movapd	[srcreg+2*d1], xmm7	;; Save R2
+	movapd	[srcreg+2*d1+16], xmm1	;; Save R3
+	movapd	[srcreg+2*d1+32], xmm5	;; Save R4
+	movapd	[srcreg+2*d1+48], xmm6	;; Save R5
+	movapd	xmm0, [srcreg+48]	;; Load R3
+	movapd	xmm1, [srcreg+4*d1+32]	;; Load R4
+	movapd	xmm4, [srcreg+4*d1+48]	;; Load R5
+	x5r_fft xmm2, xmm3, xmm0, xmm1, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+48], xmm2	;; Save R1
+	movapd	[srcreg+4*d1], xmm7	;; Save R2
+	movapd	[srcreg+4*d1+16], xmm3	;; Save R3
+	movapd	[srcreg+4*d1+32], xmm5	;; Save R4
+	movapd	[srcreg+4*d1+48], xmm6	;; Save R5
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+g5cl_five_reals_first_fft MACRO srcreg,srcinc,d1,dstreg,dstinc,e1
+	movapd	xmm0, [srcreg][rbx]
+	movapd	xmm1, [srcreg+3*d1][rbx]
+	movapd	xmm2, [srcreg+3*d1+16][rbx]
+	movapd	xmm3, [srcreg+d1+32][rbx]
+	movapd	xmm4, [srcreg+d1+48][rbx]
+	x5r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	xmm2, [srcreg+d1][rbx]	;; Load R1
+	movapd	xmm3, [srcreg+d1+16][rbx] ;; Load R2
+	movapd	[dstreg], xmm0		;; Save R1
+	movapd	[dstreg+e1], xmm7	;; Save R2
+	movapd	[dstreg+e1+16], xmm1	;; Save R3
+	movapd	[dstreg+e1+32], xmm5	;; Save R4
+	movapd	[dstreg+e1+48], xmm6	;; Save R5
+	movapd	xmm0, [srcreg+32][rbx]	;; Load R3
+	movapd	xmm1, [srcreg+3*d1+32][rbx] ;; Load R4
+	movapd	xmm4, [srcreg+3*d1+48][rbx] ;; Load R5
+	x5r_fft xmm2, xmm3, xmm0, xmm1, xmm4, xmm5, xmm6, xmm7
+	movapd	[dstreg+32], xmm2	;; Save R1
+	movapd	[dstreg+3*e1], xmm7	;; Save R2
+	movapd	[dstreg+3*e1+16], xmm3	;; Save R3
+	movapd	[dstreg+3*e1+32], xmm5	;; Save R4
+	movapd	[dstreg+3*e1+48], xmm6	;; Save R5
+
+	movapd	xmm0, [srcreg+16][rbx]
+	movapd	xmm1, [srcreg+4*d1][rbx]
+	movapd	xmm2, [srcreg+4*d1+16][rbx]
+	movapd	xmm3, [srcreg+2*d1+32][rbx]
+	movapd	xmm4, [srcreg+2*d1+48][rbx]
+	x5r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	xmm2, [srcreg+2*d1][rbx] ;; Load R1
+	movapd	xmm3, [srcreg+2*d1+16][rbx] ;; Load R2
+	movapd	[dstreg+16], xmm0	;; Save R1
+	movapd	[dstreg+2*e1], xmm7	;; Save R2
+	movapd	[dstreg+2*e1+16], xmm1	;; Save R3
+	movapd	[dstreg+2*e1+32], xmm5	;; Save R4
+	movapd	[dstreg+2*e1+48], xmm6	;; Save R5
+	movapd	xmm0, [srcreg+48][rbx]	;; Load R3
+	movapd	xmm1, [srcreg+4*d1+32][rbx] ;; Load R4
+	movapd	xmm4, [srcreg+4*d1+48][rbx] ;; Load R5
+	lea	srcreg, [srcreg+srcinc]
+	x5r_fft xmm2, xmm3, xmm0, xmm1, xmm4, xmm5, xmm6, xmm7
+	movapd	[dstreg+48], xmm2	;; Save R1
+	movapd	[dstreg+4*e1], xmm7	;; Save R2
+	movapd	[dstreg+4*e1+16], xmm3	;; Save R3
+	movapd	[dstreg+4*e1+32], xmm5	;; Save R4
+	movapd	[dstreg+4*e1+48], xmm6	;; Save R5
+	lea	dstreg, [dstreg+dstinc]
+	ENDM
+x5r_fft MACRO r1, r2, r3, r4, r5, t1, t2, t3
+	movapd	t1, r5			;; 0-5 Copy R5
+	addpd	r5, r2			;; 1-4 T1 = R2 + R5
+	movapd	t2, r4			;; 2-7 Copy R4
+	addpd	r4, r3			;; 3-5 T2 = R3 + R4
+	movapd	t3, r1			;; 4-9 newR2 = R1
+	subpd	r2, t1			;; 6-9 T3 = R2 - R5
+	movapd	t1, r1			;; 7-12 newR3 = R1
+	subpd	r3, t2			;; 8-11 T4 = R3 - R4
+	movapd	t2, XMM_P618		;; 9-14 const (.588/.951)
+	addpd	r1, r5			;; 10-13 newR1 = R1 + T1
+	mulpd	r5, XMM_P309		;; 11-16 T1 = T1 * .309
+	mulpd	r2, XMM_P951		;; 13-18 T3 = T3 * .951 (new I2)
+	addpd	r1, r4			;; 14-17 newR1 = newR1 + T2
+	mulpd	r3, XMM_P588		;; 15-20 T4 = T4 * .588
+	addpd	t3, r5			;; 17-20 newR2 = newR2 + T1
+	mulpd	r4, XMM_M809		;; 18-23 T2 = T2 * -.809
+	mulpd	r5, XMM_M262		;; 20-25 T1 = T1 * (-.809/.309)
+	mulpd	t2, r2			;; 22-27 T3 = T3 * (.588/.951)
+	addpd	r2, r3			;; 23-26 newI2 = newI2 + T4
+	mulpd	r3, XMM_M162		;; 24-29 T4 = T4 * (-.951/.588)
+	addpd	t3, r4			;; 25-28 newR2 = newR2 + T2
+	mulpd	r4, XMM_M382		;; 26-31 T2 = T2 * (.309/-.809)
+	addpd	t1, r5			;; 27-30 newR3 = newR3 + T1
+	addpd	t2, r3			;; 30-33 T3 = T3 + T4 (final I3)
+	addpd	t1, r4			;; 32-35 newR3 = newR3 + T2
+	ENDM
+
+xfive_reals_unfft_preload MACRO
+ENDM
+x5cl_five_reals_last_unfft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+d1]	;; R2
+	movapd	xmm2, [srcreg+d1+32]	;; R3
+	movapd	xmm3, [srcreg+3*d1]	;; R4
+	movapd	xmm4, [srcreg+3*d1+32]	;; R5
+	x5r_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg]
+	movapd	xmm1, [srcreg+d1+16]	;; R2
+	movapd	xmm2, [srcreg+d1+48]	;; R3
+	movapd	[srcreg+d1+32], xmm3	;; Save R4
+	movapd	[srcreg+d1+48], xmm7	;; Save R5
+	movapd	xmm3, [srcreg+3*d1+16]	;; R4
+	movapd	xmm4, [srcreg+3*d1+48]	;; R5
+	movapd	[srcreg+3*d1], xmm5	;; Save R2
+	movapd	[srcreg+3*d1+16], xmm6	;; Save R3
+	movapd	xmm0, [srcreg+32]	;; R1
+	x5r_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d1]
+	movapd	[srcreg+d1+16], xmm5	;; Save R2
+	movapd	[srcreg+32], xmm6	;; Save R3
+	movapd	[srcreg+3*d1+32], xmm3	;; Save R4
+	movapd	[srcreg+3*d1+48], xmm7	;; Save R5
+
+	movapd	xmm0, [srcreg+16]	;; R1
+	movapd	xmm1, [srcreg+2*d1]	;; R2
+	movapd	xmm2, [srcreg+2*d1+32]	;; R3
+	movapd	xmm3, [srcreg+4*d1]	;; R4
+	movapd	xmm4, [srcreg+4*d1+32]	;; R5
+	x5r_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+16]
+	movapd	xmm1, [srcreg+2*d1+16]	;; R2
+	movapd	xmm2, [srcreg+2*d1+48]	;; R3
+	movapd	[srcreg+2*d1+32], xmm3	;; Save R4
+	movapd	[srcreg+2*d1+48], xmm7	;; Save R5
+	movapd	xmm3, [srcreg+4*d1+16]	;; R4
+	movapd	xmm4, [srcreg+4*d1+48]	;; R5
+	movapd	[srcreg+4*d1], xmm5	;; Save R2
+	movapd	[srcreg+4*d1+16], xmm6	;; Save R3
+	movapd	xmm0, [srcreg+48]	;; R1
+	x5r_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+2*d1]
+	movapd	[srcreg+2*d1+16], xmm5	;; Save R2
+	movapd	[srcreg+48], xmm6	;; Save R3
+	movapd	[srcreg+4*d1+32], xmm3	;; Save R4
+	movapd	[srcreg+4*d1+48], xmm7	;; Save R5
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x5r_unfft MACRO r1, r2, r3, r4, r5, t1, t2, t3, mem1
+	movapd	t1, XMM_P309		;; Load .309
+	mulpd	t1, r2			;; 1-6 R2*.309
+	movapd	t2, XMM_M809		;; Load -.809
+	mulpd	t2, r2			;; 3-8 R2*-.809
+	addpd	r2, r4			;; 4-7 R2+R3
+	movapd	t3, XMM_M809		;; Load .309
+	mulpd	t3, r4			;; 5-10 R3*-.809
+	addpd	r2, r1			;; 6-9 R1+R2+R3 (final R1)
+	mulpd	r4, XMM_P309		;; 7-12 R3*.309
+	addpd	t1, r1			;; 8-11 R1 + R2*.309
+	movapd	mem1, r2		;; Save final R1
+	movapd	r2, XMM_P951		;; Load 0.951
+	mulpd	r2, r3	 		;; 9-14 I2*.951
+	addpd	t2, r1			;; 10-13 R1 + R2*-.809
+	movapd	r1, XMM_P588		;; Load 0.588
+	mulpd	r1, r5			;; 11-16 I3*.588
+	addpd	t1, t3			;; 12-15 R1 + R2*.309 - R3*.809
+	mulpd	r3, XMM_P588		;; 13-18 I2*.588
+	addpd	t2, r4			;; 14-17 R1 - R2*.809 + R3*.309
+	mulpd	r5, XMM_P951		;; 15-20 I3*-.951
+	movapd	t3, t1			;; 16-21 R1 + R2*.309 - R3*.809
+	addpd	r2, r1			;; 17-20 I2*.951 + I3*.588
+	movapd	r4, t2			;; 18-23 R1 - R2*.809 + R3*.309
+	subpd	r3, r5			;; 21-24 I2*.588 - I3*.951
+	addpd	t1, r2			;; 23-26 final R2
+	subpd	t3, r2			;; 25-28 final R5
+	addpd	t2, r3			;; 27-30 final R3
+	subpd	r4, r3			;; 29-31 final R4
+	ENDM
+
+xsix_reals_fft_preload MACRO
+ENDM
+s3cl_six_reals_first_fft MACRO srcreg,srcinc,d1
+	low_load xmm0, [srcreg][rbx], [srcreg+16][rbx] ;; R1
+	low_load xmm3, [srcreg+32][rbx], [srcreg+48][rbx] ;; R4
+	high_load xmm2, [srcreg+d1][rbx], [srcreg+d1+16][rbx] ;; R3
+	high_load xmm5, [srcreg+d1+32][rbx], [srcreg+d1+48][rbx] ;; R6
+	low_load xmm1, [srcreg+2*d1][rbx], [srcreg+2*d1+16][rbx] ;; R2
+	low_load xmm4, [srcreg+2*d1+32][rbx], [srcreg+2*d1+48][rbx] ;; R5
+	x6r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	high_load xmm5, [srcreg][rbx], [srcreg+16][rbx] ;; R2
+	high_load xmm7, [srcreg+32][rbx], [srcreg+48][rbx] ;; R5
+	movapd	[srcreg], xmm1			;; Save R1
+	movapd	[srcreg+32], xmm0		;; Save R2
+	low_load xmm0, [srcreg+d1][rbx], [srcreg+d1+16][rbx] ;; R1
+	low_load xmm1, [srcreg+d1+32][rbx], [srcreg+d1+48][rbx]	;; R4
+	movapd	[srcreg+d1], xmm4		;; Save R3
+	movapd	[srcreg+d1+16], xmm3		;; Save R4
+	movapd	[srcreg+d1+32], xmm6		;; Save R5
+	movapd	[srcreg+d1+48], xmm2		;; Save R6
+	high_load xmm2, [srcreg+2*d1][rbx], [srcreg+2*d1+16][rbx] ;; R3
+	high_load xmm3, [srcreg+2*d1+32][rbx], [srcreg+2*d1+48][rbx] ;; R6
+	x6r_fft xmm0, xmm5, xmm2, xmm1, xmm7, xmm3, xmm6, xmm4
+	movapd	[srcreg+16], xmm5		;; Save R1
+	movapd	[srcreg+48], xmm0		;; Save R2
+	movapd	[srcreg+2*d1], xmm7		;; Save R3
+	movapd	[srcreg+2*d1+16], xmm1		;; Save R4
+	movapd	[srcreg+2*d1+32], xmm6		;; Save R5
+	movapd	[srcreg+2*d1+48], xmm2		;; Save R6
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x3cl_six_reals_first_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg][rbx]
+	movapd	xmm3, [srcreg+32][rbx]
+	movapd	xmm2, [srcreg+d1+16][rbx]
+	movapd	xmm5, [srcreg+d1+48][rbx]
+	movapd	xmm1, [srcreg+2*d1][rbx]
+	movapd	xmm4, [srcreg+2*d1+32][rbx]
+	x6r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg], xmm1
+	movapd	[srcreg+32], xmm0
+	movapd	[srcreg+d1+16], xmm3
+	movapd	[srcreg+d1+48], xmm2
+	movapd	xmm0, [srcreg+d1][rbx]
+	movapd	xmm3, [srcreg+d1+32][rbx]
+	movapd	[srcreg+d1], xmm4
+	movapd	[srcreg+d1+32], xmm6
+	movapd	xmm1, [srcreg+16][rbx]
+	movapd	xmm4, [srcreg+48][rbx]
+	movapd	xmm2, [srcreg+2*d1+16][rbx]
+	movapd	xmm5, [srcreg+2*d1+48][rbx]
+	x6r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+16], xmm1
+	movapd	[srcreg+48], xmm0
+	movapd	[srcreg+2*d1], xmm4
+	movapd	[srcreg+2*d1+16], xmm3
+	movapd	[srcreg+2*d1+32], xmm6
+	movapd	[srcreg+2*d1+48], xmm2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x3cl_six_reals_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]
+	movapd	xmm3, [srcreg+32]
+	movapd	xmm2, [srcreg+d1+16]
+	movapd	xmm5, [srcreg+d1+48]
+	movapd	xmm1, [srcreg+2*d1]
+	movapd	xmm4, [srcreg+2*d1+32]
+	x6r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg], xmm1
+	movapd	[srcreg+32], xmm0
+	movapd	[srcreg+d1+16], xmm3
+	movapd	[srcreg+d1+48], xmm2
+	movapd	xmm0, [srcreg+d1]
+	movapd	xmm3, [srcreg+d1+32]
+	movapd	[srcreg+d1], xmm4
+	movapd	[srcreg+d1+32], xmm6
+	movapd	xmm1, [srcreg+16]
+	movapd	xmm4, [srcreg+48]
+	movapd	xmm2, [srcreg+2*d1+16]
+	movapd	xmm5, [srcreg+2*d1+48]
+	x6r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+16], xmm1
+	movapd	[srcreg+48], xmm0
+	movapd	[srcreg+2*d1], xmm4
+	movapd	[srcreg+2*d1+16], xmm3
+	movapd	[srcreg+2*d1+32], xmm6
+	movapd	[srcreg+2*d1+48], xmm2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+g3cl_six_reals_first_fft MACRO srcreg,srcinc,d1,dstreg,dstinc,e1
+	movapd	xmm0, [srcreg][rbx]
+	movapd	xmm3, [srcreg+32][rbx]
+	movapd	xmm2, [srcreg+d1+16][rbx]
+	movapd	xmm5, [srcreg+d1+48][rbx]
+	movapd	xmm1, [srcreg+2*d1][rbx]
+	movapd	xmm4, [srcreg+2*d1+32][rbx]
+	x6r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[dstreg], xmm1
+	movapd	[dstreg+32], xmm0
+	movapd	[dstreg+e1+16], xmm3
+	movapd	[dstreg+e1+48], xmm2
+	movapd	xmm0, [srcreg+d1][rbx]
+	movapd	xmm3, [srcreg+d1+32][rbx]
+	movapd	[dstreg+e1], xmm4
+	movapd	[dstreg+e1+32], xmm6
+	movapd	xmm1, [srcreg+16][rbx]
+	movapd	xmm4, [srcreg+48][rbx]
+	movapd	xmm2, [srcreg+2*d1+16][rbx]
+	movapd	xmm5, [srcreg+2*d1+48][rbx]
+	lea	srcreg, [srcreg+srcinc]
+	x6r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[dstreg+16], xmm1
+	movapd	[dstreg+48], xmm0
+	movapd	[dstreg+2*e1], xmm4
+	movapd	[dstreg+2*e1+16], xmm3
+	movapd	[dstreg+2*e1+32], xmm6
+	movapd	[dstreg+2*e1+48], xmm2
+	lea	dstreg, [dstreg+dstinc]
+	ENDM
+x6r_fft MACRO r1, r2, r3, r4, r5, r6, t1, t2
+	subpd	r4, r6			;; T4 = R4 - R6 (new I4 / 0.866)
+	multwo	r6
+	addpd	r6, r4			;; T3 = R4 + R6
+	subpd	r3, r5			;; T2 = R3 - R5
+	multwo	r5
+	addpd	r5, r3			;; T1 = R3 + R5
+	movapd	t2, r2			;; T5 = R2
+	addpd	r2, r6			;; R2 = R2 + T3 (new R3)
+	mulhalf	r6			;; T3 = T3 * 0.5
+	subpd	t2, r6			;; T5 = R2 - T3 (new R4)
+	movapd	t1, r1			;; T6 = R1
+	addpd	r1, r5			;; R1 = R1 + T1 (new R1)
+	mulhalf	r5			;; T1 = T1 * 0.5
+	subpd	t1, r5			;; T6 = R1 - T1 (new R2)
+	mulpd	r3, XMM_P866		;; T2 = T2 * 0.866 (new I2)
+	mulpd	r4, XMM_P75		;; B4 = newI4 * sine
+	mulpd	t2, XMM_P866		;; A4 = newR4 * sine
+	movapd	r5, t2			;; C4 = A4
+	mulpd	r5, XMM_P577		;; C4 = C4 * cosine / sine
+	subpd	r5, r4			;; C4 = C4 - B4 (new R4)
+	mulpd	r4, XMM_P577		;; B4 = B4 * cosine / sine
+	addpd	r4, t2			;; B4 = A4 + B4 (new I4)
+	subpd	r1, r2			;; R1 = R1 - R3 (final R2)
+	multwo	r2			;; R3 = R3 * 2
+	addpd	r2, r1			;; R3 = R1 + R3 (final R1)
+	subpd	t1, r5			;; R2 = R2 - R4 (final R5)
+	multwo	r5			;; R4 = R4 * 2
+	addpd	r5, t1			;; R4 = R2 + R4 (final R3)
+	subpd	r3, r4			;; I2 = I2 - I4 (final R6)
+	multwo	r4			;; I4 = I4 * 2
+	addpd	r4, r3			;; I4 = I2 + I4 (final R4)
+	ENDM
+
+xsix_reals_unfft_preload MACRO
+ENDM
+x3cl_six_reals_last_unfft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+2*d1]	;; R5
+	movapd	xmm5, [srcreg+2*d1+32]	;; R6
+	x6r_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg], xmm4		;; Save R1
+	movapd	[srcreg+32], xmm3	;; Save R4
+	movapd	[srcreg+2*d1], xmm2	;; Save R2
+	movapd	[srcreg+2*d1+32], xmm1	;; Save R5
+	movapd	xmm6, [srcreg+d1+16]	;; R3
+	movapd	xmm7, [srcreg+d1+48]	;; R4
+	movapd	[srcreg+d1+16], xmm5	;; Save R3
+	movapd	[srcreg+d1+48], xmm0	;; Save R6
+	movapd	xmm4, [srcreg+16]	;; R1
+	movapd	xmm2, [srcreg+48]	;; R2
+	movapd	xmm1, [srcreg+2*d1+16]	;; R5
+	movapd	xmm0, [srcreg+2*d1+48]	;; R6
+	x6r_unfft xmm4, xmm2, xmm6, xmm7, xmm1, xmm0, xmm5, xmm3
+	movapd	[srcreg+16], xmm6	;; Save R2
+	movapd	[srcreg+48], xmm2	;; Save R5
+	movapd	[srcreg+d1], xmm1	;; Save R1
+	movapd	[srcreg+d1+32], xmm7	;; Save R4
+	movapd	[srcreg+2*d1+16], xmm0	;; Save R3
+	movapd	[srcreg+2*d1+48], xmm4	;; Save R6
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x6r_unfft MACRO r1, r2, r3, r4, r5, r6, t1, t2
+	subpd	r3, r5			;; R3 - R5 (new R4)
+	multwo	r5
+	addpd	r5, r3			;; R3 + R5 (new R2)
+	subpd	r4, r6			;; R4 - R6 (new I4)
+	multwo	r6
+	addpd	r6, r4			;; R4 + R6 (new I2)
+	subpd	r1, r2			;; R1 - R2 (new R3)
+	multwo	r2
+	addpd	r2, r1			;; R1 + R2 (new R1)
+	mulpd	r3, XMM_P25		;; A4 = R4 * 0.5 * 0.5
+	mulpd	r4, XMM_P433		;; B4 = I4 * 0.866 * 0.5
+	movapd	t1, r3			;; C4 = A4
+	mulpd	t1, XMM_P3		;; C4 = C4 * 0.75/0.25
+	addpd	r3, r4			;; A4 = A4 + B4 (new R4 * 0.5)
+	mulhalf	r5			;; R2 = R2 * 0.5
+	subpd	r4, t1			;; B4 = B4 - C4 (new I4 * 0.866)
+	subpd	r2, r5			;; R1 = R1 - 0.5 * R2
+	mulpd	r5, XMM_P3		;; R2 = R2 * 3
+	subpd	r1, r3			;; R3 = R3 - 0.5 * R4
+	mulpd	r3, XMM_P3		;; R4 = 3 * R4
+	addpd	r5, r2			;; R2 = R1 + R2 (final R1)
+	mulpd	r6, XMM_P866		;; I2 = 0.866 * I2
+	addpd	r3, r1			;; R4 = R3 + R4 (final R2)
+	subpd	r1, r4			;; R3 = R3 - I4 (final R6)
+	multwo	r4			;; I4 = I4 * 2
+	addpd	r4, r1			;; I4 = R3 + I4 (final R4)
+	subpd	r2, r6			;; R1 = R1 - I2 (final R5)
+	multwo	r6			;; I2 = I2 * 2
+	addpd	r6, r2			;; I2 = R1 + I2 (final R3)
+	ENDM
+
+
+xseven_reals_fft_preload MACRO
+ENDM
+s7cl_seven_reals_first_fft MACRO srcreg,srcinc,d1
+	shuffle_load xmm0,xmm7,[srcreg][rbx],[srcreg+16][rbx] ;; R1,R1
+	movapd	[srcreg+16],xmm7		;; Save it
+	movapd	xmm1, [srcreg+d1+16][rbx]
+	movlpd	xmm1, Q [srcreg+d1+8][rbx]	;; R2
+	shuffle_load xmm2,xmm3,[srcreg+5*d1][rbx],[srcreg+5*d1+16][rbx] ;;R3,R4
+	low_load xmm4, [srcreg+d1+32][rbx], [srcreg+d1+48][rbx]	;; R5
+	shuffle_load xmm5,xmm6,[srcreg+3*d1+32][rbx],[srcreg+3*d1+48][rbx] ;;R6,R7
+	x7r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg]
+	low_load xmm2, [srcreg+d1][rbx], [srcreg+d1+16][rbx] ;; R1
+	high_load xmm6, [srcreg+d1+32][rbx], [srcreg+d1+48][rbx] ;; R5
+	movapd	[srcreg+d1], xmm0		;; Save R2
+	movapd	[srcreg+d1+32], xmm1		;; Save R3
+	shuffle_load xmm1,xmm0,[srcreg+3*d1][rbx],[srcreg+3*d1+16][rbx] ;;R2,R3
+	movapd	[srcreg+3*d1], xmm4		;; Save R4
+	movapd	[srcreg+3*d1+16], xmm5		;; Save R5
+	movapd	[srcreg+3*d1+32], xmm7		;; Save R6
+	movapd	[srcreg+3*d1+48], xmm3		;; Save R7
+	shuffle_load xmm3,xmm7,[srcreg+32][rbx],[srcreg+48][rbx] ;; R4,R4
+	movapd	[srcreg+48],xmm7		;; Save it
+	shuffle_load xmm5,xmm4,[srcreg+5*d1+32][rbx],[srcreg+5*d1+48][rbx];;R6,R7
+	x7r_fft xmm2, xmm1, xmm0, xmm3, xmm6, xmm5, xmm4, xmm7, [srcreg+32]
+	movapd	[srcreg+d1+16], xmm2		;; Save R2
+	movapd	[srcreg+d1+48], xmm1		;; Save R3
+	movapd	[srcreg+5*d1], xmm6		;; Save R4
+	movapd	[srcreg+5*d1+16], xmm5		;; Save R5
+	movapd	[srcreg+5*d1+32], xmm7		;; Save R6
+	movapd	[srcreg+5*d1+48], xmm3		;; Save R7
+
+	movapd	xmm0, [srcreg+16]		;; R1
+	high_load xmm1, [srcreg+2*d1][rbx], [srcreg+2*d1+16][rbx] ;; R2
+	shuffle_load xmm2,xmm3,[srcreg+6*d1][rbx],[srcreg+6*d1+16][rbx];;R3,R4
+	low_load xmm4, [srcreg+2*d1+32][rbx], [srcreg+2*d1+48][rbx] ;; R5
+	shuffle_load xmm5,xmm6,[srcreg+4*d1+32][rbx],[srcreg+4*d1+48][rbx];;R6,R7
+	x7r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+16]
+	low_load xmm2, [srcreg+2*d1][rbx], [srcreg+2*d1+16][rbx] ;; R1
+	high_load xmm6, [srcreg+2*d1+32][rbx], [srcreg+2*d1+48][rbx]
+	movapd	[srcreg+2*d1], xmm0		;; Save R2
+	movapd	[srcreg+2*d1+32], xmm1		;; Save R3
+	shuffle_load xmm1,xmm0,[srcreg+4*d1][rbx],[srcreg+4*d1+16][rbx];;R2,R3
+	movapd	[srcreg+4*d1], xmm4		;; Save R4
+	movapd	[srcreg+4*d1+16], xmm5		;; Save R5
+	movapd	[srcreg+4*d1+32], xmm7		;; Save R6
+	movapd	[srcreg+4*d1+48], xmm3		;; Save R7
+	movapd	xmm3, [srcreg+48]		;; R4
+	shuffle_load xmm5,xmm4,[srcreg+6*d1+32][rbx],[srcreg+6*d1+48][rbx];;R6,R7
+	x7r_fft xmm2, xmm1, xmm0, xmm3, xmm6, xmm5, xmm4, xmm7, [srcreg+48]
+	movapd	[srcreg+2*d1+16], xmm2		;; Save R2
+	movapd	[srcreg+2*d1+48], xmm1		;; Save R3
+	movapd	[srcreg+6*d1], xmm6		;; Save R4
+	movapd	[srcreg+6*d1+16], xmm5		;; Save R5
+	movapd	[srcreg+6*d1+32], xmm7		;; Save R6
+	movapd	[srcreg+6*d1+48], xmm3		;; Save R7
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+;; 215.55 clocks
+x7cl_seven_reals_first_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg][rbx]	;; Load R1
+	movapd	xmm1, [srcreg+d1+16][rbx];; Load R2
+	movapd	xmm2, [srcreg+5*d1][rbx];; Load R3
+	x7r_fft_mem [srcreg+5*d1+16][rbx], [srcreg+d1+32][rbx], [srcreg+3*d1+32][rbx], [srcreg+3*d1+48][rbx], [srcreg], [srcreg+3*d1+32], 0
+	movapd	[srcreg+d1+32], xmm2	;; Save I2
+	movapd	xmm2, [srcreg+3*d1+16][rbx];; Load R3
+	movapd	[srcreg+3*d1+16], xmm1	;; Save I3
+	movapd	xmm1, [srcreg+3*d1][rbx];; Load R2
+	movapd	[srcreg+3*d1], xmm0	;; Save R3
+	movapd	xmm0, [srcreg+d1][rbx]	;; Load R1
+	movapd	[srcreg+d1], xmm4	;; Save R2
+	movapd	[srcreg+3*d1+48], xmm3	;; Save I4
+	x7r_fft_mem [srcreg+32][rbx], [srcreg+d1+48][rbx], [srcreg+5*d1+32][rbx], [srcreg+5*d1+48][rbx], [srcreg+32], [srcreg+5*d1+32], 1
+	movapd	[srcreg+d1+16], xmm4	;; Save R2
+	movapd	[srcreg+d1+48], xmm2	;; Save I2
+	movapd	[srcreg+5*d1], xmm0	;; Save R3
+	movapd	[srcreg+5*d1+16], xmm1	;; Save I3
+	movapd	[srcreg+5*d1+48], xmm3	;; Save I4
+
+	movapd	xmm0, [srcreg+16][rbx]	;; Load R1
+	movapd	xmm1, [srcreg+2*d1+16][rbx];; Load R2
+	movapd	xmm2, [srcreg+6*d1][rbx];; Load R3
+	x7r_fft_mem [srcreg+6*d1+16][rbx], [srcreg+2*d1+32][rbx], [srcreg+4*d1+32][rbx], [srcreg+4*d1+48][rbx], [srcreg+16], [srcreg+4*d1+32], 0
+	movapd	[srcreg+2*d1+32], xmm2	;; Save I2
+	movapd	xmm2, [srcreg+4*d1+16][rbx];; Load R3
+	movapd	[srcreg+4*d1+16], xmm1	;; Save I3
+	movapd	xmm1, [srcreg+4*d1][rbx];; Load R2
+	movapd	[srcreg+4*d1], xmm0	;; Save R3
+	movapd	xmm0, [srcreg+2*d1][rbx];; Load R1
+	movapd	[srcreg+2*d1], xmm4	;; Save R2
+	movapd	[srcreg+4*d1+48], xmm3	;; Save I4
+	x7r_fft_mem [srcreg+48][rbx], [srcreg+2*d1+48][rbx], [srcreg+6*d1+32][rbx], [srcreg+6*d1+48][rbx], [srcreg+48], [srcreg+6*d1+32], 1
+	movapd	[srcreg+2*d1+16], xmm4	;; Save R2
+	movapd	[srcreg+2*d1+48], xmm2	;; Save I2
+	movapd	[srcreg+6*d1], xmm0	;; Save R3
+	movapd	[srcreg+6*d1+16], xmm1	;; Save I3
+	movapd	[srcreg+6*d1+48], xmm3	;; Save I4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x7cl_seven_reals_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; Load R1
+	movapd	xmm1, [srcreg+d1+16]	;; Load R2
+	movapd	xmm2, [srcreg+5*d1]	;; Load R3
+	x7r_fft_mem [srcreg+5*d1+16], [srcreg+d1+32], [srcreg+3*d1+32], [srcreg+3*d1+48], [srcreg], [srcreg+3*d1+32], 0
+	movapd	[srcreg+d1+32], xmm2	;; Save I2
+	movapd	xmm2, [srcreg+3*d1+16]	;; Load R3
+	movapd	[srcreg+3*d1+16], xmm1	;; Save I3
+	movapd	xmm1, [srcreg+3*d1]	;; Load R2
+	movapd	[srcreg+3*d1], xmm0	;; Save R3
+	movapd	xmm0, [srcreg+d1]	;; Load R1
+	movapd	[srcreg+d1], xmm4	;; Save R2
+	movapd	[srcreg+3*d1+48], xmm3	;; Save I4
+	x7r_fft_mem [srcreg+32], [srcreg+d1+48], [srcreg+5*d1+32], [srcreg+5*d1+48], [srcreg+32], [srcreg+5*d1+32], 1
+	movapd	[srcreg+d1+16], xmm4	;; Save R2
+	movapd	[srcreg+d1+48], xmm2	;; Save I2
+	movapd	[srcreg+5*d1], xmm0	;; Save R3
+	movapd	[srcreg+5*d1+16], xmm1	;; Save I3
+	movapd	[srcreg+5*d1+48], xmm3	;; Save I4
+
+	movapd	xmm0, [srcreg+16]	;; Load R1
+	movapd	xmm1, [srcreg+2*d1+16]	;; Load R2
+	movapd	xmm2, [srcreg+6*d1]	;; Load R3
+	x7r_fft_mem [srcreg+6*d1+16], [srcreg+2*d1+32], [srcreg+4*d1+32], [srcreg+4*d1+48], [srcreg+16], [srcreg+4*d1+32], 0
+	movapd	[srcreg+2*d1+32], xmm2	;; Save I2
+	movapd	xmm2, [srcreg+4*d1+16]	;; Load R3
+	movapd	[srcreg+4*d1+16], xmm1	;; Save I3
+	movapd	xmm1, [srcreg+4*d1]	;; Load R2
+	movapd	[srcreg+4*d1], xmm0	;; Save R3
+	movapd	xmm0, [srcreg+2*d1]	;; Load R1
+	movapd	[srcreg+2*d1], xmm4	;; Save R2
+	movapd	[srcreg+4*d1+48], xmm3	;; Save I4
+	x7r_fft_mem [srcreg+48], [srcreg+2*d1+48], [srcreg+6*d1+32], [srcreg+6*d1+48], [srcreg+48], [srcreg+6*d1+32], 1
+	movapd	[srcreg+2*d1+16], xmm4	;; Save R2
+	movapd	[srcreg+2*d1+48], xmm2	;; Save I2
+	movapd	[srcreg+6*d1], xmm0	;; Save R3
+	movapd	[srcreg+6*d1+16], xmm1	;; Save I3
+	movapd	[srcreg+6*d1+48], xmm3	;; Save I4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+g7cl_seven_reals_first_fft MACRO srcreg,srcinc,d1,dstreg,dstinc,e1
+	movapd	xmm0, [srcreg][rbx]	;; Load R1
+	movapd	xmm1, [srcreg+d1+16][rbx];; Load R2
+	movapd	xmm2, [srcreg+5*d1][rbx];; Load R3
+	x7r_fft_mem [srcreg+5*d1+16][rbx], [srcreg+d1+32][rbx], [srcreg+3*d1+32][rbx], [srcreg+3*d1+48][rbx], [dstreg], [dstreg+3*e1+32], 0
+	movapd	[dstreg+e1+32], xmm2	;; Save I2
+	movapd	xmm2, [srcreg+3*d1+16][rbx];; Load R3
+	movapd	[dstreg+3*e1+16], xmm1	;; Save I3
+	movapd	xmm1, [srcreg+3*d1][rbx];; Load R2
+	movapd	[dstreg+3*e1], xmm0	;; Save R3
+	movapd	xmm0, [srcreg+d1][rbx]	;; Load R1
+	movapd	[dstreg+e1], xmm4	;; Save R2
+	movapd	[dstreg+3*e1+48], xmm3	;; Save I4
+	x7r_fft_mem [srcreg+32][rbx], [srcreg+d1+48][rbx], [srcreg+5*d1+32][rbx], [srcreg+5*d1+48][rbx], [dstreg+32], [dstreg+5*e1+32], 1
+	movapd	[dstreg+e1+16], xmm4	;; Save R2
+	movapd	[dstreg+e1+48], xmm2	;; Save I2
+	movapd	[dstreg+5*e1], xmm0	;; Save R3
+	movapd	[dstreg+5*e1+16], xmm1	;; Save I3
+	movapd	[dstreg+5*e1+48], xmm3	;; Save I4
+
+	movapd	xmm0, [srcreg+16][rbx]	;; Load R1
+	movapd	xmm1, [srcreg+2*d1+16][rbx];; Load R2
+	movapd	xmm2, [srcreg+6*d1][rbx];; Load R3
+	x7r_fft_mem [srcreg+6*d1+16][rbx], [srcreg+2*d1+32][rbx], [srcreg+4*d1+32][rbx], [srcreg+4*d1+48][rbx], [dstreg+16], [dstreg+4*d1+32], 0
+	movapd	[dstreg+2*e1+32], xmm2	;; Save I2
+	movapd	xmm2, [srcreg+4*d1+16][rbx];; Load R3
+	movapd	[dstreg+4*e1+16], xmm1	;; Save I3
+	movapd	xmm1, [srcreg+4*d1][rbx];; Load R2
+	movapd	[dstreg+4*e1], xmm0	;; Save R3
+	movapd	xmm0, [srcreg+2*d1][rbx];; Load R1
+	movapd	[dstreg+2*e1], xmm4	;; Save R2
+	movapd	[dstreg+4*e1+48], xmm3	;; Save I4
+	x7r_fft_mem [srcreg+48][rbx], [srcreg+2*d1+48][rbx], [srcreg+6*d1+32][rbx], [srcreg+6*d1+48][rbx], [dstreg+48], [dstreg+6*d1+32], 1
+	lea	srcreg, [srcreg+srcinc]
+	movapd	[dstreg+2*e1+16], xmm4	;; Save R2
+	movapd	[dstreg+2*e1+48], xmm2	;; Save I2
+	movapd	[dstreg+6*e1], xmm0	;; Save R3
+	movapd	[dstreg+6*e1+16], xmm1	;; Save I3
+	movapd	[dstreg+6*e1+48], xmm3	;; Save I4
+	lea	dstreg, [dstreg+dstinc]
+	ENDM
+;; xmm0, xmm1, xmm2 are preloaded with m1, m2, m3
+;; destr1 may be same address as m4 (in that case set m4_conflict to one)
+;; destr4 may be same address as m6
+x7r_fft_mem MACRO m4, m5, m6, m7, destr1, destr4, m4_conflict
+	movapd	xmm3, m7		;;	T1 = R7
+	addpd	xmm3, xmm1		;;1-4	T1 = R2+R7
+	movapd	xmm4, m6		;;	T2 = R6
+	addpd	xmm4, xmm2		;;3-6	T2 = R3+R6
+	movapd	xmm5, m4		;;	T3 = R4
+	addpd	xmm5, m5		;;5-8	T3 = R4+R5
+	movapd	xmm6, XMM_P623
+	mulpd	xmm6, xmm3		;;6-11	T1 = T1 * .623
+	addpd	xmm3, xmm0		;;7-10  R1+T1
+	movapd	xmm7, XMM_P623
+	mulpd	xmm7, xmm4		;;8-13	T2 = T2 * .623
+	addpd	xmm4, xmm5		;;9-12	T2+T3
+	mulpd	xmm5, XMM_P623		;;10-15	T3 = T3 * .623
+	addpd	xmm3, xmm4		;;14-17	R1+T1+T2+T3 (final R1)
+
+	movapd	xmm4, xmm0		;;	newR2 = R1
+	addpd	xmm4, xmm6		;;12-15	newR2 = R1 + T1
+	mulpd	xmm6, XMM_M358		;;13-18	T1 = T1 * (-.223/.623)
+	IF m4_conflict EQ 1
+	movapd	XMM_TMP1, xmm3		;;	Save R1
+	ELSE
+	movapd	destr1, xmm3		;;	Save R1
+	ENDIF
+	movapd	xmm3, xmm0		;;	newR4 = R1
+	addpd	xmm0, xmm5		;;16-19	newR3 = R1 + T3
+	mulpd	xmm5, XMM_M358		;;17-22	T3 = T3 * (-.223/.623)
+	addpd	xmm3, xmm7		;;14-17	newR4 = R1 + T2
+	mulpd	xmm7, XMM_M358		;;15-20	T2 = T2 * (-.223/.623)
+	addpd	xmm0, xmm6		;;20-23	newR3 = newR3 + T1
+	mulpd	xmm6, XMM_P404		;;21-26	T1 = T1 * (-.901/-.223)
+	addpd	xmm3, xmm5		;;24-27	newR4 = newR4 + T3
+	mulpd	xmm5, XMM_P404		;;25-30	T3 = T3 * (-.901/-.223)
+	addpd	xmm4, xmm7		;;22-25	newR2 = newR2 + T2
+	mulpd	xmm7, XMM_P404		;;23-28	T2 = T2 * (-.901/-.223)
+	addpd	xmm3, xmm6		;;30-33	newR4 = newR4 + T1 (final R4)
+	addpd	xmm0, xmm7		;;34-37	newR3 = newR3 + T2 (final R3)
+	addpd	xmm4, xmm5		;;36-39	newR2 = newR2 + T3 (final R2)
+
+	subpd	xmm1, m7		;;28-31	S1 = R2-R7
+	mulpd	xmm1, XMM_P975		;;33-38	S1 = S1 * .975
+	subpd	xmm2, m6		;;26-29	S2 = R3-R6
+	mulpd	xmm2, XMM_P975		;;31-36	S2 = S2 * .975
+	movapd	destr4, xmm3		;;	Save R4
+	movapd	xmm3, m4		;;	S3 = R4
+	subpd	xmm3, m5		;;32-35	S3 = R4-R5
+	mulpd	xmm3, XMM_P975		;;37-42	S3 = S3 * .975
+	movapd	xmm5, XMM_P445		;;	(.434/.975)
+	mulpd	xmm5, xmm1		;;41-46	S1 = S1 * (.434/.975), newI3=S1
+	movapd	xmm6, XMM_P445		;;	(.434/.975)
+	mulpd	xmm6, xmm2		;;39-44	S2 = S2 * (.434/.975), newI2=S2
+	movapd	xmm7, XMM_P445		;;	(.434/.975)
+	mulpd	xmm7, xmm3		;;43-48	S3 = S3 * (.434/.975), newI4=S3
+	subpd	xmm1, xmm6		;;45-48	newI3 = newI3 - S2
+	mulpd	xmm6, XMM_P180		;;46-51	S2 = S2 * (.782/.434)
+	addpd	xmm3, xmm5		;;47-50	newI4 = newI4 + S1
+	mulpd	xmm5, XMM_P180		;;48-53	S1 = S1 * (.782/.434)
+	addpd	xmm2, xmm7		;;49-52	newI2 = newI2 + S3
+	mulpd	xmm7, XMM_P180		;;50-55	S3 = S3 * (.782/.434)
+	subpd	xmm3, xmm6		;;52-55	newI4 = newI4 - S2 (final I4)
+	addpd	xmm2, xmm5		;;54-57	newI2 = newI2 + S1 (final I2)
+	subpd	xmm1, xmm7		;;56-59	newI3 = newI3 - S3 (final I3)
+	IF m4_conflict EQ 1
+	movapd	xmm6, XMM_TMP1		;;	Reload final R1
+	movapd	destr1, xmm6		;;	Save final R1
+	ENDIF
+	ENDM
+x7r_fft MACRO r1, r2, r3, r4, r5, r6, r7, t1, memr1
+	subpd	r2, r7			;;	R2-R7
+	multwo	r7
+	addpd	r7, r2			;; T1 = R2+R7
+	subpd	r3, r6			;;	R3-R6
+	multwo	r6
+	addpd	r6, r3			;; T2 = R3+R6
+	subpd	r4, r5			;;	R4-R5
+	multwo	r5
+	addpd	r5, r4			;; T3 = R4+R5
+	movapd	t1, r1			;; R1
+	addpd	t1, r7			;; R1+T1
+	addpd	t1, r6			;; R1+T1+T2
+	addpd	t1, r5			;; R1+T1+T2+T3 (final R1)
+	movapd	memr1, t1
+	mulpd	r7, XMM_P623		;; T1 = T1 * .623
+	mulpd	r6, XMM_P623		;; T2 = T2 * .623
+	mulpd	r5, XMM_P623		;; T3 = T3 * .623
+	movapd	XMM_TMP1, r2
+	movapd	r2, r1
+	movapd	t1, r1
+	addpd	r1, r7			;; newR2 = R1 + T1
+	addpd	r2, r5			;; newR3 = R1 + T3
+	addpd	t1, r6			;; newR4 = R1 + T2
+	mulpd	r7, XMM_M358		;; T1 = T1 * (-.223/.623)
+	mulpd	r6, XMM_M358		;; T2 = T2 * (-.223/.623)
+	mulpd	r5, XMM_M358		;; T3 = T3 * (-.223/.623)
+	addpd	r1, r6			;; newR2 = newR2 + T2
+	addpd	r2, r7			;; newR3 = newR3 + T1
+	addpd	t1, r5			;; newR4 = newR4 + T3
+	mulpd	r7, XMM_P404		;; T1 = T1 * (-.901/-.223)
+	mulpd	r6, XMM_P404		;; T2 = T2 * (-.901/-.223)
+	mulpd	r5, XMM_P404		;; T3 = T3 * (-.901/-.223)
+	addpd	r1, r5			;; newR2 = newR2 + T3 (final R2)
+	addpd	r2, r6			;; newR3 = newR3 + T2 (final R3)
+	addpd	t1, r7			;; newR4 = newR4 + T1 (final R4)
+	movapd	r7, XMM_TMP1		;; T1 = R2-R7
+	mulpd	r7, XMM_P975		;; T1 = T1 * .975
+	mulpd	r3, XMM_P975		;; T2 = T2 * .975
+	mulpd	r4, XMM_P975		;; T3 = T3 * .975
+	movapd	XMM_TMP2, r2		;; final R3
+	movapd	r2, r3			;; newI2 = T2
+	movapd	r6, r7			;; newI3 = T1
+	movapd	r5, r4			;; newI4 = T3
+	mulpd	r7, XMM_P445		;; T1 = T1 * (.434/.975)
+	mulpd	r3, XMM_P445		;; T2 = T2 * (.434/.975)
+	mulpd	r5, XMM_P445		;; T3 = T3 * (.434/.975)
+	addpd	r2, r5			;; newI2 = newI2 + T3
+	subpd	r6, r3			;; newI3 = newI3 - T2
+	addpd	r4, r7			;; newI4 = newI4 + T1
+	mulpd	r7, XMM_P180		;; T1 = T1 * (.782/.434)
+	mulpd	r3, XMM_P180		;; T2 = T2 * (.782/.434)
+	mulpd	r5, XMM_P180		;; T3 = T3 * (.782/.434)
+	addpd	r2, r7			;; newI2 = newI2 + T1 (final I2)
+	subpd	r6, r5			;; newI3 = newI3 - T3 (final I3)
+	subpd	r4, r3			;; newI4 = newI4 - T2 (final I4)
+	movapd	r5, XMM_TMP2 		;; final R3
+	ENDM
+
+xseven_reals_unfft_preload MACRO
+ENDM
+;; 198.15 clocks
+x7cl_seven_reals_last_unfft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+d1]	;; R2
+	movapd	xmm3, [srcreg+3*d1]	;; R4
+	movapd	xmm4, [srcreg+3*d1+32]	;; R5
+	movapd	xmm5, [srcreg+5*d1]	;; R6
+	x7r_unfft_mem xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d1+32], [srcreg+5*d1+32], [srcreg]
+	movapd	[srcreg+5*d1], xmm1	;; Save R3
+	movapd	xmm1, [srcreg+d1+16]	;; R2
+	movapd	[srcreg+d1+16], xmm5	;; Save R2
+	movapd	[srcreg+d1+32], xmm0	;; Save R5
+	movapd	xmm5, [srcreg+5*d1+16]	;; R6
+	movapd	[srcreg+5*d1+16], xmm3	;; Save R4
+	movapd	[srcreg+3*d1+32], xmm7	;; Save R6
+	movapd	xmm4, [srcreg+3*d1+48]	;; R5
+	movapd	[srcreg+3*d1+48], xmm2	;; Save R7
+	movapd	xmm0, [srcreg+32]	;; R1
+	movapd	xmm3, [srcreg+3*d1+16]	;; R4
+	x7r_unfft_mem xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d1+48], [srcreg+5*d1+48], [srcreg+d1]
+	movapd	[srcreg+3*d1], xmm5	;; Save R2
+	movapd	[srcreg+3*d1+16], xmm1	;; Save R3
+	movapd	[srcreg+32], xmm3	;; Save R4
+	movapd	[srcreg+d1+48], xmm0	;; Save R5
+	movapd	[srcreg+5*d1+32], xmm7	;; Save R6
+	movapd	[srcreg+5*d1+48], xmm2	;; Save R7
+
+	movapd	xmm0, [srcreg+16]	;; R1
+	movapd	xmm1, [srcreg+2*d1]	;; R2
+	movapd	xmm3, [srcreg+4*d1]	;; R4
+	movapd	xmm4, [srcreg+4*d1+32]	;; R5
+	movapd	xmm5, [srcreg+6*d1]	;; R6
+	x7r_unfft_mem xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+2*d1+32], [srcreg+6*d1+32], [srcreg+16]
+	movapd	[srcreg+6*d1], xmm1	;; Save R3
+	movapd	xmm1, [srcreg+2*d1+16]	;; R2
+	movapd	[srcreg+2*d1+16], xmm5	;; Save R2
+	movapd	[srcreg+2*d1+32], xmm0	;; Save R5
+	movapd	xmm5, [srcreg+6*d1+16]	;; R6
+	movapd	[srcreg+6*d1+16], xmm3	;; Save R4
+	movapd	[srcreg+4*d1+32], xmm7	;; Save R6
+	movapd	xmm4, [srcreg+4*d1+48]	;; R5
+	movapd	[srcreg+4*d1+48], xmm2	;; Save R7
+	movapd	xmm0, [srcreg+48]	;; R1
+	movapd	xmm3, [srcreg+4*d1+16]	;; R4
+	x7r_unfft_mem xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+2*d1+48], [srcreg+6*d1+48], [srcreg+2*d1]
+	movapd	[srcreg+4*d1], xmm5	;; Save R2
+	movapd	[srcreg+4*d1+16], xmm1	;; Save R3
+	movapd	[srcreg+48], xmm3	;; Save R4
+	movapd	[srcreg+2*d1+48], xmm0	;; Save R5
+	movapd	[srcreg+6*d1+32], xmm7	;; Save R6
+	movapd	[srcreg+6*d1+48], xmm2	;; Save R7
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+;; All but r3 and r7 must be pre-loaded
+x7r_unfft_mem MACRO r1, r2, r3, r4, r5, r6, r7, t1, memr3, memr7, outmemr1
+	movapd	t1, r1			;; R1
+	addpd	t1, r2			;; R1 + R2
+	addpd	t1, r4			;; R1 + R2 + R3
+	addpd	t1, r6			;; R1 + R2 + R3 + R4 (final R1)
+	movapd	outmemr1, t1		;; Save final R1
+
+	movapd	r7, r1			;; A2 = R1
+	movapd	t1, r1			;; A3 = R1
+	mulpd	r2, XMM_P623		;; S2 = R2 * .623
+	mulpd	r4, XMM_P623		;; S3 = R3 * .623
+	mulpd	r6, XMM_P623		;; S4 = R4 * .623
+	addpd	r7, r2			;; A2 = A2 + S2
+	addpd	t1, r6			;; A3 = A3 + S4
+	addpd	r1, r4			;; A4 = A4 + S3
+	mulpd	r2, XMM_M358		;; S2 = S2 * (-.223/.623)
+	mulpd	r4, XMM_M358		;; S3 = S3 * (-.223/.623)
+	mulpd	r6, XMM_M358		;; S4 = S4 * (-.223/.623)
+	addpd	r7, r4			;; A2 = A2 + S3
+	addpd	t1, r2			;; A3 = A3 + S2
+	addpd	r1, r6			;; A4 = A4 + S4
+	mulpd	r2, XMM_P404		;; S2 = S2 * (-.901/-.223)
+	mulpd	r4, XMM_P404		;; S3 = S3 * (-.901/-.223)
+	mulpd	r6, XMM_P404		;; S4 = S4 * (-.901/-.223)
+	addpd	r7, r6			;; A2 = A2 + S4
+	addpd	t1, r4			;; A3 = A3 + S3
+	addpd	r1, r2			;; A4 = A4 + S2
+
+	movapd	XMM_TMP2, r7		;; Save A2
+	movapd	r3, memr3		;; Load I2
+	movapd	r7, memr7		;; Load I3
+	mulpd	r3, XMM_P975		;; T2 = I2*.975
+	mulpd	r5, XMM_P975		;; T3 = I3*.975
+	mulpd	r7, XMM_P975		;; T4 = I4*.975
+	movapd	r6, r5			;; B2 = T3
+	movapd	r2, r3			;; B3 = T2
+	movapd	r4, r7			;; B4 = T4
+	mulpd	r3, XMM_P445		;; T2 = T2 * (.434/.975)
+	mulpd	r5, XMM_P445		;; T3 = T3 * (.434/.975)
+	mulpd	r7, XMM_P445		;; T4 = T4 * (.434/.975)
+	addpd	r6, r7			;; B2 = B2 + T4
+	subpd	r2, r5			;; B3 = B3 - T3
+	addpd	r4, r3			;; B4 = B4 + T2
+	mulpd	r3, XMM_P180		;; T2 = T2 * (.782/.434)
+	mulpd	r5, XMM_P180		;; T3 = T3 * (.782/.434)
+	mulpd	r7, XMM_P180		;; T4 = T4 * (.782/.434)
+	addpd	r6, r3			;; B2 = B2 + T2
+	subpd	r2, r7			;; B3 = B3 - T4
+	subpd	r4, r5			;; B4 = B4 - T3
+	movapd	r3, XMM_TMP2		;; Reload A2
+
+	subpd	r3, r6			;; A2 = A2 - B2 (final R7)
+	multwo	r6			;; B2 = B2 * 2
+	addpd	r6, r3			;; B2 = A2 + B2 (final R2)
+	subpd	t1, r2			;; A3 = A3 - B3 (final R6)
+	multwo	r2			;; B3 = B3 * 2
+	addpd	r2, t1			;; B3 = A3 + B3 (final R3)
+	subpd	r1, r4			;; A4 = A4 - B4 (final R5)
+	multwo	r4			;; B4 = B4 * 2
+	addpd	r4, r1			;; B4 = A4 + B4 (final R4)
+	ENDM
+x7r_unfft MACRO r1, r2, r3, r4, r5, r6, r7, t1, memr1
+	movapd	t1, r1			;; R1
+	addpd	t1, r2			;; R1 + R2
+	addpd	t1, r4			;; R1 + R2 + R3
+	addpd	t1, r6			;; R1 + R2 + R3 + R4 (final R1)
+	mulpd	r3, XMM_P975		;; T2 = I2*.975
+	mulpd	r5, XMM_P975		;; T3 = I3*.975
+	mulpd	r7, XMM_P975		;; T4 = I4*.975
+	movapd	memr1, t1		;; Save final R1
+	movapd	XMM_TMP2, r2		;; Save R2
+	movapd	XMM_TMP3, r4		;; Save R3
+	movapd	t1, r5			;; B2 = T3
+	movapd	r2, r3			;; B3 = T2
+	movapd	r4, r7			;; B4 = T4
+	mulpd	r3, XMM_P445		;; T2 = T2 * (.434/.975)
+	mulpd	r5, XMM_P445		;; T3 = T3 * (.434/.975)
+	mulpd	r7, XMM_P445		;; T4 = T4 * (.434/.975)
+	addpd	t1, r7			;; B2 = B2 + T4
+	subpd	r2, r5			;; B3 = B3 - T3
+	addpd	r4, r3			;; B4 = B4 + T2
+	mulpd	r3, XMM_P180		;; T2 = T2 * (.782/.434)
+	mulpd	r5, XMM_P180		;; T3 = T3 * (.782/.434)
+	mulpd	r7, XMM_P180		;; T4 = T4 * (.782/.434)
+	addpd	t1, r3			;; B2 = B2 + T2
+	subpd	r2, r7			;; B3 = B3 - T4
+	subpd	r4, r5			;; B4 = B4 - T3
+	movapd	r3, XMM_TMP2		;; Reload R2
+	movapd	r5, XMM_TMP3		;; Reload R3
+	movapd	XMM_TMP2, t1		;; Save B2
+	movapd	r7, r1			;; A2 = R1
+	movapd	t1, r1			;; A3 = R1
+	mulpd	r3, XMM_P623		;; S2 = R2 * .623
+	mulpd	r5, XMM_P623		;; S3 = R3 * .623
+	mulpd	r6, XMM_P623		;; S4 = R4 * .623
+	addpd	r7, r3			;; A2 = A2 + S2
+	addpd	t1, r6			;; A3 = A3 + S4
+	addpd	r1, r5			;; A4 = A4 + S3
+	mulpd	r3, XMM_M358		;; S2 = S2 * (-.223/.623)
+	mulpd	r5, XMM_M358		;; S3 = S3 * (-.223/.623)
+	mulpd	r6, XMM_M358		;; S4 = S4 * (-.223/.623)
+	addpd	r7, r5			;; A2 = A2 + S3
+	addpd	t1, r3			;; A3 = A3 + S2
+	addpd	r1, r6			;; A4 = A4 + S4
+	mulpd	r3, XMM_P404		;; S2 = S2 * (-.901/-.223)
+	mulpd	r5, XMM_P404		;; S3 = S3 * (-.901/-.223)
+	mulpd	r6, XMM_P404		;; S4 = S4 * (-.901/-.223)
+	addpd	r7, r6			;; A2 = A2 + S4
+	addpd	t1, r5			;; A3 = A3 + S3
+	addpd	r1, r3			;; A4 = A4 + S2
+	movapd	r3, XMM_TMP2		;; Reload B2
+	subpd	r7, r3			;; A2 = A2 - B2 (final R7)
+	multwo	r3			;; B2 = B2 * 2
+	addpd	r3, r7			;; B2 = A2 + B2 (final R2)
+	subpd	t1, r2			;; A3 = A3 - B3 (final R6)
+	multwo	r2			;; B3 = B3 * 2
+	addpd	r2, t1			;; B3 = A3 + B3 (final R3)
+	subpd	r1, r4			;; A4 = A4 - B4 (final R5)
+	multwo	r4			;; B4 = B4 * 2
+	addpd	r4, r1			;; B4 = A4 + B4 (final R4)
+	ENDM
+
+
+
+
+;***********************************************************************
+; These macros process the interior FFT levels.
+;***********************************************************************
+
+
+;; Macro to operate on 4 64-byte cache lines.  It does 4 two_four_reals_fft,
+;; 4 two_two_complex_fft_2, 4 four_complex_fft in a one pass FFT.  The
+;; x2cl versions is used in the PFA-6 case of the two pass FFT.
+x4cl_eight_reals_fft_2 MACRO srcreg,srcinc,d1,d2
+	x4cl_eight_reals_fft_2_screg srcreg,srcinc,d1,d2,rdi
+	ENDM
+x4cl_eight_reals_fft_2_screg MACRO srcreg,srcinc,d1,d2,screg
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm4, [srcreg+16]	;; R5
+	movapd	xmm1, [srcreg+d1]	;; R2
+	movapd	xmm5, [srcreg+d1+16]	;; R6
+	movapd	xmm2, [srcreg+d2]	;; R3
+	movapd	xmm6, [srcreg+d2+16]	;; R7
+	movapd	xmm3, [srcreg+d2+d1]	;; R4
+	movapd	xmm7, [srcreg+d2+d1+16]	;; R8
+	x8r2_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg], xmm3		;; Save R1
+	movapd	xmm3, [srcreg+32]	;; R1
+	movapd	[srcreg+16], xmm2	;; Save R2
+	movapd	xmm2, [srcreg+48]	;; R5
+	movapd	[srcreg+32], xmm0	;; Save R3
+	movapd	xmm0, [srcreg+d1+32]	;; R2
+	movapd	[srcreg+48], xmm1	;; Save R4
+	movapd	xmm1, [srcreg+d1+48]	;; R6
+	movapd	[srcreg+d1], xmm5	;; Save R5
+	movapd	xmm5, [srcreg+d2+32]	;; R3
+	movapd	[srcreg+d1+16], xmm7	;; Save R6
+	movapd	xmm7, [srcreg+d2+48]	;; R7
+	movapd	[srcreg+d1+32], xmm4	;; Save R7
+	movapd	xmm4, [srcreg+d2+d1+32]	;; R4
+	movapd	[srcreg+d1+48], xmm6	;; Save R8
+	x4c_fft_screg xmm3, xmm0, xmm5, xmm4, xmm2, xmm1, xmm7, xmm6, [srcreg+d2+d1+48], 0, screg, srcreg+srcinc+d2, d1, [srcreg+d2+d1+48], [srcreg+d2+d1]
+	movapd	[srcreg+d2], xmm4	;; Save R1
+	movapd	[srcreg+d2+16], xmm0	;; Save R2
+	movapd	[srcreg+d2+32], xmm6	;; Save R3
+	movapd	[srcreg+d2+48], xmm7	;; Save R4
+;	movapd	[srcreg+d2+d1], xmm3	;; Save R5
+	movapd	[srcreg+d2+d1+16], xmm5	;; Save R6
+	movapd	[srcreg+d2+d1+32], xmm1	;; Save R7
+;	movapd	[srcreg+d2+d1+48], xmm2	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+g4cl_eight_reals_fft_2 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm4, [srcreg+16]	;; R5
+	movapd	xmm1, [srcreg+d1]	;; R2
+	movapd	xmm5, [srcreg+d1+16]	;; R6
+	movapd	xmm2, [srcreg+d2]	;; R3
+	movapd	xmm6, [srcreg+d2+16]	;; R7
+	movapd	xmm3, [srcreg+d2+d1]	;; R4
+	movapd	xmm7, [srcreg+d2+d1+16]	;; R8
+	x8r2_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[dstreg], xmm3		;; Save R1
+	movapd	xmm3, [srcreg+32]	;; R1
+	movapd	[dstreg+16], xmm2	;; Save R2
+	movapd	xmm2, [srcreg+48]	;; R5
+	movapd	[dstreg+32], xmm0	;; Save R3
+	movapd	xmm0, [srcreg+d1+32]	;; R2
+	movapd	[dstreg+48], xmm1	;; Save R4
+	movapd	xmm1, [srcreg+d1+48]	;; R6
+	movapd	[dstreg+e1], xmm5	;; Save R5
+	movapd	xmm5, [srcreg+d2+32]	;; R3
+	movapd	[dstreg+e1+16], xmm7	;; Save R6
+	movapd	xmm7, [srcreg+d2+48]	;; R7
+	movapd	[dstreg+e1+32], xmm4	;; Save R7
+	movapd	xmm4, [srcreg+d2+d1+32]	;; R4
+	movapd	[dstreg+e1+48], xmm6	;; Save R8
+	x4c_fft xmm3, xmm0, xmm5, xmm4, xmm2, xmm1, xmm7, xmm6, [srcreg+d2+d1+48], 0, dstreg+dstinc+e2, e1, [dstreg+e2+e1+48], [dstreg+e2+e1]
+	lea	srcreg, [srcreg+srcinc]
+	movapd	[dstreg+e2], xmm4	;; Save R1
+	movapd	[dstreg+e2+16], xmm0	;; Save R2
+	movapd	[dstreg+e2+32], xmm6	;; Save R3
+	movapd	[dstreg+e2+48], xmm7	;; Save R4
+;	movapd	[dstreg+e2+e1], xmm3	;; Save R5
+	movapd	[dstreg+e2+e1+16], xmm5	;; Save R6
+	movapd	[dstreg+e2+e1+32], xmm1	;; Save R7
+;	movapd	[dstreg+e2+e1+48], xmm2	;; Save R8
+	lea	dstreg, [dstreg+dstinc]
+	ENDM
+x2cl_eight_reals_fft_2 MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+d1]	;; R2
+	movapd	xmm2, [srcreg+16]	;; R3
+	movapd	xmm3, [srcreg+d1+16]	;; R4
+	movapd	xmm4, [srcreg+32]	;; R5
+	movapd	xmm5, [srcreg+d1+32]	;; R6
+	movapd	xmm6, [srcreg+48]	;; R7
+	movapd	xmm7, [srcreg+d1+48]	;; R8
+	x8r2_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg], xmm3		;; Save R1
+	movapd	[srcreg+16], xmm2	;; Save R2
+	movapd	[srcreg+32], xmm0	;; Save R3
+	movapd	[srcreg+48], xmm1	;; Save R4
+	movapd	[srcreg+d1], xmm5	;; Save R5
+	movapd	[srcreg+d1+16], xmm7	;; Save R6
+	movapd	[srcreg+d1+32], xmm4	;; Save R7
+	movapd	[srcreg+d1+48], xmm6	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x8r2_fft MACRO r1, r2, r3, r4, r5, r6, r7, r8
+	subpd	r1, r3			;; new R3 = R1 - R3 (final R3)
+	multwo	r3
+	addpd	r3, r1			;; new R1 = R1 + R3
+	subpd	r2, r4			;; new R4 = R2 - R4 (final R4)
+	multwo	r4
+	addpd	r4, r2			;; new R2 = R2 + R4
+	subpd	r3, r4			;; R1 = R1 - R2 (final R2)
+	multwo	r4
+	addpd	r4, r3			;; R2 = R1 + R2 (final R1)
+
+	subpd	r6, r8			;; R2 - I2
+	multwo	r8
+	addpd	r8, r6			;; R2 + I2
+	mulpd	r6, XMM_SQRTHALF	;; newR2
+	mulpd	r8, XMM_SQRTHALF	;; newI2
+	subpd	r7, r8			;; I1 = I1 - I2 (new I2)
+	multwo	r8
+	addpd	r8, r7			;; I2 = I1 + I2 (new I1)
+	subpd	r5, r6			;; R1 = R1 - R2 (new R2)
+	multwo	r6
+	addpd	r6, r5			;; R2 = R1 + R2 (new R1)
+	ENDM
+
+
+;; Macro to operate on 4 64-byte cache lines.  It does 4 two_four_reals_unfft,
+;; 4 two_two_complex_unfft_2, 4 four_complex_unfft in a one pass FFT.
+x4cl_eight_reals_unfft_2 MACRO srcreg,srcinc,d1,d2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	movapd	xmm6, [srcreg+d2+d1]	;; R7
+	movapd	xmm7, [srcreg+d2+d1+32]	;; R8
+	xprefetchw [srcreg+srcinc]
+	xprefetchw [srcreg+srcinc+d1]
+	x8r2_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg]
+	movapd	xmm2, [srcreg+16]	;; R1
+	movapd	[srcreg+d2], xmm3	;; Save R2
+	movapd	xmm3, [srcreg+d2+16]	;; R5
+	movapd	[srcreg+16], xmm1	;; Save R3
+	movapd	xmm1, [srcreg+48]	;; R2
+	movapd	[srcreg+d2+16], xmm0	;; Save R4
+	movapd	xmm0, [srcreg+d2+48]	;; R6
+	movapd	[srcreg+32], xmm6	;; Save R5
+	movapd	xmm6, [srcreg+d1+16]	;; R3
+	movapd	[srcreg+d2+32], xmm4	;; Save R6
+	movapd	xmm4, [srcreg+d1+48]	;; R4
+	movapd	[srcreg+48], xmm7	;; Save R7
+	movapd	xmm7, [srcreg+d2+d1+16]	;; R7
+	movapd	[srcreg+d2+48], xmm5	;; Save R8
+	movapd	xmm5, [srcreg+d2+d1+48]	;; R8
+	xprefetchw [srcreg+srcinc+d2]
+	xprefetchw [srcreg+srcinc+d2+d1]
+	x8r2_unfft xmm2, xmm1, xmm6, xmm4, xmm3, xmm0, xmm7, xmm5, [srcreg+d1]
+	movapd	[srcreg+d2+d1], xmm4	;; Save R2
+	movapd	[srcreg+d1+16], xmm1	;; Save R3
+	movapd	[srcreg+d2+d1+16], xmm2	;; Save R4
+	movapd	[srcreg+d1+32], xmm7	;; Save R5
+	movapd	[srcreg+d2+d1+32], xmm3	;; Save R6
+	movapd	[srcreg+d1+48], xmm5	;; Save R7
+	movapd	[srcreg+d2+d1+48], xmm0	;; Save R8
+	bump	srcreg, srcinc
+	ENDM
+x8r2_unfft MACRO r1, r2, r3, r4, r5, r6, r7, r8, dest1
+	subpd	r1, r2			;; new R2 = R1 - R2
+	multwo	r2
+	addpd	r2, r1			;; new R1 = R1 + R2
+	subpd	r1, r4			;; R2 = R2 - R4 (final R4)
+	multwo	r4
+	addpd	r4, r1			;; R4 = R2 + R4 (final R2)
+	subpd	r2, r3			;; R1 = R1 - R3 (final R3)
+	multwo	r3
+	addpd	r3, r2			;; R3 = R1 + R3 (final R1)
+	movapd	dest1, r3
+
+	subpd	r6, r8			;; new I2 = I1 - I2
+	multwo	r8
+	addpd	r8, r6			;; new I1 = I1 + I2
+	subpd	r5, r7			;; new R2 = R1 - R2
+	multwo	r7
+	addpd	r7, r5			;; new R1 = R1 + R2
+	movapd	r3, XMM_SQRTHALF
+	mulpd	r6, r3			;; B2 = I2 * sine
+	mulpd	r5, r3			;; A2 = R2 * sine
+	movapd	r3, r6			;; Save B2 (C2 = B2)
+	subpd	r6, r5			;; C2 = C2 - A2 (new I2)
+	addpd	r5, r3			;; A2 = A2 + B2 (new R2)
+	ENDM
+
+
+x1cl_half_eight_reals_fft_2 MACRO srcreg,srcinc
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+16]	;; R2
+	movapd	xmm2, [srcreg+32]	;; R3
+	movapd	xmm3, [srcreg+48]	;; R4
+	x8r2_half_fft xmm0, xmm1, xmm2, xmm3
+	movapd	[srcreg], xmm3		;; Save R1
+	movapd	[srcreg+16], xmm2	;; Save R2
+	movapd	[srcreg+32], xmm0	;; Save R3
+	movapd	[srcreg+48], xmm1	;; Save R4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x8r2_half_fft MACRO r1, r2, r3, r4
+	subpd	r1, r3			;; new R3 = R1 - R3 (final R3)
+	multwo	r3
+	addpd	r3, r1			;; new R1 = R1 + R3
+	subpd	r2, r4			;; new R4 = R2 - R4 (final R4)
+	multwo	r4
+	addpd	r4, r2			;; new R2 = R2 + R4
+	subpd	r3, r4			;; R1 = R1 - R2 (final R2)
+	multwo	r4
+	addpd	r4, r3			;; R2 = R1 + R2 (final R1)
+	ENDM
+
+x2cl_half_eight_reals_unfft_2 MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	x8r2_half_unfft xmm0, xmm1, xmm2, xmm3
+	movapd	xmm4, [srcreg+16]	;; R1
+	movapd	xmm5, [srcreg+48]	;; R2
+	movapd	xmm6, [srcreg+d1+16]	;; R3
+	movapd	xmm7, [srcreg+d1+48]	;; R4
+	movapd	[srcreg], xmm2		;; Save R1
+	movapd	[srcreg+16], xmm3	;; Save R2
+	movapd	[srcreg+32], xmm1	;; Save R3
+	movapd	[srcreg+48], xmm0	;; Save R4
+	x8r2_half_unfft xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+d1], xmm6	;; Save R1
+	movapd	[srcreg+d1+16], xmm7	;; Save R2
+	movapd	[srcreg+d1+32], xmm5	;; Save R3
+	movapd	[srcreg+d1+48], xmm4	;; Save R4
+	bump	srcreg, srcinc
+	ENDM
+x1cl_half_eight_reals_unfft_2 MACRO srcreg,srcinc
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+16]	;; R2
+	movapd	xmm2, [srcreg+32]	;; R3
+	movapd	xmm3, [srcreg+48]	;; R4
+	x8r2_half_unfft xmm0, xmm1, xmm2, xmm3
+	movapd	[srcreg], xmm2		;; Save R1
+	movapd	[srcreg+16], xmm3	;; Save R2
+	movapd	[srcreg+32], xmm1	;; Save R3
+	movapd	[srcreg+48], xmm0	;; Save R4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x8r2_half_unfft MACRO r1, r2, r3, r4
+	subpd	r1, r2			;; new R2 = R1 - R2
+	multwo	r2
+	addpd	r2, r1			;; new R1 = R1 + R2
+	subpd	r1, r4			;; R2 = R2 - R4 (final R4)
+	multwo	r4
+	addpd	r4, r1			;; R4 = R2 + R4 (final R2)
+	subpd	r2, r3			;; R1 = R1 - R3 (final R3)
+	multwo	r3
+	addpd	r3, r2			;; R3 = R1 + R3 (final R1)
+	ENDM
+
+;; Macro to operate on 2 64-byte cache lines.  It does 2 two_four_reals_unfft,
+;; 2 two_two_complex_unfft_2, 2 four_complex_unfft in a one pass FFT.
+x2cl_eight_reals_unfft_2 MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+16]	;; R2
+	movapd	xmm2, [srcreg+32]	;; R3
+	movapd	xmm3, [srcreg+48]	;; R4
+	movapd	xmm4, [srcreg+d1]	;; R5
+	movapd	xmm5, [srcreg+d1+16]	;; R6
+	movapd	xmm6, [srcreg+d1+32]	;; R7
+	movapd	xmm7, [srcreg+d1+48]	;; R8
+	x8r2_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg]
+	movapd	[srcreg+d1], xmm3	;; Save R2
+	movapd	[srcreg+16], xmm1	;; Save R3
+	movapd	[srcreg+d1+16], xmm0	;; Save R4
+	movapd	[srcreg+32], xmm6	;; Save R5
+	movapd	[srcreg+d1+32], xmm4	;; Save R6
+	movapd	[srcreg+48], xmm7	;; Save R7
+	movapd	[srcreg+d1+48], xmm5	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+g2cl_eight_reals_unfft_2 MACRO srcreg,srcinc,d1,dstreg,dstinc,e1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+16]	;; R2
+	movapd	xmm2, [srcreg+32]	;; R3
+	movapd	xmm3, [srcreg+48]	;; R4
+	movapd	xmm4, [srcreg+d1]	;; R5
+	movapd	xmm5, [srcreg+d1+16]	;; R6
+	movapd	xmm6, [srcreg+d1+32]	;; R7
+	movapd	xmm7, [srcreg+d1+48]	;; R8
+	lea	srcreg, [srcreg+srcinc]
+	x8r2_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [dstreg]
+	movapd	[dstreg+e1], xmm3	;; Save R2
+	movapd	[dstreg+16], xmm1	;; Save R3
+	movapd	[dstreg+e1+16], xmm0	;; Save R4
+	movapd	[dstreg+32], xmm6	;; Save R5
+	movapd	[dstreg+e1+32], xmm4	;; Save R6
+	movapd	[dstreg+48], xmm7	;; Save R7
+	movapd	[dstreg+e1+48], xmm5	;; Save R8
+	lea	dstreg, [dstreg+dstinc]
+	ENDM
+
+
+;; Macro to operate on 4 64-byte cache lines.  It does 4 four_complex_ffts
+;; in a one pass FFT.
+;; 98.35 clocks
+x4cl_four_complex_fft MACRO srcreg,srcinc,d1,d2
+	x4cl_four_complex_fft_screg srcreg,srcinc,d1,d2,rdi
+	ENDM
+x4cl_four_complex_fft_screg MACRO srcreg,srcinc,d1,d2,screg
+	x4c_fft_mem_screg [srcreg],[srcreg+d1],[srcreg+d2],[srcreg+d2+d1],[srcreg+16],[srcreg+d1+16],[srcreg+d2+16],[srcreg+d2+d1+16],0,screg,srcreg+srcinc,d1,,[srcreg+d1]
+	movapd	[srcreg], xmm5		;; Save R1
+	movapd	xmm5, [srcreg+32]	;; R1
+	movapd	[srcreg+16], xmm7	;; Save R2
+	movapd	xmm7, [srcreg+48]	;; R5
+	movapd	[srcreg+32], xmm1	;; Save R3
+	movapd	xmm1, [srcreg+d1+32]	;; R2
+	movapd	[srcreg+48], xmm3	;; Save R4
+	movapd	xmm3, [srcreg+d1+48]	;; R6
+;	movapd	[srcreg+d1], xmm2	;; Save R5
+	movapd	xmm2, [srcreg+d2+32]	;; R3
+	movapd	[srcreg+d1+16], xmm4	;; Save R6
+	movapd	xmm4, [srcreg+d2+48]	;; R7
+	movapd	[srcreg+d1+32], xmm6	;; Save R7
+	movapd	xmm6, [srcreg+d2+d1+32]	;; R4
+	movapd	[srcreg+d1+48], xmm0	;; Save R8
+	x4c_fft_screg xmm5, xmm1, xmm2, xmm6, xmm7, xmm3, xmm4, xmm0, [srcreg+d2+d1+48], XMM_SCD, screg, srcreg+srcinc+d2, d1, [srcreg+d2+d1+48], [srcreg+d2+d1]
+	movapd	[srcreg+d2], xmm6	;; Save R1
+	movapd	[srcreg+d2+16], xmm1	;; Save R2
+	movapd	[srcreg+d2+32], xmm0	;; Save R3
+	movapd	[srcreg+d2+48], xmm4	;; Save R4
+;	movapd	[srcreg+d2+d1], xmm5	;; Save R5
+	movapd	[srcreg+d2+d1+16], xmm2	;; Save R6
+	movapd	[srcreg+d2+d1+32], xmm3	;; Save R7
+;	movapd	[srcreg+d2+d1+48], xmm7	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+g4cl_four_complex_fft MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2
+	xprefetchw [srcreg+srcinc]
+	x4c_fft_mem [srcreg],[srcreg+d1],[srcreg+d2],[srcreg+d2+d1],[srcreg+16],[srcreg+d1+16],[srcreg+d2+16],[srcreg+d2+d1+16],0,dstreg+dstinc,e1,[dstreg+e1+48],[dstreg+e1]
+	xprefetchw [srcreg+srcinc+d1]
+	movapd	[dstreg], xmm5		;; Save R1
+	movapd	[dstreg+16], xmm7	;; Save R2
+	movapd	[dstreg+32], xmm1	;; Save R3
+	movapd	[dstreg+48], xmm3	;; Save R4
+;	movapd	[dstreg+e1], xmm2	;; Save R5
+	movapd	[dstreg+e1+16], xmm4	;; Save R6
+	movapd	[dstreg+e1+32], xmm6	;; Save R7
+;	movapd	[dstreg+e1+48], xmm0	;; Save R8
+	xprefetchw [srcreg+srcinc+d2]
+	x4c_fft_mem [srcreg+32],[srcreg+d1+32],[srcreg+d2+32],[srcreg+d2+d1+32],[srcreg+48],[srcreg+d1+48],[srcreg+d2+48],[srcreg+d2+d1+48],XMM_SCD,dstreg+dstinc+e2,e1,[dstreg+e2+e1+48],[dstreg+e2+e1]
+	xprefetchw [srcreg+srcinc+d2+d1]
+	lea	srcreg, [srcreg+srcinc]
+	movapd	[dstreg+e2], xmm5	;; Save R1
+	movapd	[dstreg+e2+16], xmm7	;; Save R2
+	movapd	[dstreg+e2+32], xmm1	;; Save R3
+	movapd	[dstreg+e2+48], xmm3	;; Save R4
+;	movapd	[dstreg+e2+e1], xmm2	;; Save R5
+	movapd	[dstreg+e2+e1+16], xmm4	;; Save R6
+	movapd	[dstreg+e2+e1+32], xmm6	;; Save R7
+;	movapd	[dstreg+e2+e1+48], xmm0	;; Save R8
+	lea	dstreg, [dstreg+dstinc]
+	ENDM
+;; 50.35 clocks
+x2cl_four_complex_fft MACRO srcreg,srcinc,d1
+	x4c_fft_mem [srcreg],[srcreg+d1],[srcreg+16],[srcreg+d1+16],[srcreg+32],[srcreg+d1+32],[srcreg+48],[srcreg+d1+48],0,srcreg+srcinc,d1,[srcreg+d1+48],[srcreg+d1]
+	movapd	[srcreg], xmm5		;; Save R1
+	movapd	[srcreg+16], xmm7	;; Save R2
+	movapd	[srcreg+32], xmm1	;; Save R3
+	movapd	[srcreg+48], xmm3	;; Save R4
+;	movapd	[srcreg+d1], xmm2	;; Save R5
+	movapd	[srcreg+d1+16], xmm4	;; Save R6
+	movapd	[srcreg+d1+32], xmm6	;; Save R7
+;	movapd	[srcreg+d1+48], xmm0	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x4c_fft MACRO r1, r2, r3, r4, r5, r6, r7, r8, mem8, off, pre1, pre2, dst1, dst2
+	x4c_fft_screg r1, r2, r3, r4, r5, r6, r7, r8, mem8, off, rdi, pre1, pre2, dst1, dst2
+	ENDM
+x4c_fft_screg MACRO r1, r2, r3, r4, r5, r6, r7, r8, mem8, off, screg, pre1, pre2, dst1, dst2
+	movapd	r8, [screg+off+32+16]	;; cosine/sine
+	mulpd	r8, r3			;; A3 = R3 * cosine/sine	;1-6
+	subpd	r8, r7			;; A3 = A3 - I3			;8-11
+	mulpd	r7, [screg+off+32+16]	;; B3 = I3 * cosine/sine	;3-8
+	addpd	r7, r3			;; B3 = B3 + R3			;10-13
+	movapd	r3, [screg+off+0+16]	;; cosine/sine
+	mulpd	r3, r2			;; A2 = R2 * cosine/sine	;5-10
+	subpd	r3, r6			;; A2 = A2 - I2			;12-15
+	mulpd	r6, [screg+off+0+16]	;; B2 = I2 * cosine/sine	;9-14
+	addpd	r6, r2			;; B2 = B2 + R2			;16-19
+	movapd	r2, [screg+off+64+16]	;; cosine/sine
+	mulpd	r2, mem8		;; B4 = I4 * cosine/sine	;11-16
+	addpd	r2, r4			;; B4 = B4 + R4			;18-21
+	mulpd	r4, [screg+off+64+16]	;; A4 = R4 * cosine/sine	;7-12
+	subpd	r4, mem8		;; A4 = A4 - I4			;14-17
+	mulpd	r8, [screg+off+32]	;; A3 = A3 * sine (new R3)	;13-18
+	mulpd	r7, [screg+off+32]	;; B3 = B3 * sine (new I3)	;15-20
+	mulpd	r3, [screg+off+0]	;; A2 = A2 * sine (new R2)	;17-22
+	mulpd	r4, [screg+off+64]	;; A4 = A4 * sine (new R4)	;19-24
+	xprefetchw [pre1]
+	 subpd	r1, r8			;; R1 = R1 - R3 (new R3)	;20-23
+	 multwo	r8
+	mulpd	r6, [screg+off+0]	;; B2 = B2 * sine (new I2)	;21-26
+	 subpd	r5, r7			;; I1 = I1 - I3 (new I3)	;22-25
+	 multwo	r7
+	mulpd	r2, [screg+off+64]	;; B4 = B4 * sine (new I4)	;23-28
+	xprefetchw [pre1][pre2]
+	 addpd	r8, r1			;; R3 = R1 + R3 (new R1)	;24-27
+	 subpd	r3, r4			;; R2 = R2 - R4 (new R4)	;26-29
+	 multwo	r4			;; R4 = R4 * 2			;27-32
+	 addpd	r7, r5			;; I3 = I1 + I3 (new I1)	;28-31
+	 subpd	r6, r2			;; I2 = I2 - I4 (new I4)	;30-33
+	 multwo	r2			;; I4 = I4 * 2			;31-36
+	subpd	r5, r3			;; I3 = I3 - R4 (final I4)	;32-35
+	IFNB <dst1>
+	movapd	dst1, r5
+	 addpd	r4, r3			;; R4 = R2 + R4 (new R2)	;34-37
+	multwo	r3			;; R4 = R4 * 2			;35-40
+	 addpd	r2, r6			;; I4 = I2 + I4 (new I2)	;36-39
+	addpd	r3, r5			;; R4 = I3 + R4 (final I3)	;44-47
+	movapd	r5, r1
+	subpd	r1, r6			;; R3 = R3 - I4 (final R3)	;38-41
+	IFNB <dst2>
+	movapd	dst2, r1
+	ENDIF
+	addpd	r6, r5			;; I4 = R3 + I4 (final R4)	;46-49
+	movapd	r5, r8
+	subpd	r8, r4			;; R1 = R1 - R2 (final R2)	;40-43
+	addpd	r4, r5			;; R2 = R1 + R2 (final R1)	;48-51
+	movapd	r5, r7
+	subpd	r7, r2			;; I1 = I1 - I2 (final I2)	;42-45
+	addpd	r2, r5			;; I2 = I1 + I2 (final I1)	;50-53
+	ENDIF
+	IFB <dst1>
+	 addpd	r4, r3			;; R4 = R2 + R4 (new R2)	;34-37
+	multwo	r3			;; R4 = R4 * 2			;35-40
+	 addpd	r2, r6			;; I4 = I2 + I4 (new I2)	;36-39
+	subpd	r1, r6			;; R3 = R3 - I4 (final R3)	;38-41
+	IFNB <dst2>
+	movapd	dst2, r1
+	ENDIF
+	multwo	r6			;; I4 = I4 * 2			;39-44
+	subpd	r8, r4			;; R1 = R1 - R2 (final R2)	;40-43
+	multwo	r4			;; R2 = R2 * 2			;41-46
+	subpd	r7, r2			;; I1 = I1 - I2 (final I2)	;42-45
+	multwo	r2			;; I2 = I2 * 2			;43-48
+	addpd	r3, r5			;; R4 = I3 + R4 (final I3)	;44-47
+	addpd	r6, r1			;; I4 = R3 + I4 (final R4)	;46-49
+	addpd	r4, r8			;; R2 = R1 + R2 (final R1)	;48-51
+	addpd	r2, r7			;; I2 = I1 + I2 (final I1)	;50-53
+	ENDIF
+	ENDM
+x4c_fft_mem MACRO R1,R2,R3,R4,R5,R6,R7,R8,off,pre1,pre2,dst1,dst2
+	x4c_fft_mem_screg R1,R2,R3,R4,R5,R6,R7,R8,off,rdi,pre1,pre2,dst1,dst2
+	ENDM
+x4c_fft_mem_screg MACRO R1,R2,R3,R4,R5,R6,R7,R8,off,screg,pre1,pre2,dst1,dst2
+	movapd	xmm0, R3		;; R3
+	movapd	xmm1, [screg+off+32+16]	;; cosine/sine
+	mulpd	xmm1, xmm0		;; A3 = R3 * cosine/sine	;1-6
+	movapd	xmm2, R7		;; I3
+	movapd	xmm3, [screg+off+32+16]	;; cosine/sine
+	mulpd	xmm3, xmm2		;; B3 = I3 * cosine/sine	;3-8
+	movapd	xmm4, R2		;; R2
+	movapd	xmm6, [screg+off+0+16]	;; cosine/sine
+	mulpd	xmm4, xmm6		;; A2 = R2 * cosine/sine	;5-10
+	movapd	xmm5, R4		;; R4
+	movapd	xmm7, [screg+off+64+16]	;; cosine/sine
+	mulpd	xmm5, xmm7		;; A4 = R4 * cosine/sine	;7-12
+	subpd	xmm1, xmm2		;; A3 = A3 - I3			;8-11
+	movapd	xmm2, R6		;; I2
+	mulpd	xmm6, xmm2		;; B2 = I2 * cosine/sine	;9-14
+	addpd	xmm3, xmm0		;; B3 = B3 + R3			;10-13
+	movapd	xmm0, R8		;; I4
+	mulpd	xmm7, xmm0		;; B4 = I4 * cosine/sine	;11-16
+	subpd	xmm4, xmm2		;; A2 = A2 - I2			;12-15
+	movapd	xmm2, [screg+off+32]	;; sine
+	mulpd	xmm1, xmm2		;; A3 = A3 * sine (new R3)	;13-18
+	subpd	xmm5, xmm0		;; A4 = A4 - I4			;14-17
+	mulpd	xmm3, xmm2		;; B3 = B3 * sine (new I3)	;15-20
+	addpd	xmm6, R2		;; B2 = B2 + R2			;16-19
+	movapd	xmm0, [screg+off+0]	;; sine
+	mulpd	xmm4, xmm0		;; A2 = A2 * sine (new R2)	;17-22
+	xprefetchw [pre1]
+	addpd	xmm7, R4		;; B4 = B4 + R4			;18-21
+	mulpd	xmm5, [screg+off+64]	;; A4 = A4 * sine (new R4)	;19-24
+	 movapd	xmm2, R1		;; R1
+	 subpd	xmm2, xmm1		;; R1 = R1 - R3 (new R3)	;20-23
+	mulpd	xmm6, xmm0		;; B2 = B2 * sine (new I2)	;21-26
+	 movapd	xmm0, R5		;; I1
+	 subpd	xmm0, xmm3		;; I1 = I1 - I3 (new I3)	;22-25
+	mulpd	xmm7, [screg+off+64]	;; B4 = B4 * sine (new I4)	;23-28
+	 addpd	xmm1, R1		;; R3 = R1 + R3 (new R1)	;24-27
+	xprefetchw [pre1][pre2]
+	 subpd	xmm4, xmm5		;; R2 = R2 - R4 (new R4)	;26-29
+	 multwo	xmm5			;; R4 = R4 * 2			;27-32
+	 addpd	xmm3, R5		;; I3 = I1 + I3 (new I1)	;28-31
+	 subpd	xmm6, xmm7		;; I2 = I2 - I4 (new I4)	;30-33
+	 multwo	xmm7			;; I4 = I4 * 2			;31-36
+	subpd	xmm0, xmm4		;; I3 = I3 - R4 (final I4)	;32-35
+	IFNB <dst1>
+	movapd	dst1, xmm0
+	 addpd	xmm5, xmm4		;; R4 = R2 + R4 (new R2)	;34-37
+	multwo	xmm4			;; R4 = R4 * 2			;35-40
+	 addpd	xmm7, xmm6		;; I4 = I2 + I4 (new I2)	;36-39
+	addpd	xmm4, xmm0		;; R4 = I3 + R4 (final I3)	;44-47
+	movapd	xmm0, xmm2
+	subpd	xmm2, xmm6		;; R3 = R3 - I4 (final R3)	;38-41
+	IFNB <dst2>
+	movapd	dst2, xmm2
+	ENDIF
+	addpd	xmm6, xmm0		;; I4 = R3 + I4 (final R4)	;46-49
+	movapd	xmm0, xmm1
+	subpd	xmm1, xmm5		;; R1 = R1 - R2 (final R2)	;40-43
+	addpd	xmm5, xmm0		;; R2 = R1 + R2 (final R1)	;48-51
+	movapd	xmm0, xmm3
+	subpd	xmm3, xmm7		;; I1 = I1 - I2 (final I2)	;42-45
+	addpd	xmm7, xmm0		;; I2 = I1 + I2 (final I1)	;50-53
+	ENDIF
+	IFB <dst1>
+	 addpd	xmm5, xmm4		;; R4 = R2 + R4 (new R2)	;34-37
+	multwo	xmm4			;; R4 = R4 * 2			;35-40
+	 addpd	xmm7, xmm6		;; I4 = I2 + I4 (new I2)	;36-39
+	subpd	xmm2, xmm6		;; R3 = R3 - I4 (final R3)	;38-41
+	IFNB <dst2>
+	movapd	dst2, xmm2
+	multwo	xmm6			;; I4 = I4 * 2			;39-44
+	addpd	xmm6, xmm2		;; I4 = R3 + I4 (final R4)	;46-49
+	movapd	xmm2, xmm1
+	subpd	xmm1, xmm5		;; R1 = R1 - R2 (final R2)	;40-43
+	addpd	xmm5, xmm2		;; R2 = R1 + R2 (final R1)	;48-51
+	movapd	xmm2, xmm3
+	subpd	xmm3, xmm7		;; I1 = I1 - I2 (final I2)	;42-45
+	addpd	xmm4, xmm0		;; R4 = I3 + R4 (final I3)	;44-47
+	addpd	xmm7, xmm2		;; I2 = I1 + I2 (final I1)	;50-53
+	ENDIF
+	IFB <dst2>
+	multwo	xmm6			;; I4 = I4 * 2			;39-44
+	subpd	xmm1, xmm5		;; R1 = R1 - R2 (final R2)	;40-43
+	multwo	xmm5			;; R2 = R2 * 2			;41-46
+	subpd	xmm3, xmm7		;; I1 = I1 - I2 (final I2)	;42-45
+	multwo	xmm7			;; I2 = I2 * 2			;43-48
+	addpd	xmm4, xmm0		;; R4 = I3 + R4 (final I3)	;44-47
+	addpd	xmm6, xmm2		;; I4 = R3 + I4 (final R4)	;46-49
+	addpd	xmm5, xmm1		;; R2 = R1 + R2 (final R1)	;48-51
+	addpd	xmm7, xmm3		;; I2 = I1 + I2 (final I1)	;50-53
+	ENDIF
+	ENDIF
+	ENDM
+
+
+;; Macro to operate on 4 64-byte cache lines.  It does 4 four_complex_unffts
+;; in a one pass FFT.
+;; 98 clocks
+x4cl_four_complex_unfft MACRO srcreg,srcinc,d1,d2
+	x4cl_four_complex_unfft_screg srcreg,srcinc,d1,d2,rdi
+	ENDM
+x4cl_four_complex_unfft_screg MACRO srcreg,srcinc,d1,d2,screg
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	best_x4c_unfft_screg xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1], [srcreg+d2+d1+32], [srcreg], [srcreg+32], 0, screg, srcreg+srcinc, d1
+	movapd	xmm2, [srcreg+16]	;; R1
+	movapd	xmm3, [srcreg+d2+16]	;; R5
+	movapd	[srcreg+d2], xmm1	;; Save R2
+	movapd	[srcreg+d2+16], xmm4	;; Save R4
+	movapd	xmm1, [srcreg+48]	;; R2
+	movapd	xmm4, [srcreg+d2+48]	;; R6
+	movapd	[srcreg+d2+32], xmm0	;; Save R6
+	movapd	[srcreg+d2+48], xmm7	;; Save R8
+	movapd	[srcreg+16], xmm5	;; Save R3
+	movapd	[srcreg+48], xmm6	;; Save R7
+	movapd	xmm0, [srcreg+d1+16]	;; R3
+	movapd	xmm5, [srcreg+d1+48]	;; R4
+	best_x4c_unfft_screg xmm2, xmm1, xmm0, xmm5, xmm3, xmm4, xmm6, xmm7, [srcreg+d2+d1+16], [srcreg+d2+d1+48], [srcreg+d1], [srcreg+d1+32], 0, screg, srcreg+srcinc+d2, d1
+	movapd	[srcreg+d2+d1], xmm1	;; Save R2
+	movapd	[srcreg+d2+d1+16], xmm3	;; Save R4
+	movapd	[srcreg+d2+d1+32], xmm2	;; Save R6
+	movapd	[srcreg+d2+d1+48], xmm7	;; Save R8
+	movapd	[srcreg+d1+16], xmm4	;; Save R3
+	movapd	[srcreg+d1+48], xmm6	;; Save R7
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+best_x4c_unfft MACRO r1, r2, r3, r4, r5, r6, r7, r8, mem7, mem8, dest1, dest2, off, pre1, pre2
+	best_x4c_unfft_screg r1, r2, r3, r4, r5, r6, r7, r8, mem7, mem8, dest1, dest2, off, rdi, pre1, pre2
+	ENDM
+best_x4c_unfft_screg MACRO r1, r2, r3, r4, r5, r6, r7, r8, mem7, mem8, dest1, dest2, off, screg, pre1, pre2
+	subpd	r1, r3			;; new R2 = R1 - R2
+	multwo	r3
+	movapd	r8, mem8
+	addpd	r8, r6			;; new I3 = I3 + I4
+	subpd	r6, mem8		;; new R4 = I3 - I4
+	subpd	r2, r4			;; new I2 = I1 - I2
+	multwo	r4
+	movapd	r7, mem7
+	subpd	r7, r5			;; new I4 = R4 - R3
+	addpd	r5, mem7		;; new R3 = R3 + R4
+	addpd	r3, r1			;; new R1 = R1 + R2
+	addpd	r4, r2			;; new I1 = I1 + I2
+	IFNB <pre1>
+	xprefetchw [pre1]
+	ENDIF
+	subpd	r1, r6			;; R2 = R2 - R4 (new R4)
+	multwo	r6			;; R4 = R4 * 2
+	addpd	r6, r1			;; R4 = R2 + R4 (new R2)
+	subpd	r2, r7			;; I2 = I2 - I4 (new I4)
+	multwo	r7			;; I4 = I4 * 2
+	addpd	r7, r2			;; I4 = I2 + I4 (new I2)
+	subpd	r3, r5			;; R1 = R1 - R3 (new R3)
+	multwo	r5			;; R3 = R3 * 2
+	addpd	r5, r3			;; R3 = R1 + R3 (new & final R1)
+	IFNB <pre1>
+	xprefetchw [pre1][pre2]
+	ENDIF
+	movapd	dest1, r5		;; Save final R1
+	movapd	r5, r4
+	subpd	r4, r8			;; I1 = I1 - I3 (new I3)
+	addpd	r8, r5			;; I3 = I1 + I3 (new & final I1)
+	movapd	dest2, r8		;; Save final I1
+	movapd	r5, [screg+off+64+16]	;; cosine/sine
+	mulpd	r5, r1			;; A4 = new R4 * cosine/sine
+	movapd	r8, [screg+off+64+16]	;; cosine/sine
+	mulpd	r8, r2			;; B4 = new I4 * cosine/sine
+	addpd	r5, r2			;; A4 = A4 + new I4
+	subpd	r8, r1			;; B4 = B4 - new R4
+	mulpd	r5, [screg+off+64]	;; A4 = A4 * sine (final R4)
+	mulpd	r8, [screg+off+64]	;; B4 = B4 * sine (final I4)
+	movapd	r2, [screg+off+0+16]	;; cosine/sine
+	mulpd	r2, r6			;; A2 = new R2 * cosine/sine
+	movapd	r1, [screg+off+0+16]	;; cosine/sine
+	mulpd	r1, r7			;; B2 = new I2 * cosine/sine
+	addpd	r2, r7			;; A2 = A2 + new I2
+	subpd	r1, r6			;; B2 = B2 - new R2
+	movapd	r6, [screg+off+32+16]	;; cosine/sine
+	mulpd	r6, r3			;; A3 = new R3 * cosine/sine
+	movapd	r7, [screg+off+32+16]	;; cosine/sine
+	mulpd	r7, r4			;; B3 = new I3 * cosine/sine
+	addpd	r6, r4			;; A3 = A3 + new I3
+	subpd	r7, r3			;; B3 = B3 - new R3
+	mulpd	r2, [screg+off+0]	;; A2 = A2 * sine (final R2)
+	mulpd	r1, [screg+off+0]	;; B2 = B2 * sine (final I2)
+	mulpd	r6, [screg+off+32]	;; A3 = A3 * sine (final R3)
+	mulpd	r7, [screg+off+32]	;; B3 = B3 * sine (final I3)
+	ENDM
+new_x4c_unfft MACRO r1, r2, r3, r4, r5, r6, r7, r8, dest1, off
+	subpd	r1, r3			;; new R2 = R1 - R2
+	multwo	r3
+	subpd	r6, r8			;; new R4 = I3 - I4
+	multwo	r8
+	subpd	r2, r4			;; new I2 = I1 - I2
+	multwo	r4
+	subpd	r7, r5			;; new I4 = R4 - R3
+	multwo	r5
+	addpd	r5, r7			;; new R3 = R3 + R4
+	addpd	r3, r1			;; new R1 = R1 + R2
+	addpd	r8, r6			;; new I3 = I3 + I4
+	addpd	r4, r2			;; new I1 = I1 + I2
+	subpd	r1, r6			;; R2 = R2 - R4 (new R4)
+	multwo	r6			;; R4 = R4 * 2
+	subpd	r2, r7			;; I2 = I2 - I4 (new I4)
+	multwo	r7			;; I4 = I4 * 2
+	subpd	r3, r5			;; R1 = R1 - R3 (new R3)
+	multwo	r5			;; R3 = R3 * 2
+	addpd	r6, r1			;; R4 = R2 + R4 (new R2)
+	addpd	r7, r2			;; I4 = I2 + I4 (new I2)
+	addpd	r5, r3			;; R3 = R1 + R3 (new & final R1)
+	movapd	dest1, r5		;; Save final R1
+	mulpd	r2, [rdi+off+64]	;; B4 = new I4 * sine
+	mulpd	r1, [rdi+off+64]	;; A4 = new R4 * sine
+	movapd	r5, [rdi+off+64+16]	;; cosine/sine
+	mulpd	r5, r2			;; C4 = B4 * cosine/sine
+	subpd	r5, r1			;; C4 = C4 - A4 (final I4)
+	mulpd	r1, [rdi+off+64+16]	;; A4 = A4 * cosine/sine
+	addpd	r1, r2			;; A4 = B4 + A4 (final R4)
+	subpd	r4, r8			;; I1 = I1 - I3 (new I3)
+	multwo	r8			;; I3 = I3 * 2
+	addpd	r8, r4			;; I3 = I1 + I3 (new & final I1)
+	movapd	r2, [rdi+off+0+16]	;; cosine/sine
+	mulpd	r2, r6			;; A2 = new R2 * cosine/sine
+	addpd	r2, r7			;; A2 = A2 + new I2
+	mulpd	r7, [rdi+off+0+16]	;; B2 = new I2 * cosine/sine
+	subpd	r7, r6			;; B2 = B2 - new R2
+	movapd	r6, [rdi+off+32+16]	;; cosine/sine
+	mulpd	r6, r3			;; A3 = new R3 * cosine/sine
+	addpd	r6, r4			;; A3 = A3 + new I3
+	mulpd	r4, [rdi+off+32+16]	;; B3 = new I3 * cosine/sine
+	subpd	r4, r3			;; B3 = B3 - new R3
+	mulpd	r2, [rdi+off+0]		;; A2 = A2 * sine (final R2)
+	mulpd	r7, [rdi+off+0]		;; B2 = B2 * sine (final I2)
+	mulpd	r6, [rdi+off+32]	;; A3 = A3 * sine (final R3)
+	mulpd	r4, [rdi+off+32]	;; B3 = B3 * sine (final I3)
+	ENDM
+x4c_unfft MACRO r1, r2, r3, r4, r5, r6, r7, r8
+	subpd	r1, r3			;; new R2 = R1 - R2
+	multwo	r3
+	addpd	r3, r1			;; new R1 = R1 + R2
+	subpd	r6, r8			;; new R4 = I3 - I4
+	multwo	r8
+	addpd	r8, r6			;; new I3 = I3 + I4
+	subpd	r2, r4			;; new I2 = I1 - I2
+	multwo	r4
+	addpd	r4, r2			;; new I1 = I1 + I2
+	subpd	r7, r5			;; new I4 = R4 - R3
+	multwo	r5
+	addpd	r5, r7			;; new R3 = R3 + R4
+	subpd	r1, r6			;; R2 = R2 - R4 (new R4)
+	multwo	r6			;; R4 = R4 * 2
+	addpd	r6, r1			;; R4 = R2 + R4 (new R2)
+	subpd	r2, r7			;; I2 = I2 - I4 (new I4)
+	multwo	r7			;; I4 = I4 * 2
+	addpd	r7, r2			;; I4 = I2 + I4 (new I2)
+	subpd	r3, r5			;; R1 = R1 - R3 (new R3)
+	movapd	XMM_TMP1, r6		;; Save new R2
+	mulpd	r2, [rdi+64]		;; B4 = new I4 * sine
+	movapd	XMM_TMP2, r3		;; Save new R3
+	mulpd	r1, [rdi+64]		;; A4 = new R4 * sine
+	mulpd	r6, [rdi+0+16]		;; A2 = new R2 * cosine/sine
+	movapd	XMM_TMP3, r2		;; Save B4
+	mulpd	r3, [rdi+32+16]		;; A3 = new R3 * cosine/sine
+	subpd	r4, r8			;; I1 = I1 - I3 (new I3)
+	mulpd	r2, [rdi+64+16]		;; C4 = B4 * cosine/sine
+	multwo	r8			;; I3 = I3 * 2
+	movapd	XMM_TMP4, r4		;; Save I1
+	addpd	r6, r7			;; A2 = A2 + new I2
+	mulpd	r7, [rdi+0+16]		;; B2 = new I2 * cosine/sine
+	addpd	r3, r4			;; A3 = A3 + new I3
+	mulpd	r4, [rdi+32+16]		;; B3 = new I3 * cosine/sine
+	multwo	r5			;; R3 = R3 * 2
+	subpd	r2, r1			;; C4 = C4 - A4 (final I4)
+	mulpd	r1, [rdi+64+16]		;; A4 = A4 * cosine/sine
+	subpd	r7, XMM_TMP1		;; B2 = B2 - new R2
+	mulpd	r6, [rdi+0]		;; A2 = A2 * sine (final R2)
+	subpd	r4, XMM_TMP2		;; B3 = B3 - new R3
+	mulpd	r3, [rdi+32]		;; A3 = A3 * sine (final R3)
+	addpd	r8, XMM_TMP4		;; I3 = I1 + I3 (new & final I1)
+	mulpd	r7, [rdi+0]		;; B2 = B2 * sine (final I2)
+	addpd	r1, XMM_TMP3		;; A4 = B4 + A4 (final R4)
+	mulpd	r4, [rdi+32]		;; B3 = B3 * sine (final I3)
+	addpd	r5, XMM_TMP2		;; R3 = R1 + R3 (new & final R1)
+	ENDM
+
+;; Macro to operate on 2 64-byte cache lines.  It does 2 four_complex_unffts
+;; in a two pass FFT.
+x2cl_four_complex_unfft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+16]	;; R2
+	movapd	xmm2, [srcreg+32]	;; R3
+	movapd	xmm3, [srcreg+48]	;; R4
+	movapd	xmm4, [srcreg+d1]	;; R5
+	movapd	xmm5, [srcreg+d1+16]	;; R6
+	best_x4c_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d1+32], [srcreg+d1+48], [srcreg], [srcreg+32], 0, srcreg+srcinc, d1
+	movapd	[srcreg+d1], xmm1	;; Save R2
+	movapd	[srcreg+d1+16], xmm4	;; Save R4
+	movapd	[srcreg+d1+32], xmm0	;; Save R6
+	movapd	[srcreg+d1+48], xmm7	;; Save R8
+	movapd	[srcreg+16], xmm5	;; Save R3
+	movapd	[srcreg+48], xmm6	;; Save R7
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+g2cl_four_complex_unfft MACRO srcreg,srcinc,d1,dstreg,dstinc,e1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+16]	;; R2
+	movapd	xmm2, [srcreg+32]	;; R3
+	movapd	xmm3, [srcreg+48]	;; R4
+	movapd	xmm4, [srcreg+d1]	;; R5
+	movapd	xmm5, [srcreg+d1+16]	;; R6
+	best_x4c_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d1+32], [srcreg+d1+48], [dstreg], [dstreg+32], 0, dstreg+dstinc, e1
+	lea	srcreg, [srcreg+srcinc]
+	movapd	[dstreg+e1], xmm1	;; Save R2
+	movapd	[dstreg+e1+16], xmm4	;; Save R4
+	movapd	[dstreg+e1+32], xmm0	;; Save R6
+	movapd	[dstreg+e1+48], xmm7	;; Save R8
+	movapd	[dstreg+16], xmm5	;; Save R3
+	movapd	[dstreg+48], xmm6	;; Save R7
+	lea	dstreg, [dstreg+dstinc]
+	ENDM
+
+
+;; Macro to operate on 2 64-byte cache line.  It does does one FFT level
+;; given 8 reals.
+x2cl_four_reals_fft_1 MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+16]	;; R2
+	movapd	xmm2, [srcreg+32]	;; R3
+	movapd	xmm3, [srcreg+48]	;; R4
+	half_x4r_fft xmm0, xmm1, xmm2, xmm3
+	movapd	[srcreg], xmm1		;; Save R1
+	movapd	[srcreg+16], xmm0	;; Save R2
+	movapd	[srcreg+32], xmm2	;; Save R3
+	movapd	[srcreg+48], xmm3	;; Save R4
+	movapd	xmm4, [srcreg+d1]	;; R1
+	movapd	xmm5, [srcreg+d1+16]	;; R2
+	movapd	xmm6, [srcreg+d1+32]	;; R3
+	movapd	xmm7, [srcreg+d1+48]	;; R4
+	half_x4r_fft xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg+d1], xmm5	;; Save R1
+	movapd	[srcreg+d1+16], xmm4	;; Save R2
+	movapd	[srcreg+d1+32], xmm6	;; Save R3
+	movapd	[srcreg+d1+48], xmm7	;; Save R4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+half_x4r_fft MACRO r1, r2, r3, r4
+	subpd	r1, r2			;; R1 - R2 (final R2)
+	multwo	r2
+	addpd	r2, r1			;; R1 + R2 (final R1)
+					;; Nop R3
+					;; Nop R4
+	ENDM
+
+;; Macro to operate on 2 64-byte cache lines.  It does does one FFT level
+;; given 4 reals and 2 complex values.
+x2cl_eight_reals_fft_1 MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+d1]	;; R2
+	movapd	xmm2, [srcreg+16]	;; R3
+	movapd	xmm3, [srcreg+d1+16]	;; R4
+	movapd	xmm4, [srcreg+32]	;; R5
+	movapd	xmm5, [srcreg+d1+32]	;; R6
+	movapd	xmm6, [srcreg+48]	;; R7
+	movapd	xmm7, [srcreg+d1+48]	;; R8
+	x4r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg], xmm1		;; Save R1
+	movapd	[srcreg+16], xmm0	;; Save R2
+	movapd	[srcreg+32], xmm2	;; Save R3
+	movapd	[srcreg+48], xmm3	;; Save R4
+	movapd	[srcreg+d1], xmm5	;; Save R5
+	movapd	[srcreg+d1+16], xmm7	;; Save R6
+	movapd	[srcreg+d1+32], xmm4	;; Save R7
+	movapd	[srcreg+d1+48], xmm6	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+s2cl_eight_reals_fft_1 MACRO srcreg,srcinc,d1
+	shuffle_load xmm0,xmm1,[srcreg][rbx],[srcreg+d1][rbx] ;; R1,R2
+	shuffle_load xmm2,xmm3,[srcreg+16][rbx],[srcreg+d1+16][rbx] ;; R3,R4
+	shuffle_load xmm4,xmm5,[srcreg+32][rbx],[srcreg+d1+32][rbx] ;; R5,R6
+	shuffle_load xmm6,xmm7,[srcreg+48][rbx],[srcreg+d1+48][rbx] ;; R7,R8
+	x4r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	[srcreg], xmm1		;; Save R1
+	movapd	[srcreg+16], xmm0	;; Save R2
+	movapd	[srcreg+32], xmm2	;; Save R3
+	movapd	[srcreg+48], xmm3	;; Save R4
+	movapd	[srcreg+d1], xmm5	;; Save R5
+	movapd	[srcreg+d1+16], xmm7	;; Save R6
+	movapd	[srcreg+d1+32], xmm4	;; Save R7
+	movapd	[srcreg+d1+48], xmm6	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x4r_fft MACRO r1, r2, r3, r4, r5, r6, r7, r8
+	subpd	r1, r2			;; R1 - R2 (final R2)
+	multwo	r2
+	addpd	r2, r1			;; R1 + R2 (final R1)
+					;; Nop R3
+					;; Nop R4
+	subpd	r6, r8			;; R2 - I2
+	multwo	r8
+	addpd	r8, r6			;; R2 + I2
+	mulpd	r6, XMM_SQRTHALF	;; newR2
+	mulpd	r8, XMM_SQRTHALF	;; newI2
+	subpd	r7, r8			;; I1 = I1 - I2 (new I2)
+	multwo	r8
+	addpd	r8, r7			;; I2 = I1 + I2 (new I1)
+	subpd	r5, r6			;; R1 = R1 - R2 (new R2)
+	multwo	r6
+	addpd	r6, r5			;; R2 = R1 + R2 (new R1)
+	ENDM
+
+
+;; Macro to operate on 2 64-byte cache lines.  It does one level
+;; of inverse FFT.
+x2cl_eight_reals_unfft_1 MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+16]	;; R1
+	movapd	xmm5, [srcreg+48]	;; R2
+	movapd	xmm6, [srcreg+d1+16]	;; R3
+;;	movapd	xmm7, [srcreg+d1+48]	;; R4
+	subpd	xmm0, xmm1		;; R1 - R2 (final R2)
+	multwo	xmm1
+	addpd	xmm1, xmm0		;; R1 + R2 (final R1)
+	subpd	xmm4, xmm5		;; R1 - R2 (final R2)
+	multwo	xmm5
+	addpd	xmm5, xmm4		;; R1 + R2 (final R1)
+	movapd	[srcreg], xmm1		;; R1
+	movapd	[srcreg+16], xmm0	;; R2
+	movapd	[srcreg+32], xmm2	;; R3
+	movapd	[srcreg+48], xmm3	;; R4
+	movapd	[srcreg+d1], xmm5	;; R5
+	movapd	[srcreg+d1+16], xmm4	;; R6
+	movapd	[srcreg+d1+32], xmm6	;; R7
+;;	movapd	[srcreg+d1+48], xmm7	;; R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x1cl_eight_reals_unfft_1 MACRO srcreg,srcinc
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+16]	;; R2
+	subpd	xmm0, xmm1		;; R1 - R2 (final R2)
+	multwo	xmm1
+	addpd	xmm1, xmm0		;; R1 + R2 (final R1)
+	movapd	[srcreg], xmm1		;; R1
+	movapd	[srcreg+16], xmm0	;; R2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+;; Macro to operate on 4 64-byte cache lines.  It does one level
+;; of inverse FFT.
+s4cl_eight_reals_unfft_1 MACRO srcreg,srcinc,d1,d2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	movapd	xmm6, [srcreg+d2+d1]	;; R7
+	movapd	xmm7, [srcreg+d2+d1+32]	;; R8
+	x8r1_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d1], [srcreg+d1+32]
+	shuffle_store [srcreg], [srcreg+d2], xmm1, xmm0	;; Save R1 and R2
+	movapd	xmm0, [srcreg+16]	;; R1
+	movapd	xmm1, [srcreg+d2+16]	;; R5
+	shuffle_store [srcreg+16], [srcreg+d2+16], xmm2, xmm3 ;; Save R3 and R4
+	movapd	xmm2, [srcreg+48]	;; R2
+	movapd	xmm3, [srcreg+d2+48]	;; R6
+	shuffle_store [srcreg+32], [srcreg+d2+32], xmm6, xmm4 ;; Save R5 and R6
+	shuffle_store [srcreg+48], [srcreg+d2+48], xmm7, xmm5 ;; Save R7 and R8
+	movapd	xmm6, [srcreg+d2+d1+16]	;; R7
+	movapd	xmm7, [srcreg+d2+d1+48]	;; R8
+	x8r1_unfft xmm0, xmm2, xmm4, xmm5, xmm1, xmm3, xmm6, xmm7, [srcreg+d1+16], [srcreg+d1+48]
+	shuffle_store [srcreg+d1], [srcreg+d2+d1], xmm2, xmm0 ;; Save R1 and R2
+	shuffle_store [srcreg+d1+16], [srcreg+d2+d1+16], xmm4, xmm5 ;; R3, R4
+	shuffle_store [srcreg+d1+32], [srcreg+d2+d1+32], xmm6, xmm1 ;; R5, R6
+	shuffle_store [srcreg+d1+48], [srcreg+d2+d1+48], xmm7, xmm3 ;; R7, R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x8r1_unfft MACRO r1, r2, r3, r4, r5, r6, r7, r8, mem3, mem4
+	subpd	r1, r2			;; R1 - R2 (final R2)
+	multwo	r2
+	addpd	r2, r1			;; R1 + R2 (final R1)
+	subpd	r6, r8			;; new I2 = I1 - I2
+	multwo	r8
+	addpd	r8, r6			;; new I1 = I1 + I2
+	subpd	r5, r7			;; new R2 = R1 - R2
+	multwo	r7
+	addpd	r7, r5			;; new R1 = R1 + R2
+	movapd	r3, XMM_SQRTHALF
+	mulpd	r6, r3			;; B2 = I2 * sine
+	mulpd	r5, r3			;; A2 = R2 * sine
+	movapd	r3, r6			;; Save B2 (C2 = B2)
+	subpd	r6, r5			;; C2 = C2 - A2 (new I2)
+	addpd	r5, r3			;; A2 = A2 + B2 (new R2)
+	movapd	r3, mem3
+	movapd	r4, mem4
+	ENDM
+
+;; Macro to operate on 2 64-byte cache lines.  It does 2 two_complex_ffts
+;; in a one pass FFT.
+;; 30.45 clocks
+x2cl_two_complex_fft MACRO srcreg,srcinc,d1
+	x2cl_two_complex_fft_screg srcreg,srcinc,d1,rdi
+	ENDM
+x2cl_two_complex_fft_screg MACRO srcreg,srcinc,d1,screg
+	movapd	xmm2, [srcreg+d1]	;; R2
+	movapd	xmm0, [screg+48]		;; cosine/sine
+	mulpd	xmm0, xmm2		;; A2 = R2 * cosine/sine	;1-6
+	movapd	xmm3, [srcreg+d1+16]	;; R4
+	movapd	xmm1, [screg+48]	;; cosine/sine
+	mulpd	xmm1, xmm3		;; B2 = I2 * cosine/sine	;3-8
+	movapd	xmm6, [srcreg+d1+32]	;; R2_2
+	movapd	xmm4, [screg+XMM_SCD+48];; cosine/sine
+	mulpd	xmm4, xmm6		;; A2_2 = R2_2 * cosine/sine	;5-10
+	movapd	xmm7, [srcreg+d1+48]	;; R4_2
+	movapd	xmm5, [screg+XMM_SCD+48];; cosine/sine
+	mulpd	xmm5, xmm7		;; B2_2 = I2_2 * cosine/sine	;7-12
+	subpd	xmm0, xmm3		;; A2 = A2 - I2			;8-11
+	addpd	xmm1, xmm2		;; B2 = B2 + R2			;10-13
+	xprefetchw [srcreg+srcinc]
+	subpd	xmm4, xmm7		;; A2_2 = A2_2 - I2_2		;12-15
+	mulpd	xmm0, [screg+32]	;; A2 = A2 * sine (new R2)	;13-18
+	addpd	xmm5, xmm6		;; B2_2 = B2_2 + R2_2		;14-17
+	mulpd	xmm1, [screg+32]	;; B2 = B2 * sine (new I2)	;15-20
+	mulpd	xmm4, [screg+XMM_SCD+32];; A2_2 = A2_2 * sine (new R2_2);17-22
+	movapd	xmm2, [srcreg]		;; R1
+	xprefetchw [srcreg+srcinc+d1]
+	subpd	xmm2, xmm0		;; R1 = R1 - R2 (final R2)	;18-21
+	mulpd	xmm5, [screg+XMM_SCD+32];; B2_2 = B2_2 * sine (new I2_2);19-24
+	addpd	xmm0, [srcreg]		;; R2 = R1 + R2 (final R1)	;20-23
+	movapd	xmm3, [srcreg+16]	;; R3
+	subpd	xmm3, xmm1		;; I1 = I1 - I2 (final I2)	;22-25
+	addpd	xmm1, [srcreg+16]	;; I2 = I1 + I2 (final I1)	;24-27
+	movapd	xmm6, [srcreg+32]	;; R1_2
+	subpd	xmm6, xmm4		;; R1_2 = R1_2-R2_2 (final R2_2);26-29
+	addpd	xmm4, [srcreg+32]	;; R2_2 = R1_2+R2_2 (final R1_2);28-31
+	movapd	xmm7, [srcreg+48]	;; R3_2
+	subpd	xmm7, xmm5		;; I1_2 = I1_2-I2_2 (final I2_2);30-33
+	addpd	xmm5, [srcreg+48]	;; I2_2 = I1_2+I2_2 (final I1_2);32-35
+	movapd	[srcreg], xmm0		;; Save R1
+	movapd	[srcreg+16], xmm1	;; Save R2
+	movapd	[srcreg+32], xmm2	;; Save R3
+	movapd	[srcreg+48], xmm3	;; Save R4
+	movapd	[srcreg+d1], xmm4	;; Save R1_2
+	movapd	[srcreg+d1+16], xmm5	;; Save R2_2
+	movapd	[srcreg+d1+32], xmm6	;; Save R3_2
+	movapd	[srcreg+d1+48], xmm7	;; Save R4_2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+;; Like the above except that it uses a different memory layout and uses
+;; only one sin/cos set.  See xfft48p for an example use.
+x2cl_two_complex_fft_in_place MACRO srcreg,srcinc,d1
+	x2cl_two_complex_fft_in_place_screg srcreg,srcinc,d1,rdi
+	ENDM
+x2cl_two_complex_fft_in_place_screg MACRO srcreg,srcinc,d1,screg
+	movapd	xmm2, [srcreg+16]	;; R2
+	movapd	xmm0, [screg+48]		;; cosine/sine
+	mulpd	xmm0, xmm2		;; A2 = R2 * cosine/sine	;1-6
+	movapd	xmm3, [srcreg+48]	;; R4
+	movapd	xmm1, [screg+48]	;; cosine/sine
+	mulpd	xmm1, xmm3		;; B2 = I2 * cosine/sine	;3-8
+	movapd	xmm6, [srcreg+d1+16]	;; R2_2
+	movapd	xmm4, [screg+48]	;; cosine/sine
+	mulpd	xmm4, xmm6		;; A2_2 = R2_2 * cosine/sine	;5-10
+	movapd	xmm7, [srcreg+d1+48]	;; R4_2
+	movapd	xmm5, [screg+48]	;; cosine/sine
+	mulpd	xmm5, xmm7		;; B2_2 = I2_2 * cosine/sine	;7-12
+	subpd	xmm0, xmm3		;; A2 = A2 - I2			;8-11
+	addpd	xmm1, xmm2		;; B2 = B2 + R2			;10-13
+	subpd	xmm4, xmm7		;; A2_2 = A2_2 - I2_2		;12-15
+	mulpd	xmm0, [screg+32]	;; A2 = A2 * sine (new R2)	;13-18
+	addpd	xmm5, xmm6		;; B2_2 = B2_2 + R2_2		;14-17
+	mulpd	xmm1, [screg+32]	;; B2 = B2 * sine (new I2)	;15-20
+	mulpd	xmm4, [screg+32]	;; A2_2 = A2_2 * sine (new R2_2);17-22
+	movapd	xmm2, [srcreg]		;; R1
+	subpd	xmm2, xmm0		;; R1 = R1 - R2 (final R2)	;18-21
+	mulpd	xmm5, [screg+32]	;; B2_2 = B2_2 * sine (new I2_2);19-24
+	addpd	xmm0, [srcreg]		;; R2 = R1 + R2 (final R1)	;20-23
+	movapd	xmm3, [srcreg+32]	;; R3
+	subpd	xmm3, xmm1		;; I1 = I1 - I2 (final I2)	;22-25
+	addpd	xmm1, [srcreg+32]	;; I2 = I1 + I2 (final I1)	;24-27
+	movapd	xmm6, [srcreg+d1]	;; R1_2
+	subpd	xmm6, xmm4		;; R1_2 = R1_2-R2_2 (final R2_2);26-29
+	addpd	xmm4, [srcreg+d1]	;; R2_2 = R1_2+R2_2 (final R1_2);28-31
+	movapd	xmm7, [srcreg+d1+32]	;; R3_2
+	subpd	xmm7, xmm5		;; I1_2 = I1_2-I2_2 (final I2_2);30-33
+	addpd	xmm5, [srcreg+d1+32]	;; I2_2 = I1_2+I2_2 (final I1_2);32-35
+	movapd	[srcreg], xmm0		;; Save R1
+	movapd	[srcreg+16], xmm1	;; Save R2
+	movapd	[srcreg+32], xmm2	;; Save R3
+	movapd	[srcreg+48], xmm3	;; Save R4
+	movapd	[srcreg+d1], xmm4	;; Save R1_2
+	movapd	[srcreg+d1+16], xmm5	;; Save R2_2
+	movapd	[srcreg+d1+32], xmm6	;; Save R3_2
+	movapd	[srcreg+d1+48], xmm7	;; Save R4_2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+;; Macro to operate on 2 64-byte cache lines.  It does 2 two_complex_unffts
+;; in a one pass FFT.
+;; 31.45 clocks
+x2cl_two_complex_unfft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	x2c_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5
+	movapd	[srcreg], xmm2		;; Save R1
+	movapd	xmm2, [srcreg+16]	;; R1
+	movapd	[srcreg+16], xmm4	;; Save R2
+	movapd	xmm4, [srcreg+48]	;; R2
+	movapd	[srcreg+32], xmm3	;; Save R3
+	movapd	xmm3, [srcreg+d1+16]	;; R3
+	movapd	[srcreg+48], xmm5	;; Save R4
+	movapd	xmm5, [srcreg+d1+48]	;; R4
+	x2c_unfft xmm2, xmm4, xmm3, xmm5, xmm0, xmm1
+	movapd	[srcreg+d1], xmm3	;; Save R1
+	movapd	[srcreg+d1+16], xmm0	;; Save R2
+	movapd	[srcreg+d1+32], xmm5	;; Save R3
+	movapd	[srcreg+d1+48], xmm1	;; Save R4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x1cl_two_complex_unfft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+16]	;; R2
+	movapd	xmm2, [srcreg+32]	;; R3
+	movapd	xmm3, [srcreg+48]	;; R4
+	x2c_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5
+	movapd	[srcreg], xmm2		;; Save R1
+	movapd	[srcreg+16], xmm4	;; Save R2
+	movapd	[srcreg+32], xmm3	;; Save R3
+	movapd	[srcreg+48], xmm5	;; Save R4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x2c_unfft MACRO r1, r2, r3, r4, t1, t2
+	subpd	r1, r3			;; new R2 = R1 - R2
+	multwo	r3
+	addpd	r3, r1			;; new R1 = R1 + R2
+	subpd	r2, r4			;; new I2 = I1 - I2
+	multwo	r4
+	addpd	r4, r2			;; new I1 = I1 + I2
+	movapd	t1, [rdi+32+16]		;; cosine/sine
+	mulpd	t1, r1			;; A2 = new R2 * cosine/sine
+	addpd	t1, r2			;; A2 = A2 + new I2
+	movapd	t2, [rdi+32+16]		;; cosine/sine
+	mulpd	t2, r2			;; B2 = new I2 * cosine/sine
+	subpd	t2, r1			;; B2 = B2 - new R2
+	movapd	r1, [rdi+32]		;; sine
+	mulpd	t1, r1			;; A2 = A2 * sine (final R2)
+	mulpd	t2, r1			;; B2 = B2 * sine (final I2)
+	ENDM
+IFDEF SHOULD_BE_FASTER_BUT_ISNT
+;; 28.35 clocks, but is slower in practice
+x2cl_two_complex_unfft MACRO srcreg,srcinc,d1
+	movapd	xmm4, [srcreg]		;; R1
+	movapd	xmm2, [srcreg+d1]	;; R2
+	subpd	xmm4, xmm2		;; new R2 = R1 - R2		;1-4
+	movapd	xmm5, [srcreg+32]	;; I1
+	subpd	xmm5, [srcreg+d1+32]	;; new I2 = I1 - I2		;3-6
+	movapd	xmm6, [srcreg+16]	;; R1_2
+	subpd	xmm6, [srcreg+d1+16]	;; new R2_2 = R1_2 - R2_2	;5-8
+	movapd	xmm7, [rdi+48]		;; cosine/sine
+	movapd	xmm0, xmm4		;; save new R2
+	mulpd	xmm4, xmm7		;; A2 = new R2 * cosine/sine	;6-11
+	movapd	xmm3, [srcreg+48]	;; I1_2
+	subpd	xmm3, [srcreg+d1+48]	;; new I2_2 = I1_2 - I2_2	;7-10
+	movapd	xmm1, xmm5		;; save new I2
+	mulpd	xmm5, xmm7		;; B2 = new I2 * cosine/sine	;8-13
+	addpd	xmm4, xmm1		;; A2 = A2 + new I2		;13-16
+	movapd	xmm1, [srcreg]		;; R1
+	addpd	xmm1, xmm2		;; new R1 = R1 + R2		;9-12
+	movapd	xmm2, xmm6		;; save new R2_2
+	mulpd	xmm6, xmm7		;; A2_2 = new R2_2 * cosine/sine;10-15
+	subpd	xmm5, xmm0		;; B2 = B2 - new R2		;15-18
+	movapd	xmm0, [srcreg+32]	;; I1
+	addpd	xmm0, [srcreg+d1+32]	;; new I1 = I1 + I2		;11-14
+	mulpd	xmm7, xmm3		;; B2_2 = new I2_2 * cosine/sine;12-17
+	addpd	xmm6, xmm3		;; A2_2 = A2_2 + new I2_2	;17-20
+	subpd	xmm7, xmm2		;; B2_2 = B2_2 - new R2_2	;19-22
+	movapd	xmm3, [srcreg+16]	;; R1_2
+	addpd	xmm3, [srcreg+d1+16]	;; new R1_2 = R1_2 + R2_2	;21-24
+	movapd	[srcreg], xmm1		;; Save R1
+	movapd	xmm1, [rdi+32]		;; sine
+	mulpd	xmm4, xmm1		;; A2 = A2 * sine (final R2)	;22-27
+	movapd	xmm2, [srcreg+48]	;; I1_2
+	addpd	xmm2, [srcreg+d1+48]	;; new I1_2 = I1_2 + I2_2	;23-26
+	mulpd	xmm5, xmm1		;; B2 = B2 * sine (final I2)	;24-29
+	mulpd	xmm6, xmm1		;; A2_2 = A2_2*sine (final R2_2);26-31
+	mulpd	xmm7, xmm1		;; B2_2 = B2_2*sine (final I2_2);28-33
+	movapd	[srcreg+16], xmm4	;; Save R2
+	movapd	[srcreg+32], xmm0	;; Save R3
+	movapd	[srcreg+48], xmm5	;; Save R4
+	movapd	[srcreg+d1], xmm3	;; Save R1_2
+	movapd	[srcreg+d1+16], xmm6	;; Save R2_2
+	movapd	[srcreg+d1+32], xmm2	;; Save R3_2
+	movapd	[srcreg+d1+48], xmm7	;; Save R4_2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+ENDIF
+
+
+;***********************************************************************
+;
+; These macros do the last two FFT levels.
+;
+;***********************************************************************
+
+; Macros for one pass FFTs and the real data in a two pass FFT.
+; These macros process two cache lines containing the first 16 FFT values.
+; The first 8 values are real data, then next 8 values represent 4 complex
+; numbers.  Note that the high word of each XMM register contains the
+; complex data.  Also note that these macros are called only once and
+; we can be a bit sloppy with the optimization.
+
+; Do an eight_reals_fft_2 on 8 doubles and a four_complex_fft_2 on 8 doubles
+s2cl_eight_reals_fft_2_final MACRO srcreg,srcinc,d1
+	movsd	xmm0, Q [srcreg]	;; R1
+	movsd	xmm1, Q [srcreg+8]	;; R2
+	movsd	xmm2, Q [srcreg+d1]	;; R3
+	movsd	xmm3, Q [srcreg+d1+8]	;; R4
+	movsd	xmm4, Q [srcreg+16]	;; R5
+	movsd	xmm5, Q [srcreg+24]	;; R6
+	movsd	xmm6, Q [srcreg+d1+16]	;; R7
+	movsd	xmm7, Q [srcreg+d1+24]	;; R8
+	xs8r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movsd	Q [srcreg], xmm3	;; Save R1
+	movsd	Q [srcreg+8], xmm2	;; Save R2
+	movsd	Q [srcreg+16], xmm0	;; Save R3
+	movsd	Q [srcreg+24], xmm1	;; Save R4
+	movsd	xmm0, Q [srcreg+32]	;; R1
+	movsd	xmm1, Q [srcreg+40]	;; R2
+	movsd	xmm2, Q [srcreg+48]	;; R5
+	movsd	xmm3, Q [srcreg+56]	;; R6
+	movsd	Q [srcreg+32], xmm5	;; Save R5
+	movsd	Q [srcreg+40], xmm7	;; Save R6
+	movsd	Q [srcreg+48], xmm4	;; Save R7
+	movsd	Q [srcreg+56], xmm6	;; Save R8
+	movsd	xmm4, Q [srcreg+d1+32]	;; R3
+	movsd	xmm5, Q [srcreg+d1+40]	;; R4
+	movsd	xmm6, Q [srcreg+d1+48]	;; R7
+	xs4c_fft xmm0, xmm1, xmm4, xmm5, xmm2, xmm3, xmm6, xmm7, [srcreg+d1+56]
+	movsd	Q [srcreg+d1], xmm5	;; Save R1
+	movsd	Q [srcreg+d1+8], xmm1	;; Save R2
+	movsd	Q [srcreg+d1+16], xmm7	;; Save R3
+	movsd	Q [srcreg+d1+24], xmm6	;; Save R4
+	movsd	Q [srcreg+d1+32], xmm0	;; Save R5
+	movsd	Q [srcreg+d1+40], xmm4	;; Save R6
+	movsd	Q [srcreg+d1+48], xmm3	;; Save R7
+	movsd	Q [srcreg+d1+56], xmm2	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+; Do an eight_reals_with_square_2 on 8 doubles and
+; a four_complex_with_square_2 on 8 doubles
+s2cl_eight_reals_with_square_2 MACRO srcreg,srcinc,d1
+	xmult7	srcreg, srcreg
+
+	movsd	xmm0, Q [srcreg]	;; R1
+	movsd	xmm1, Q [srcreg+8]	;; R2
+	movsd	xmm2, Q [srcreg+d1]	;; R3
+	movsd	xmm3, Q [srcreg+d1+8]	;; R4
+	movsd	xmm4, Q [srcreg+16]	;; R5
+	movsd	xmm5, Q [srcreg+24]	;; R6
+	movsd	xmm6, Q [srcreg+d1+16]	;; R7
+	movsd	xmm7, Q [srcreg+d1+24]	;; R8
+	xs8r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+
+	mulsd	xmm3, xmm3		;; R1 = R1 * R1
+	mulsd	xmm2, xmm2		;; R2 = R2 * R2
+	movsd	Q [rsi-16], xmm3	;; Save product of sum of FFT values
+	xs_complex_square xmm0, xmm1, xmm3	;; Square R3, R4
+	xs_complex_square xmm5, xmm7, xmm3	;; Square R5, R6
+	xs_complex_square xmm4, xmm6, xmm3	;; Square R7, R8
+	movsd	xmm3, Q [rsi-16]	;; Restore xmm3
+
+	xs8r_unfft xmm3, xmm2, xmm0, xmm1, xmm5, xmm7, xmm4, xmm6
+
+	movsd	Q [srcreg], xmm0	;; Save R1
+	movsd	Q [srcreg+8], xmm1	;; Save R2
+	movsd	Q [srcreg+16], xmm2	;; Save R3
+	movsd	Q [srcreg+24], xmm3	;; Save R4
+	movsd	xmm0, Q [srcreg+32]	;; R1
+	movsd	xmm1, Q [srcreg+40]	;; R2
+	movsd	xmm2, Q [srcreg+48]	;; R5
+	movsd	xmm3, Q [srcreg+56]	;; R6
+	movsd	Q [srcreg+32], xmm4	;; Save R5
+	movsd	Q [srcreg+40], xmm5	;; Save R6
+	movsd	Q [srcreg+48], xmm6	;; Save R7
+	movsd	Q [srcreg+56], xmm7	;; Save R8
+	movsd	xmm4, Q [srcreg+d1+32]	;; R3
+	movsd	xmm5, Q [srcreg+d1+40]	;; R4
+	movsd	xmm6, Q [srcreg+d1+48]	;; R7
+
+	xs4c_fft xmm0, xmm1, xmm4, xmm5, xmm2, xmm3, xmm6, xmm7, [srcreg+d1+56]
+
+	movsd	XMM_TMP1, xmm0
+	xs_complex_square xmm5, xmm1, xmm0	;; Square R1, R2
+	xs_complex_square xmm7, xmm6, xmm0	;; Square R3, R4
+	movsd	xmm0, XMM_TMP1
+	movsd	XMM_TMP1, xmm5
+	xs_complex_square xmm0, xmm4, xmm5	;; Square R5, R6
+	xs_complex_square xmm3, xmm2, xmm5	;; Square R7, R8
+	movsd	xmm5, XMM_TMP1
+
+	xs4c_unfft xmm5, xmm1, xmm7, xmm6, xmm0, xmm4, xmm3, xmm2
+
+	movsd	Q [srcreg+d1], xmm0	;; Save R1
+	movsd	Q [srcreg+d1+8], xmm4	;; Save R2
+	movsd	Q [srcreg+d1+16], xmm7	;; Save R3
+	movsd	Q [srcreg+d1+24], xmm5	;; Save R4
+	movsd	Q [srcreg+d1+32], xmm2	;; Save R5
+	movsd	Q [srcreg+d1+40], xmm3	;; Save R6
+	movsd	Q [srcreg+d1+48], xmm6	;; Save R7
+	movsd	Q [srcreg+d1+56], xmm1	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+; Do an eight_reals_with_mult_2 on 8 doubles and
+; a four_complex_with_mult on 8 doubles
+s2cl_eight_reals_with_mult_2 MACRO srcreg,srcinc,d1
+	xmult7	srcreg, srcreg+rbp
+
+	movsd	xmm0, Q [srcreg]	;; R1
+	movsd	xmm1, Q [srcreg+8]	;; R2
+	movsd	xmm2, Q [srcreg+d1]	;; R3
+	movsd	xmm3, Q [srcreg+d1+8]	;; R4
+	movsd	xmm4, Q [srcreg+16]	;; R5
+	movsd	xmm5, Q [srcreg+24]	;; R6
+	movsd	xmm6, Q [srcreg+d1+16]	;; R7
+	movsd	xmm7, Q [srcreg+d1+24]	;; R8
+	xs8r_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+
+	xs8r_mulf xmm3, xmm2, xmm0, xmm1, xmm5, xmm7, xmm4, xmm6, [srcreg], [srcreg+8], [srcreg+16], [srcreg+24], [srcreg+32], [srcreg+40], [srcreg+48], [srcreg+56]
+
+	xs8r_unfft xmm3, xmm2, xmm0, xmm1, xmm5, xmm7, xmm4, xmm6
+
+	movsd	Q [srcreg], xmm0	;; Save R1
+	movsd	Q [srcreg+8], xmm1	;; Save R2
+	movsd	Q [srcreg+16], xmm2	;; Save R3
+	movsd	Q [srcreg+24], xmm3	;; Save R4
+	movsd	xmm0, Q [srcreg+32]	;; R1
+	movsd	xmm1, Q [srcreg+40]	;; R2
+	movsd	xmm2, Q [srcreg+48]	;; R5
+	movsd	xmm3, Q [srcreg+56]	;; R6
+	movsd	Q [srcreg+32], xmm4	;; Save R5
+	movsd	Q [srcreg+40], xmm5	;; Save R6
+	movsd	Q [srcreg+48], xmm6	;; Save R7
+	movsd	Q [srcreg+56], xmm7	;; Save R8
+	movsd	xmm4, Q [srcreg+d1+32]	;; R3
+	movsd	xmm5, Q [srcreg+d1+40]	;; R4
+	movsd	xmm6, Q [srcreg+d1+48]	;; R7
+
+	xs4c_fft xmm0, xmm1, xmm4, xmm5, xmm2, xmm3, xmm6, xmm7, [srcreg+d1+56]
+
+	xs4c_mulf xmm5, xmm1, xmm7, xmm6, xmm0, xmm4, xmm3, xmm2, [srcreg+d1], [srcreg+d1+8], [srcreg+d1+16], [srcreg+d1+24], [srcreg+d1+32], [srcreg+d1+40], [srcreg+d1+48], [srcreg+d1+56]
+
+	xs4c_unfft xmm5, xmm1, xmm7, xmm6, xmm0, xmm4, xmm3, xmm2
+
+	movsd	Q [srcreg+d1], xmm0	;; Save R1
+	movsd	Q [srcreg+d1+8], xmm4	;; Save R2
+	movsd	Q [srcreg+d1+16], xmm7	;; Save R3
+	movsd	Q [srcreg+d1+24], xmm5	;; Save R4
+	movsd	Q [srcreg+d1+32], xmm2	;; Save R5
+	movsd	Q [srcreg+d1+40], xmm3	;; Save R6
+	movsd	Q [srcreg+d1+48], xmm6	;; Save R7
+	movsd	Q [srcreg+d1+56], xmm1	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+; Do an eight_reals_with_mulf_2 on 8 doubles and
+; a four_complex_with_mulf_2 on 8 doubles
+s2cl_eight_reals_with_mulf_2 MACRO srcreg,srcinc,d1
+	xmult7	srcreg+rbx, srcreg+rbp
+
+	movsd	xmm3, Q [srcreg][rbx]	;; R1
+	movsd	xmm2, Q [srcreg+8][rbx]	;; R2
+	movsd	xmm0, Q [srcreg+16][rbx];; R3
+	movsd	xmm1, Q [srcreg+24][rbx];; R4
+	movsd	xmm5, Q [srcreg+32][rbx];; R5
+	movsd	xmm7, Q [srcreg+40][rbx];; R6
+	movsd	xmm4, Q [srcreg+48][rbx];; R7
+	movsd	xmm6, Q [srcreg+56][rbx];; R8
+
+	xs8r_mulf xmm3, xmm2, xmm0, xmm1, xmm5, xmm7, xmm4, xmm6, [srcreg], [srcreg+8], [srcreg+16], [srcreg+24], [srcreg+32], [srcreg+40], [srcreg+48], [srcreg+56]
+
+	xs8r_unfft xmm3, xmm2, xmm0, xmm1, xmm5, xmm7, xmm4, xmm6
+
+	movsd	Q [srcreg], xmm0	;; Save R1
+	movsd	Q [srcreg+8], xmm1	;; Save R2
+	movsd	Q [srcreg+16], xmm2	;; Save R3
+	movsd	Q [srcreg+24], xmm3	;; Save R4
+	movsd	Q [srcreg+32], xmm4	;; Save R5
+	movsd	Q [srcreg+40], xmm5	;; Save R6
+	movsd	Q [srcreg+48], xmm6	;; Save R7
+	movsd	Q [srcreg+56], xmm7	;; Save R8
+
+	movsd	xmm5, Q [srcreg+d1][rbx];; R1
+	movsd	xmm7, Q [srcreg+d1+8][rbx];; R2
+	movsd	xmm4, Q [srcreg+d1+16][rbx];; R5
+	movsd	xmm6, Q [srcreg+d1+24][rbx];; R6
+	movsd	xmm0, Q [srcreg+d1+32][rbx];; R3
+	movsd	xmm1, Q [srcreg+d1+40][rbx];; R4
+	movsd	xmm3, Q [srcreg+d1+48][rbx];; R7
+	movsd	xmm2, Q [srcreg+d1+56][rbx];; R8
+
+	xs4c_mulf xmm5, xmm7, xmm4, xmm6, xmm0, xmm1, xmm3, xmm2, [srcreg+d1], [srcreg+d1+8], [srcreg+d1+16], [srcreg+d1+24], [srcreg+d1+32], [srcreg+d1+40], [srcreg+d1+48], [srcreg+d1+56]
+
+	xs4c_unfft xmm5, xmm7, xmm4, xmm6, xmm0, xmm1, xmm3, xmm2
+
+	movsd	Q [srcreg+d1], xmm0	;; Save R1
+	movsd	Q [srcreg+d1+8], xmm1	;; Save R2
+	movsd	Q [srcreg+d1+16], xmm4	;; Save R3
+	movsd	Q [srcreg+d1+24], xmm5	;; Save R4
+	movsd	Q [srcreg+d1+32], xmm2	;; Save R5
+	movsd	Q [srcreg+d1+40], xmm3	;; Save R6
+	movsd	Q [srcreg+d1+48], xmm6	;; Save R7
+	movsd	Q [srcreg+d1+56], xmm7	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+
+	ENDM
+
+; Help macros for s2cl_eight_reals_fft_2_final, s2cl_eight_reals_with_square_2,
+; s2cl_eight_reals_with_mult_2, s2cl_eight_reals_with_mulf_2
+
+;; Perform last two fft levels, results returned in
+;; R1=xmm3,R2=xmm2,R3=xmm0,R4=xmm1,R5=xmm5,R6=xmm7,R7=xmm4,R8=xmm6
+xs8r_fft MACRO r0, r1, r2, r3, r4, r5, r6, r7
+	mulsd	r5, XMM_SQRTHALF	;; R6 = R6 * square root of 1/2
+	mulsd	r7, XMM_SQRTHALF	;; R8 = R8 * square root of 1/2
+	subsd	r0, r2			;; new R3 = R1 - R3 (final R3)
+	multwos	r2
+	addsd	r2, r0			;; new R1 = R1 + R3
+	subsd	r1, r3			;; new R4 = R2 - R4 (final R4)
+	multwos	r3
+	addsd	r3, r1			;; new R2 = R2 + R4
+	subsd	r5, r7			;; R6 = R6 - R8 (Real part)
+	multwos	r7			;; R8 = R8 * 2
+	addsd	r7, r5			;; R8 = R6 + R8 (Imaginary part)
+	subsd	r2, r3			;; R1 = R1 - R2 (final R2)
+	multwos	r3			;; R2 = R2 * 2
+	addsd	r3, r2			;; R2 = R1 + R2 (final R1)
+	subsd	r4, r5			;; R5 = R5 - R6 (final R7)
+	multwos	r5
+	addsd	r5, r4			;; R6 = R5 + R6 (final R5)
+	subsd	r6, r7			;; R7 = R7 - R8 (final R8)
+	multwos	r7
+	addsd	r7, r6			;; R8 = R7 + R8 (final R6)
+	ENDM
+
+;; Perform the multiply step.  Multiply registers with values from memory.
+;; Input and output registers are:
+;; R1=xmm3,R2=xmm2,R3=xmm4,R4=xmm5,R5=xmm0,R6=xmm1,R7=xmm6,R8=xmm7
+xs8r_mulf MACRO r1, r2, r3, r4, r5, r6, r7, r8, m1, m2, m3, m4, m5, m6, m7, m8
+	mulsd	r1, Q m1[rbp]		;; R11
+	mulsd	r2, Q m2[rbp]		;; R22
+	movsd	Q [rsi-16], r1		;; Save product of sum of FFT values
+	movsd	XMM_TMP1, r2		;; Save xmm2
+	xs_complex_mult r3, r4, Q m3[rbp], Q m4[rbp], r2, r1
+	xs_complex_mult r5, r6, Q m5[rbp], Q m6[rbp], r2, r1
+	xs_complex_mult r7, r8, Q m7[rbp], Q m8[rbp], r2, r1
+	movsd	r2, XMM_TMP1		;; Restore xmm2
+	movsd	r1, Q [rsi-16]		;; Restore xmm3
+	ENDM
+
+;; Perform 2 levels of inverse FFT.  Input registers are:
+;; R1=xmm3,R2=xmm2,R3=xmm4,R4=xmm5,R5=xmm0,R6=xmm1,R7=xmm6,R8=xmm7
+;; Output registers are:
+;; R1=xmm4,R2=xmm5,R3=xmm2,R4=xmm3,R5=xmm6,R6=xmm0,R7=xmm7,R8=xmm1
+xs8r_unfft MACRO r1, r2, r3, r4, r5, r6, r7, r8
+	subsd	r1, r2			;; R1 = R1 - R2 (new R2)
+	mulhalfs r1			;; Mul R1 by HALF
+	addsd	r2, r1			;; R2 = R1 + R2 (new R1)
+
+	subsd	r5, r7			;; R5 = R5 - R7 (new R6)
+	multwos	r7			;; R7 = R7 * 2
+	addsd	r7, r5			;; R7 = R5 + R7 (new R5)
+
+	subsd	r6, r8			;; R6 = R6 - R8 (new R8)
+	multwos	r8			;; R8 = R8 * 2
+	addsd	r8, r6			;; R8 = R6 + R8 (new R7)
+
+	subsd	r6, r5			;; R8 = R8 - R6
+	multwos	r5			;; R6 = R6 * 2
+	addsd	r5, r6			;; R6 = R6 + R8
+	mulsd	r5, XMM_SQRTHALF	;; R6 = R6 * square root of 1/2
+	mulsd	r6, XMM_SQRTHALF	;; R8 = R8 * square root of 1/2
+
+	subsd	r2, r3			;; R1 = R1 - R3 (new R3)
+	multwos	r3			;; R3 = R3 * 2
+	addsd	r3, r2			;; R3 = R1 + R3 (new R1)
+
+	subsd	r1, r4			;; R2 = R2 - R4 (new R4)
+	multwos	r4			;; R4 = R4 * 2
+	addsd	r4, r1			;; R4 = R2 + R4 (new R2)
+	ENDM
+
+;; Perform last 2 levels of FFT.
+;; ***Optimization - these are sin/cos values special???
+xs4c_fft MACRO r1, r2, r3, r4, r5, r6, r7, r8, mem8
+	movsd	r8, Q [rdi+32+24]	;; cosine/sine
+	mulsd	r8, r3			;; A3 = R3 * cosine/sine	;1-6
+	subsd	r8, r7			;; A3 = A3 - I3			;8-11
+	mulsd	r7, Q [rdi+32+24]	;; B3 = I3 * cosine/sine	;3-8
+	addsd	r7, r3			;; B3 = B3 + R3			;10-13
+	movsd	r3, Q [rdi+0+24]	;; cosine/sine
+	mulsd	r3, r2			;; A2 = R2 * cosine/sine	;5-10
+	subsd	r3, r6			;; A2 = A2 - I2			;12-15
+	mulsd	r6, Q [rdi+0+24]	;; B2 = I2 * cosine/sine	;9-14
+	addsd	r6, r2			;; B2 = B2 + R2			;16-19
+	movsd	r2, Q [rdi+64+24]	;; cosine/sine
+	mulsd	r2, Q mem8		;; B4 = I4 * cosine/sine	;11-16
+	addsd	r2, r4			;; B4 = B4 + R4			;18-21
+	mulsd	r4, Q [rdi+64+24]	;; A4 = R4 * cosine/sine	;7-12
+	subsd	r4, Q mem8		;; A4 = A4 - I4			;14-17
+	mulsd	r8, Q [rdi+32+8]	;; A3 = A3 * sine (new R3)	;13-18
+	mulsd	r7, Q [rdi+32+8]	;; B3 = B3 * sine (new I3)	;15-20
+	mulsd	r3, Q [rdi+0+8]		;; A2 = A2 * sine (new R2)	;17-22
+	mulsd	r4, Q [rdi+64+8]	;; A4 = A4 * sine (new R4)	;19-24
+	 subsd	r1, r8			;; R1 = R1 - R3 (new R3)	;20-23
+	 multwos r8
+	mulsd	r6, Q [rdi+0+8]		;; B2 = B2 * sine (new I2)	;21-26
+	 subsd	r5, r7			;; I1 = I1 - I3 (new I3)	;22-25
+	 multwos r7
+	mulsd	r2, Q [rdi+64+8]	;; B4 = B4 * sine (new I4)	;23-28
+	 addsd	r8, r1			;; R3 = R1 + R3 (new R1)	;24-27
+	 subsd	r3, r4			;; R2 = R2 - R4 (new R4)	;26-29
+	 multwos r4			;; R4 = R4 * 2			;27-32
+	 addsd	r7, r5			;; I3 = I1 + I3 (new I1)	;28-31
+	 subsd	r6, r2			;; I2 = I2 - I4 (new I4)	;30-33
+	 multwos r2			;; I4 = I4 * 2			;31-36
+	subsd	r5, r3			;; I3 = I3 - R4 (final I4)	;32-35
+	 addsd	r4, r3			;; R4 = R2 + R4 (new R2)	;34-37
+	multwos	r3			;; R4 = R4 * 2			;35-40
+	 addsd	r2, r6			;; I4 = I2 + I4 (new I2)	;36-39
+	subsd	r1, r6			;; R3 = R3 - I4 (final R3)	;38-41
+	multwos	r6			;; I4 = I4 * 2			;39-44
+	subsd	r8, r4			;; R1 = R1 - R2 (final R2)	;40-43
+	multwos	r4			;; R2 = R2 * 2			;41-46
+	subsd	r7, r2			;; I1 = I1 - I2 (final I2)	;42-45
+	multwos	r2			;; I2 = I2 * 2			;43-48
+	addsd	r3, r5			;; R4 = I3 + R4 (final I3)	;44-47
+	addsd	r6, r1			;; I4 = R3 + I4 (final R4)	;46-49
+	addsd	r4, r8			;; R2 = R1 + R2 (final R1)	;48-51
+	addsd	r2, r7			;; I2 = I1 + I2 (final I1)	;50-53
+	ENDM
+
+;; Perform the complex multiply step.  Input and output registers are:
+;; R1=xmm5,I1=xmm7,R2=xmm1,I2=xmm3,R3=xmm2,I3=xmm4,R4=xmm6,I4=xmm0
+xs4c_mulf MACRO r1,r2,r3,r4,r5,r6,r7,r8,m1,m2,m3,m4,m5,m6,m7,m8
+	movsd	XMM_TMP1, r7		;; Save r7
+	movsd	XMM_TMP2, r8		;; Save r8
+	xs_complex_mult r1, r2, Q m1[rbp], Q m2[rbp], r7, r8
+	xs_complex_mult r3, r4, Q m3[rbp], Q m4[rbp], r7, r8
+	movsd	r7, XMM_TMP1 		;; Restore r7
+	movsd	r8, XMM_TMP2	 	;; Restore r8
+	movsd	XMM_TMP1, r1		;; Save r1
+	movsd	XMM_TMP2, r2		;; Save r2
+	xs_complex_mult r5, r6, Q m5[rbp], Q m6[rbp], r1, r2
+	xs_complex_mult r7, r8, Q m7[rbp], Q m8[rbp], r1, r2
+	movsd	r1, XMM_TMP1 		;; Restore r1
+	movsd	r2, XMM_TMP2	 	;; Restore r2
+	ENDM
+
+xp4c_mulf MACRO r1,r2,r3,r4,r5,r6,r7,r8,m1,m2,m3,m4,m5,m6,m7,m8
+	movapd	XMM_TMP1, r7		;; Save r7
+	movapd	XMM_TMP2, r8		;; Save r8
+	xp_complex_mult r1, r2, Q m1[rbp], Q m2[rbp], r7, r8
+	xp_complex_mult r3, r4, Q m3[rbp], Q m4[rbp], r7, r8
+	movapd	r7, XMM_TMP1 		;; Restore r7
+	movapd	r8, XMM_TMP2	 	;; Restore r8
+	movapd	XMM_TMP1, r1		;; Save r1
+	movapd	XMM_TMP2, r2		;; Save r2
+	xp_complex_mult r5, r6, Q m5[rbp], Q m6[rbp], r1, r2
+	xp_complex_mult r7, r8, Q m7[rbp], Q m8[rbp], r1, r2
+	movapd	r1, XMM_TMP1 		;; Restore r1
+	movapd	r2, XMM_TMP2	 	;; Restore r2
+	ENDM
+
+;; Perform the first two inverse FFT levels.  Output registers are:
+;; R1=xmm2,I1=xmm0,R2=xmm4,I2=xmm6,R3=xmm1,I3=xmm3,R4=xmm5,I4=xmm7
+xs4c_unfft MACRO r1, r2, r3, r4, r5, r6, r7, r8
+	subsd	r1, r3			;; new R2 = R1 - R2
+	multwos	r3
+	addsd	r3, r1			;; new R1 = R1 + R2
+	subsd	r6, r8			;; new R4 = I3 - I4
+	multwos	r8
+	addsd	r8, r6			;; new I3 = I3 + I4
+	subsd	r2, r4			;; new I2 = I1 - I2
+	multwos	r4
+	addsd	r4, r2			;; new I1 = I1 + I2
+	subsd	r7, r5			;; new I4 = R4 - R3
+	multwos	r5
+	addsd	r5, r7			;; new R3 = R3 + R4
+
+	subsd	r1, r6			;; R2 = R2 - R4 (new R4)
+	multwos	r6			;; R4 = R4 * 2
+	addsd	r6, r1			;; R4 = R2 + R4 (new R2)
+	subsd	r2, r7			;; I2 = I2 - I4 (new I4)
+	multwos	r7			;; I4 = I4 * 2
+	addsd	r7, r2			;; I4 = I2 + I4 (new I2)
+	subsd	r3, r5			;; R1 = R1 - R3 (new R3)
+	movsd	XMM_TMP1, r6		;; Save new R2
+	mulsd	r2, Q [rdi+64+8]	;; B4 = new I4 * sine
+	movsd	XMM_TMP2, r3		;; Save new R3
+	mulsd	r1, Q [rdi+64+8]	;; A4 = new R4 * sine
+	mulsd	r6, Q [rdi+0+24]	;; A2 = new R2 * cosine/sine
+	movsd	XMM_TMP3, r2		;; Save B4
+	mulsd	r3, Q [rdi+32+24]	;; A3 = new R3 * cosine/sine
+	subsd	r4, r8			;; I1 = I1 - I3 (new I3)
+	mulsd	r2, Q [rdi+64+24]	;; C4 = B4 * cosine/sine
+	multwos	r8			;; I3 = I3 * 2
+	movsd	XMM_TMP4, r4		;; Save I1
+	addsd	r6, r7			;; A2 = A2 + new I2
+	mulsd	r7, Q [rdi+0+24]	;; B2 = new I2 * cosine/sine
+	addsd	r3, r4			;; A3 = A3 + new I3
+	mulsd	r4, Q [rdi+32+24]	;; B3 = new I3 * cosine/sine
+	multwos	r5			;; R3 = R3 * 2
+	subsd	r2, r1			;; C4 = C4 - A4 (final I4)
+	mulsd	r1, Q [rdi+64+24]	;; A4 = A4 * cosine/sine
+	subsd	r7, XMM_TMP1		;; B2 = B2 - new R2
+	mulsd	r6, Q [rdi+8]		;; A2 = A2 * sine (final R2)
+	subsd	r4, XMM_TMP2		;; B3 = B3 - new R3
+	mulsd	r3, Q [rdi+40]		;; A3 = A3 * sine (final R3)
+	addsd	r8, XMM_TMP4		;; I3 = I1 + I3 (new & final I1)
+	mulsd	r7, Q [rdi+8]		;; B2 = B2 * sine (final I2)
+	addsd	r1, XMM_TMP3		;; A4 = B4 + A4 (final R4)
+	mulsd	r4, Q [rdi+40]		;; B3 = B3 * sine (final I3)
+	addsd	r5, XMM_TMP2		;; R3 = R1 + R3 (new & final R1)
+	ENDM
+
+
+; These macros process two cache lines containing 16 FFT values.
+; This data represents 8 complex numbers.
+; These macros are called frequently and should be optimized.
+
+s2cl_four_complex_fft_final MACRO srcreg,srcinc,d1
+	shuffle_load xmm0,xmm1,[srcreg],[srcreg+32] ;; R1,R2
+	shuffle_load xmm2,xmm3,[srcreg+d1],[srcreg+d1+32] ;; R3,R4
+	shuffle_load xmm4,xmm5,[srcreg+16],[srcreg+48] ;; R5,R6
+	shuffle_load xmm6,xmm7,[srcreg+d1+16],[srcreg+d1+48] ;; R7,R8
+	movapd	XMM_TMP1, xmm7
+	x4c_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, XMM_TMP1, 0, srcreg+srcinc, d1, [srcreg+d1+48], [srcreg+d1]
+	movapd	[srcreg], xmm3		;; Save R1
+	movapd	[srcreg+16], xmm1	;; Save R2
+	movapd	[srcreg+32], xmm7	;; Save R3
+	movapd	[srcreg+48], xmm6	;; Save R4
+;	movapd	[srcreg+d1], xmm0	;; Save R5
+	movapd	[srcreg+d1+16], xmm2	;; Save R6
+	movapd	[srcreg+d1+32], xmm5	;; Save R7
+;	movapd	[srcreg+d1+48], xmm4	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+s2cl_four_complex_with_square MACRO srcreg,srcinc,d1
+	shuffle_load xmm0,xmm1,[srcreg],[srcreg+32] ;; R1,R2
+	shuffle_load xmm2,xmm3,[srcreg+d1],[srcreg+d1+32] ;; R3,R4
+	shuffle_load xmm4,xmm5,[srcreg+16],[srcreg+48] ;; R5,R6
+	shuffle_load xmm6,xmm7,[srcreg+d1+16],[srcreg+d1+48] ;; R7,R8
+	movapd	XMM_TMP1, xmm7
+	x4c_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, XMM_TMP1, 0, srcreg+srcinc, d1, , XMM_TMP1
+
+;	movapd	XMM_TMP1, xmm0
+	xp_complex_square xmm3, xmm1, xmm0	;; Square R1, R2
+	xp_complex_square xmm7, xmm6, xmm0	;; Square R3, R4
+	movapd	xmm0, XMM_TMP1
+	movapd	XMM_TMP1, xmm3
+	xp_complex_square xmm0, xmm2, xmm3	;; Square R5, R6
+	xp_complex_square xmm5, xmm4, xmm3	;; Square R7, R8
+	movapd	xmm3, XMM_TMP1
+
+	x4c_unfft xmm3, xmm1, xmm7, xmm6, xmm0, xmm2, xmm5, xmm4
+
+	shuffle_store [srcreg], [srcreg+d1], xmm0, xmm2	;; Save R1, R2
+	shuffle_store [srcreg+16], [srcreg+d1+16], xmm7, xmm3 ;; Save R3, R4
+	shuffle_store [srcreg+32], [srcreg+d1+32], xmm4, xmm5 ;; Save R5, R6
+	shuffle_store [srcreg+48], [srcreg+d1+48], xmm6, xmm1 ;; Save R7, R8
+
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+s2cl_four_complex_with_mult MACRO srcreg,srcinc,d1
+	shuffle_load xmm0,xmm1,[srcreg],[srcreg+32] ;; R1,R2
+	shuffle_load xmm2,xmm3,[srcreg+d1],[srcreg+d1+32] ;; R3,R4
+	shuffle_load xmm4,xmm5,[srcreg+16],[srcreg+48] ;; R5,R6
+	shuffle_load xmm6,xmm7,[srcreg+d1+16],[srcreg+d1+48] ;; R7,R8
+	movapd	XMM_TMP1, xmm7
+	x4c_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, XMM_TMP1, 0, srcreg+srcinc, d1
+
+	xp4c_mulf xmm3, xmm1, xmm7, xmm6, xmm0, xmm2, xmm5, xmm4, [srcreg], [srcreg+16], [srcreg+32], [srcreg+48], [srcreg+d1], [srcreg+d1+16], [srcreg+d1+32], [srcreg+d1+48]
+
+	x4c_unfft xmm3, xmm1, xmm7, xmm6, xmm0, xmm2, xmm5, xmm4
+
+	shuffle_store [srcreg], [srcreg+d1], xmm0, xmm2 ;; Save R1 and R2
+	shuffle_store [srcreg+16], [srcreg+d1+16], xmm7, xmm3 ;; Save R3 and R4
+	shuffle_store [srcreg+32], [srcreg+d1+32], xmm4, xmm5 ;; Save R5 and R6
+	shuffle_store [srcreg+48], [srcreg+d1+48], xmm6, xmm1 ;; Save R7 and R8
+
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+s2cl_four_complex_with_mulf MACRO srcreg,srcinc,d1
+	movapd	xmm3, [srcreg][rbx]	;; R1
+	movapd	xmm7, [srcreg+16][rbx]	;; R2
+	movapd	xmm2, [srcreg+32][rbx]	;; R3
+	movapd	xmm6, [srcreg+48][rbx]	;; R4
+	movapd	xmm0, [srcreg+d1][rbx]	;; R5
+	movapd	xmm1, [srcreg+d1+16][rbx];; R6
+	movapd	xmm5, [srcreg+d1+32][rbx];; R7
+	movapd	xmm4, [srcreg+d1+48][rbx];; R8
+
+	xp4c_mulf xmm3, xmm7, xmm2, xmm6, xmm0, xmm1, xmm5, xmm4, [srcreg], [srcreg+16], [srcreg+32], [srcreg+48], [srcreg+d1], [srcreg+d1+16], [srcreg+d1+32], [srcreg+d1+48]
+
+	x4c_unfft xmm3, xmm7, xmm2, xmm6, xmm0, xmm1, xmm5, xmm4
+
+	shuffle_store [srcreg], [srcreg+d1], xmm0, xmm1 ;; Save R1 and R2
+	shuffle_store [srcreg+16], [srcreg+d1+16], xmm2, xmm3 ;; Save R3 and R4
+	shuffle_store [srcreg+32], [srcreg+d1+32], xmm4, xmm5 ;; Save R5 and R6
+	shuffle_store [srcreg+48], [srcreg+d1+48], xmm6, xmm7 ;; Save R7 and R8
+
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+; These macros are used in the complex sections of two pass FFTs.
+; These macros process four cache lines containing 32 FFT values.
+; This data represents 16 complex numbers.
+; These macros are called frequently and should be optimized.
+
+x4cl_four_complex_fft_final MACRO srcreg,srcinc,d1,d2
+	x4cl_four_complex_fft srcreg,srcinc,d1,d2
+	ENDM
+
+;; 234.25
+x4cl_four_complex_with_square MACRO srcreg,srcinc,d1,d2
+	x4c_fft_mem [srcreg],[srcreg+d1],[srcreg+d2],[srcreg+d2+d1],[srcreg+16],[srcreg+d1+16],[srcreg+d2+16],[srcreg+d2+d1+16],0,srcreg+srcinc,d1,,XMM_TMP5
+;	movapd	XMM_TMP5, xmm2			;; R5
+	movapd	XMM_TMP6, xmm4			;; R6
+	xp_complex_square xmm6, xmm0, xmm2	;; Square R7, R8
+	xp_complex_square xmm1, xmm3, xmm4	;; Square R3, R4
+	xp_complex_square xmm5, xmm7, xmm2	;; Square R1, R2
+	movapd	XMM_TMP7, xmm6
+	movapd	XMM_TMP8, xmm0
+	movapd	XMM_TMP3, xmm1
+	movapd	XMM_TMP4, xmm3
+	movapd	XMM_TMP1, xmm5
+	movapd	XMM_TMP2, xmm7
+
+	x4c_fft_mem [srcreg+32],[srcreg+d1+32],[srcreg+d2+32],[srcreg+d2+d1+32],[srcreg+48],[srcreg+d1+48],[srcreg+d2+48],[srcreg+d2+d1+48],XMM_SCD,srcreg+srcinc+d2,d1,,[srcreg+d2+d1]
+;	movapd	[srcreg+d2+d1], xmm2		;; R5
+	movapd	[srcreg+d2+d1+16], xmm4		;; R6
+	xp_complex_square xmm6, xmm0, xmm2	;; Square R7, R8
+	xp_complex_square xmm1, xmm3, xmm4	;; Square R3, R4
+	xp_complex_square xmm5, xmm7, xmm2	;; Square R1, R2
+	movapd	[srcreg+d2+d1+32], xmm6		;; R7
+	movapd	[srcreg+d2+d1+48], xmm0		;; R8
+	movapd	[srcreg+d2+32], xmm1		;; R3
+	movapd	[srcreg+d2+48], xmm3		;; R4
+	movapd	[srcreg+d2], xmm5		;; R1
+	movapd	[srcreg+d2+16], xmm7		;; R2
+
+	movapd	xmm4, XMM_TMP5		;; R5
+	movapd	xmm5, XMM_TMP6		;; R6
+	xp_complex_square xmm4, xmm5, xmm6 ;; Square R5, R6
+	movapd	xmm0, XMM_TMP1		;; R1
+	movapd	xmm2, XMM_TMP3		;; R3
+	movapd	xmm1, XMM_TMP2		;; R2
+	movapd	xmm3, XMM_TMP4		;; R4
+	best_x4c_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, XMM_TMP7, XMM_TMP8, [srcreg], [srcreg+32], 0
+	movapd	[srcreg+16], xmm5	;; Save R3
+	movapd	[srcreg+48], xmm6	;; Save R7
+	movapd	[srcreg+d1], xmm1	;; Save R2
+	movapd	[srcreg+d1+16], xmm4	;; Save R4
+	movapd	[srcreg+d1+32], xmm0	;; Save R6
+	movapd	[srcreg+d1+48], xmm7	;; Save R8
+
+	movapd	xmm4, [srcreg+d2+d1]	;; R5
+	movapd	xmm5, [srcreg+d2+d1+16]	;; R6
+	xp_complex_square xmm4, xmm5, xmm6 ;; Square R5, R6
+	movapd	xmm0, [srcreg+d2]	;; R1
+	movapd	xmm2, [srcreg+d2+32]	;; R3
+	movapd	xmm1, [srcreg+d2+16]	;; R2
+	movapd	xmm3, [srcreg+d2+48]	;; R4
+	best_x4c_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1+32], [srcreg+d2+d1+48], [srcreg+d2], [srcreg+d2+32], XMM_SCD
+	movapd	[srcreg+d2+16], xmm5	;; Save R3
+	movapd	[srcreg+d2+48], xmm6	;; Save R7
+	movapd	[srcreg+d2+d1], xmm1	;; Save R2
+	movapd	[srcreg+d2+d1+16], xmm4	;; Save R4
+	movapd	[srcreg+d2+d1+32], xmm0	;; Save R6
+	movapd	[srcreg+d2+d1+48], xmm7	;; Save R8
+
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+x4cl_four_complex_with_mult MACRO srcreg,srcinc,d1,d2
+	x4c_fft_mem [srcreg],[srcreg+d1],[srcreg+d2],[srcreg+d2+d1],[srcreg+16],[srcreg+d1+16],[srcreg+d2+16],[srcreg+d2+d1+16],0,srcreg+srcinc,d1
+
+	xp4c_mulf xmm5, xmm7, xmm1, xmm3, xmm2, xmm4, xmm6, xmm0, [srcreg], [srcreg+16], [srcreg+32], [srcreg+48], [srcreg+d1], [srcreg+d1+16], [srcreg+d1+32], [srcreg+d1+48]
+
+	new_x4c_unfft xmm5, xmm7, xmm1, xmm3, xmm2, xmm4, xmm6, xmm0, [srcreg], 0
+	movapd	xmm1, [srcreg+32]	;; R1
+	movapd	[srcreg+d1], xmm7	;; Save R2
+	movapd	xmm7, [srcreg+48]	;; R5
+	movapd	[srcreg+16], xmm4	;; Save R3
+	movapd	xmm4, [srcreg+d1+32]	;; R2
+	movapd	[srcreg+d1+16], xmm5	;; Save R4
+	movapd	xmm5, [srcreg+d1+48]	;; R6
+	movapd	[srcreg+32], xmm0	;; Save R5
+	movapd	xmm0, [srcreg+d2+32]	;; R3
+	movapd	[srcreg+d1+32], xmm6	;; Save R6
+	movapd	xmm6, [srcreg+d2+48]	;; R7
+	movapd	[srcreg+48], xmm3	;; Save R7
+	movapd	xmm3, [srcreg+d2+d1+32]	;; R4
+	movapd	[srcreg+d1+48], xmm2	;; Save R8
+
+	x4c_fft xmm1, xmm4, xmm0, xmm3, xmm7, xmm5, xmm6, xmm2, [srcreg+d2+d1+48], XMM_SCD, srcreg+srcinc+d2, d1
+
+	xp4c_mulf xmm3, xmm4, xmm2, xmm6, xmm1, xmm0, xmm5, xmm7, [srcreg+d2], [srcreg+d2+16], [srcreg+d2+32], [srcreg+d2+48], [srcreg+d2+d1], [srcreg+d2+d1+16], [srcreg+d2+d1+32], [srcreg+d2+d1+48]
+
+	new_x4c_unfft xmm3, xmm4, xmm2, xmm6, xmm1, xmm0, xmm5, xmm7, [srcreg+d2], XMM_SCD
+
+	movapd	[srcreg+d2+d1], xmm4	;; Save R2
+	movapd	[srcreg+d2+16], xmm0	;; Save R3
+	movapd	[srcreg+d2+d1+16], xmm3	;; Save R4
+	movapd	[srcreg+d2+32], xmm7	;; Save R5
+	movapd	[srcreg+d2+d1+32], xmm5	;; Save R6
+	movapd	[srcreg+d2+48], xmm6	;; Save R7
+	movapd	[srcreg+d2+d1+48], xmm1	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+x4cl_four_complex_with_mulf MACRO srcreg,srcinc,d1,d2
+	movapd	xmm5, [srcreg][rbx]	;; R1
+	movapd	xmm7, [srcreg+16][rbx]	;; R2
+	movapd	xmm1, [srcreg+32][rbx]	;; R3
+	movapd	xmm3, [srcreg+48][rbx]	;; R4
+	movapd	xmm2, [srcreg+d1][rbx]	;; R5
+	movapd	xmm4, [srcreg+d1+16][rbx];; R6
+	movapd	xmm6, [srcreg+d1+32][rbx];; R7
+	movapd	xmm0, [srcreg+d1+48][rbx];; R8
+
+	xp4c_mulf xmm5, xmm7, xmm1, xmm3, xmm2, xmm4, xmm6, xmm0, [srcreg], [srcreg+16], [srcreg+32], [srcreg+48], [srcreg+d1], [srcreg+d1+16], [srcreg+d1+32], [srcreg+d1+48]
+
+	new_x4c_unfft xmm5, xmm7, xmm1, xmm3, xmm2, xmm4, xmm6, xmm0, [srcreg], 0
+	movapd	[srcreg+d1], xmm7	;; Save R2
+	movapd	[srcreg+16], xmm4	;; Save R3
+	movapd	[srcreg+d1+16], xmm5	;; Save R4
+	movapd	[srcreg+32], xmm0	;; Save R5
+	movapd	[srcreg+d1+32], xmm6	;; Save R6
+	movapd	[srcreg+48], xmm3	;; Save R7
+	movapd	[srcreg+d1+48], xmm2	;; Save R8
+
+	movapd	xmm3, [srcreg+d2][rbx]	;; R1
+	movapd	xmm4, [srcreg+d2+16][rbx];; R2
+	movapd	xmm2, [srcreg+d2+32][rbx];; R3
+	movapd	xmm6, [srcreg+d2+48][rbx];; R4
+	movapd	xmm1, [srcreg+d2+d1][rbx];; R5
+	movapd	xmm0, [srcreg+d2+d1+16][rbx];; R6
+	movapd	xmm5, [srcreg+d2+d1+32][rbx];; R7
+	movapd	xmm7, [srcreg+d2+d1+48][rbx];; R8
+
+	xp4c_mulf xmm3, xmm4, xmm2, xmm6, xmm1, xmm0, xmm5, xmm7, [srcreg+d2], [srcreg+d2+16], [srcreg+d2+32], [srcreg+d2+48], [srcreg+d2+d1], [srcreg+d2+d1+16], [srcreg+d2+d1+32], [srcreg+d2+d1+48]
+
+	new_x4c_unfft xmm3, xmm4, xmm2, xmm6, xmm1, xmm0, xmm5, xmm7, [srcreg+d2], XMM_SCD
+
+	movapd	[srcreg+d2+d1], xmm4	;; Save R2
+	movapd	[srcreg+d2+16], xmm0	;; Save R3
+	movapd	[srcreg+d2+d1+16], xmm3	;; Save R4
+	movapd	[srcreg+d2+32], xmm7	;; Save R5
+	movapd	[srcreg+d2+d1+32], xmm5	;; Save R6
+	movapd	[srcreg+d2+48], xmm6	;; Save R7
+	movapd	[srcreg+d2+d1+48], xmm1	;; Save R8
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+
+;*******************************************************************
+; These macros are used in the premultiplier step of two pass FFTs
+;*******************************************************************
+
+;; 84 clocks
+s2cl_four_complex_gpm_fft MACRO srcreg,srcinc,d1
+	shuffle_load xmm0, xmm1, [srcreg][rbx], [srcreg+32][rbx] ;; R1,R3
+	shuffle_load xmm2, xmm3, [srcreg+16][rbx], [srcreg+48][rbx] ;; R5,R7
+	shuffle_load xmm4, xmm5, [srcreg+d1][rbx], [srcreg+d1+32][rbx] ;; R2,R4
+
+	movapd	xmm6, xmm0		;; Save R1
+	mulpd	xmm0, [rdi+16]		;; A1 = R1 * premul_real/premul_imag
+	subpd	xmm0, xmm2		;; A1 = A1 - I1
+	mulpd	xmm2, [rdi+16]		;; B1 = I1 * premul_real/premul_imag
+	addpd	xmm2, xmm6		;; B1 = B1 + R1
+	mulpd	xmm0, [rdi]		;; A1 = A1 * premul_imag (new R1)
+	movapd	[srcreg], xmm0		;; Save new R1
+
+	shuffle_load xmm6,xmm7,[srcreg+d1+16][rbx],[srcreg+d1+48][rbx] ;; R6,R8
+
+	xprefetchw [srcreg+srcinc]
+	movapd	xmm0, xmm1		;; Save R3
+	mulpd	xmm1, [rdi+80]		;; A3 = R3 * premul_real/premul_imag
+	subpd	xmm1, xmm3		;; A3 = A3 - I3
+	mulpd	xmm3, [rdi+80]		;; B3 = I3 * premul_real/premul_imag
+	addpd	xmm3, xmm0		;; B3 = B3 + R3
+	mulpd	xmm2, [rdi]		;; B1 = B1 * premul_imag (new I1)
+
+	xprefetchw [srcreg+srcinc+d1]
+	movapd	xmm0, xmm4		;; Save R2
+	mulpd	xmm4, [rdi+48]		;; A2 = R2 * premul_real/premul_imag
+	subpd	xmm4, xmm6		;; A2 = A2 - I2
+	mulpd	xmm6, [rdi+48]		;; B2 = I2 * premul_real/premul_imag
+	addpd	xmm6, xmm0		;; B2 = B2 + R2
+	mulpd	xmm1, [rdi+64]		;; A3 = A3 * premul_imag (new R3)
+	mulpd	xmm3, [rdi+64]		;; B3 = B3 * premul_imag (new I3)
+
+	movapd	xmm0, xmm5		;; Save R4
+	mulpd	xmm5, [rdi+112]		;; A4 = R4 * premul_real/premul_imag
+	subpd	xmm5, xmm7		;; A4 = A4 - I4
+	mulpd	xmm7, [rdi+112]		;; B4 = I4 * premul_real/premul_imag
+	addpd	xmm7, xmm0		;; B4 = B4 + R4
+	mulpd	xmm4, [rdi+32]		;; A2 = A2 * premul_imag (new R2)
+	mulpd	xmm6, [rdi+32]		;; B2 = B2 * premul_imag (new I2)
+	mulpd	xmm5, [rdi+96]		;; A4 = A4 * premul_imag (new R4)
+	mulpd	xmm7, [rdi+96]		;; B4 = B4 * premul_imag (new I4)
+
+	xprefetch [srcreg+srcinc][rbx]
+	 movapd	xmm0, xmm2
+	 subpd	xmm2, xmm3		;; I1 = I1 - I3 (new I3)
+	 addpd	xmm3, xmm0		;; I3 = I1 + I3 (new I1)
+	 movapd	xmm0, xmm4
+	 subpd	xmm4, xmm5		;; R2 = R2 - R4 (new R4)
+	 addpd	xmm5, xmm0		;; R4 = R2 + R4 (new R2)
+	xprefetch [srcreg+srcinc+d1][rbx]
+	 movapd	xmm0, xmm6
+	 subpd	xmm6, xmm7		;; I2 = I2 - I4 (new I4)
+	 addpd	xmm7, xmm0		;; I4 = I2 + I4 (new I2)
+	movapd	xmm0, xmm2
+	subpd	xmm2, xmm4		;; I3 = I3 - R4 (final I4)
+	movapd	[srcreg+d1+48], xmm2
+	addpd	xmm4, xmm0		;; R4 = I3 + R4 (final I3)
+	 movapd	xmm0, [srcreg]		;; Reload new R1
+	 subpd	xmm0, xmm1		;; R1 = R1 - R3 (new R3)
+	 addpd	xmm1, [srcreg]		;; R3 = R1 + R3 (new R1)
+	movapd	xmm2, xmm3
+	subpd	xmm3, xmm7		;; I1 = I1 - I2 (final I2)
+	movapd	[srcreg+48], xmm3
+	addpd	xmm7, xmm2		;; I2 = I1 + I2 (final I1)
+	movapd	xmm2, xmm0
+	subpd	xmm0, xmm6		;; R3 = R3 - I4 (final R3)
+	movapd	xmm3, xmm1
+	subpd	xmm1, xmm5		;; R1 = R1 - R2 (final R2)
+	addpd	xmm6, xmm2		;; I4 = R3 + I4 (final R4)
+	addpd	xmm5, xmm3		;; R2 = R1 + R2 (final R1)
+	movapd	[srcreg+d1], xmm0
+	movapd	[srcreg+d1+16], xmm4
+	movapd	[srcreg+d1+32], xmm6
+	movapd	[srcreg], xmm5
+	movapd	[srcreg+16], xmm7
+	movapd	[srcreg+32], xmm1
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+;; This code is identical to the above except it is used in the single pass
+;; all-complex FFTs and has a somewhat different memory layout.
+s2cl_four_complex_first_fft MACRO srcreg,srcinc,d1
+	shuffle_load xmm0,xmm1,[srcreg][rbx],[srcreg+16][rbx] ;; R1,R3
+	shuffle_load xmm2,xmm3,[srcreg+32][rbx],[srcreg+48][rbx] ;; R5,R7
+	shuffle_load xmm4,xmm5,[srcreg+d1][rbx],[srcreg+d1+16][rbx] ;; R2,R4
+	shuffle_load xmm6,xmm7,[srcreg+d1+32][rbx],[srcreg+d1+48][rbx] ;; R6,R8
+
+	movapd	[srcreg], xmm5		;; Save R4
+
+	movapd	xmm5, xmm0		;; Save R1
+	mulpd	xmm0, [rdi+16]		;; A1 = R1 * premul_real/premul_imag
+	subpd	xmm0, xmm2		;; A1 = A1 - I1
+	mulpd	xmm2, [rdi+16]		;; B1 = I1 * premul_real/premul_imag
+	addpd	xmm2, xmm5		;; B1 = B1 + R1
+
+	movapd	xmm5, xmm1		;; Save R3
+	mulpd	xmm1, [rdi+80]		;; A3 = R3 * premul_real/premul_imag
+	subpd	xmm1, xmm3		;; A3 = A3 - I3
+	mulpd	xmm3, [rdi+80]		;; B3 = I3 * premul_real/premul_imag
+	addpd	xmm3, xmm5		;; B3 = B3 + R3
+	mulpd	xmm0, [rdi]		;; A1 = A1 * premul_imag (new R1)
+	mulpd	xmm2, [rdi]		;; B1 = B1 * premul_imag (new I1)
+
+	movapd	xmm5, xmm4		;; Save R2
+	mulpd	xmm4, [rdi+48]		;; A2 = R2 * premul_real/premul_imag
+	subpd	xmm4, xmm6		;; A2 = A2 - I2
+	mulpd	xmm6, [rdi+48]		;; B2 = I2 * premul_real/premul_imag
+	addpd	xmm6, xmm5		;; B2 = B2 + R2
+	mulpd	xmm1, [rdi+64]		;; A3 = A3 * premul_imag (new R3)
+	mulpd	xmm3, [rdi+64]		;; B3 = B3 * premul_imag (new I3)
+
+	movapd	xmm5, [srcreg]		;; Reload R4
+	mulpd	xmm5, [rdi+112]		;; A4 = R4 * premul_real/premul_imag
+	subpd	xmm5, xmm7		;; A4 = A4 - I4
+	mulpd	xmm7, [rdi+112]		;; B4 = I4 * premul_real/premul_imag
+	addpd	xmm7, [srcreg]		;; B4 = B4 + R4
+	mulpd	xmm4, [rdi+32]		;; A2 = A2 * premul_imag (new R2)
+	mulpd	xmm6, [rdi+32]		;; B2 = B2 * premul_imag (new I2)
+	mulpd	xmm5, [rdi+96]		;; A4 = A4 * premul_imag (new R4)
+	mulpd	xmm7, [rdi+96]		;; B4 = B4 * premul_imag (new I4)
+
+	subpd	xmm0, xmm1		;; R1 = R1 - R3 (new R3)
+	multwo	xmm1			;; R3 = R3 * 2
+	subpd	xmm2, xmm3		;; I1 = I1 - I3 (new I3)
+	multwo	xmm3			;; I3 = I3 * 2
+	subpd	xmm4, xmm5		;; R2 = R2 - R4 (new R4)
+	multwo	xmm5			;; R4 = R4 * 2
+	subpd	xmm6, xmm7		;; I2 = I2 - I4 (new I4)
+	multwo	xmm7			;; I4 = I4 * 2
+	addpd	xmm1, xmm0		;; R3 = R1 + R3 (new R1)
+	addpd	xmm3, xmm2		;; I3 = I1 + I3 (new I1)
+	addpd	xmm5, xmm4		;; R4 = R2 + R4 (new R2)
+	addpd	xmm7, xmm6		;; I4 = I2 + I4 (new I2)
+
+	subpd	xmm0, xmm6		;; R3 = R3 - I4 (new R3)
+	multwo	xmm6			;; I4 = I4 * 2
+	subpd	xmm2, xmm4		;; I3 = I3 - R4 (new I4)
+	multwo	xmm4			;; R4 = R4 * 2
+	subpd	xmm1, xmm5		;; R1 = R1 - R2 (new R2)
+	multwo	xmm5			;; R2 = R2 * 2
+	subpd	xmm3, xmm7		;; I1 = I1 - I2 (new I2)
+	multwo	xmm7			;; I2 = I2 * 2
+	addpd	xmm6, xmm0		;; I4 = R3 + I4 (new R4)
+	addpd	xmm4, xmm2		;; R4 = I3 + R4 (new I3)
+	addpd	xmm5, xmm1		;; R2 = R1 + R2 (new R1)
+	addpd	xmm7, xmm3		;; I2 = I1 + I2 (new I1)
+
+	movapd	[srcreg+d1], xmm0
+	movapd	[srcreg+d1+16], xmm4
+	movapd	[srcreg+d1+32], xmm6
+	movapd	[srcreg+d1+48], xmm2
+	movapd	[srcreg], xmm5
+	movapd	[srcreg+16], xmm7
+	movapd	[srcreg+32], xmm1
+	movapd	[srcreg+48], xmm3
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+;; This code is identical to the above except it is used in the two pass
+;; all-complex FFTs and has a somewhat different memory layout.
+x2cl_four_complex_first_fft MACRO srcreg,srcinc,d1
+	x2cl_four_complex_first_fft_cmn srcreg,srcinc,d1,rbx
+	ENDM
+x2cl_four_complex_first_fft_scratch MACRO srcreg,srcinc,d1
+	x2cl_four_complex_first_fft_cmn srcreg,srcinc,d1,0
+	ENDM
+x2cl_four_complex_first_fft_cmn MACRO srcreg,srcinc,d1,off
+	movapd	xmm0, [srcreg+off]		;; R1
+	movapd	xmm1, [srcreg+off+16]		;; R3
+	movapd	xmm2, [srcreg+off+32]		;; R5
+	movapd	xmm3, [srcreg+off+48]		;; R7
+	movapd	xmm4, [srcreg+off+d1]		;; R2
+	movapd	xmm5, [srcreg+off+d1+16]	;; R4
+	movapd	xmm6, [srcreg+off+d1+32]	;; R6
+	movapd	xmm7, [srcreg+off+d1+48]	;; R8
+
+	movapd	[srcreg], xmm5		;; Save R4
+
+	movapd	xmm5, xmm0		;; Save R1
+	mulpd	xmm0, [rdi+16]		;; A1 = R1 * premul_real/premul_imag
+	subpd	xmm0, xmm2		;; A1 = A1 - I1
+	mulpd	xmm2, [rdi+16]		;; B1 = I1 * premul_real/premul_imag
+	addpd	xmm2, xmm5		;; B1 = B1 + R1
+
+	movapd	xmm5, xmm1		;; Save R3
+	mulpd	xmm1, [rdi+80]		;; A3 = R3 * premul_real/premul_imag
+	subpd	xmm1, xmm3		;; A3 = A3 - I3
+	mulpd	xmm3, [rdi+80]		;; B3 = I3 * premul_real/premul_imag
+	addpd	xmm3, xmm5		;; B3 = B3 + R3
+	mulpd	xmm0, [rdi]		;; A1 = A1 * premul_imag (new R1)
+	mulpd	xmm2, [rdi]		;; B1 = B1 * premul_imag (new I1)
+
+	movapd	xmm5, xmm4		;; Save R2
+	mulpd	xmm4, [rdi+48]		;; A2 = R2 * premul_real/premul_imag
+	subpd	xmm4, xmm6		;; A2 = A2 - I2
+	mulpd	xmm6, [rdi+48]		;; B2 = I2 * premul_real/premul_imag
+	addpd	xmm6, xmm5		;; B2 = B2 + R2
+	mulpd	xmm1, [rdi+64]		;; A3 = A3 * premul_imag (new R3)
+	mulpd	xmm3, [rdi+64]		;; B3 = B3 * premul_imag (new I3)
+
+	movapd	xmm5, [srcreg]		;; Reload R4
+	mulpd	xmm5, [rdi+112]		;; A4 = R4 * premul_real/premul_imag
+	subpd	xmm5, xmm7		;; A4 = A4 - I4
+	mulpd	xmm7, [rdi+112]		;; B4 = I4 * premul_real/premul_imag
+	addpd	xmm7, [srcreg]		;; B4 = B4 + R4
+	mulpd	xmm4, [rdi+32]		;; A2 = A2 * premul_imag (new R2)
+	mulpd	xmm6, [rdi+32]		;; B2 = B2 * premul_imag (new I2)
+	mulpd	xmm5, [rdi+96]		;; A4 = A4 * premul_imag (new R4)
+	mulpd	xmm7, [rdi+96]		;; B4 = B4 * premul_imag (new I4)
+
+	subpd	xmm0, xmm1		;; R1 = R1 - R3 (new R3)
+	multwo	xmm1			;; R3 = R3 * 2
+	subpd	xmm2, xmm3		;; I1 = I1 - I3 (new I3)
+	multwo	xmm3			;; I3 = I3 * 2
+	subpd	xmm4, xmm5		;; R2 = R2 - R4 (new R4)
+	multwo	xmm5			;; R4 = R4 * 2
+	subpd	xmm6, xmm7		;; I2 = I2 - I4 (new I4)
+	multwo	xmm7			;; I4 = I4 * 2
+	addpd	xmm1, xmm0		;; R3 = R1 + R3 (new R1)
+	addpd	xmm3, xmm2		;; I3 = I1 + I3 (new I1)
+	addpd	xmm5, xmm4		;; R4 = R2 + R4 (new R2)
+	addpd	xmm7, xmm6		;; I4 = I2 + I4 (new I2)
+
+	subpd	xmm0, xmm6		;; R3 = R3 - I4 (new R3)
+	multwo	xmm6			;; I4 = I4 * 2
+	subpd	xmm2, xmm4		;; I3 = I3 - R4 (new I4)
+	multwo	xmm4			;; R4 = R4 * 2
+	subpd	xmm1, xmm5		;; R1 = R1 - R2 (new R2)
+	multwo	xmm5			;; R2 = R2 * 2
+	subpd	xmm3, xmm7		;; I1 = I1 - I2 (new I2)
+	multwo	xmm7			;; I2 = I2 * 2
+	addpd	xmm6, xmm0		;; I4 = R3 + I4 (new R4)
+	addpd	xmm4, xmm2		;; R4 = I3 + R4 (new I3)
+	addpd	xmm5, xmm1		;; R2 = R1 + R2 (new R1)
+	addpd	xmm7, xmm3		;; I2 = I1 + I2 (new I1)
+
+	movapd	[srcreg+d1], xmm0
+	movapd	[srcreg+d1+16], xmm4
+	movapd	[srcreg+d1+32], xmm6
+	movapd	[srcreg+d1+48], xmm2
+	movapd	[srcreg], xmm5
+	movapd	[srcreg+16], xmm7
+	movapd	[srcreg+32], xmm1
+	movapd	[srcreg+48], xmm3
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+
+;; 126.35 clocks
+s4cl_four_complex_gpm_unfft MACRO srcreg,srcinc,d1,d2,off
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	x4gpm_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1], [srcreg+d2+d1+32], [srcreg], [srcreg+32], 0, srcreg+srcinc, d1
+	shuffle_store [srcreg], [srcreg+32], xmm5, xmm4 ;; Save R1 and R3
+	movapd	xmm5, [srcreg+16]	;; R1
+	movapd	xmm4, [srcreg+48]	;; R2
+	shuffle_store [srcreg+16], [srcreg+48], xmm6, xmm7 ;; Save R5 and R7
+	shuffle_store [srcreg+d2], [srcreg+d2+32], xmm0, xmm2 ;; Save R2 and R4
+	movapd	xmm0, [srcreg+d2+16]	;; R5
+	movapd	xmm2, [srcreg+d2+48]	;; R6
+	shuffle_store [srcreg+d2+16], [srcreg+d2+48], xmm1, xmm3 ;; Save R6, R8
+	movapd	xmm6, [srcreg+d1+16]	;; R3
+	movapd	xmm7, [srcreg+d1+48]	;; R4
+	x4gpm_unfft xmm5, xmm4, xmm6, xmm7, xmm0, xmm2, xmm1, xmm3, [srcreg+d2+d1+16], [srcreg+d2+d1+48], [srcreg+d1], [srcreg+d1+32], off, srcreg+srcinc+d2, d1
+	shuffle_store [srcreg+d1], [srcreg+d1+32], xmm2, xmm0 ;; Save R1 and R3
+	shuffle_store [srcreg+d1+16], [srcreg+d1+48], xmm1, xmm3 ;; Save R5, R7
+	shuffle_store [srcreg+d2+d1], [srcreg+d2+d1+32], xmm5, xmm6 ;; R2, R4
+	shuffle_store [srcreg+d2+d1+16], [srcreg+d2+d1+48], xmm4, xmm7 ;; R6,R8
+
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+;; Similar to above but used in all-complex FFT case.
+x4cl_four_complex_last_unfft MACRO srcreg,srcinc,d1,d2,off
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	x4gpm_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1], [srcreg+d2+d1+32], [srcreg], [srcreg+32], 0, srcreg+srcinc, d1
+	movapd	[srcreg], xmm5		;; Save R1
+	movapd	[srcreg+32], xmm6	;; Save R5
+	movapd	xmm5, [srcreg+16]	;; R1
+	movapd	xmm6, [srcreg+48]	;; R2
+	movapd	[srcreg+16], xmm4	;; Save R3
+	movapd	[srcreg+48], xmm7	;; Save R7
+	movapd	[srcreg+d2], xmm0	;; Save R2
+	movapd	[srcreg+d2+32], xmm1	;; Save R6
+	movapd	xmm4, [srcreg+d2+16]	;; R5
+	movapd	xmm0, [srcreg+d2+48]	;; R6
+	movapd	[srcreg+d2+16], xmm2	;; Save R4
+	movapd	[srcreg+d2+48], xmm3	;; Save R8
+	movapd	xmm2, [srcreg+d1+16]	;; R3
+	movapd	xmm3, [srcreg+d1+48]	;; R4
+	x4gpm_unfft xmm5, xmm6, xmm2, xmm3, xmm4, xmm0, xmm1, xmm7, [srcreg+d2+d1+16], [srcreg+d2+d1+48], [srcreg+d1], [srcreg+d1+32], off, srcreg+srcinc+d2, d1
+	movapd	[srcreg+d1], xmm0	;; Save R1
+	movapd	[srcreg+d1+16], xmm4	;; Save R3
+	movapd	[srcreg+d1+32], xmm1	;; Save R5
+	movapd	[srcreg+d1+48], xmm7	;; Save R7
+	movapd	[srcreg+d2+d1], xmm5	;; Save R2
+	movapd	[srcreg+d2+d1+16], xmm2	;; Save R4
+	movapd	[srcreg+d2+d1+32], xmm6	;; Save R6
+	movapd	[srcreg+d2+d1+48], xmm3	;; Save R8
+	bump	srcreg, srcinc
+	ENDM
+x4gpm_unfft MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,off,pre1,pre2
+	x4c_unfft4_cmn r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,off,off+32,off+64,off+96,pre1,pre2
+	ENDM
+
+;; New cpm code that uses more premultipliers but saves lots of xsincos_complex
+;; data.
+x4cl_four_complex_cpm_fft MACRO srcreg,srcinc,d1,d2,off
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm4, [srcreg+16]	;; R5
+	movapd	xmm1, [srcreg+d1]	;; R2
+	movapd	xmm5, [srcreg+d1+16]	;; R6
+	movapd	xmm2, [srcreg+d2]	;; R3
+	movapd	xmm6, [srcreg+d2+16]	;; R7
+
+	x4c_fft4_cmn xmm0,xmm1,xmm2,xmm3,xmm4,xmm5,xmm6,xmm7,[srcreg+d2+d1],[srcreg+d2+d1+16],[srcreg+d1],0,32,64,96,srcreg+srcinc,d1
+
+	movapd	[srcreg], xmm1		;; Save R1
+	movapd	[srcreg+16], xmm5	;; Save I1
+	movapd	xmm1, [srcreg+32]	;; R1
+	movapd	xmm5, [srcreg+48]	;; R5
+	movapd	[srcreg+32], xmm0	;; Save R2
+	movapd	[srcreg+48], xmm4	;; Save I2
+	movapd	xmm0, [srcreg+d1+32]	;; R2
+	movapd	xmm4, [srcreg+d1+48]	;; R6
+	movapd	[srcreg+d1+16], xmm2	;; Save I3
+	movapd	[srcreg+d1+32], xmm6	;; Save R4
+	movapd	[srcreg+d1+48], xmm7	;; Save I4
+	movapd	xmm2, [srcreg+d2+32]	;; R3
+	movapd	xmm3, [srcreg+d2+48]	;; R7
+
+	x4c_fft4_cmn xmm1,xmm0,xmm2,xmm6,xmm5,xmm4,xmm3,xmm7,[srcreg+d2+d1+32],[srcreg+d2+d1+48],[srcreg+d2+d1],off,off+32,off+64,off+96,srcreg+srcinc+d2,d1
+
+	movapd	[srcreg+d2], xmm0	;; Save R1
+	movapd	[srcreg+d2+16], xmm4	;; Save I1
+	movapd	[srcreg+d2+32], xmm1	;; Save R2
+	movapd	[srcreg+d2+48], xmm5	;; Save I2
+	movapd	[srcreg+d2+d1+16], xmm2	;; Save I3
+	movapd	[srcreg+d2+d1+32], xmm3	;; Save R4
+	movapd	[srcreg+d2+d1+48], xmm7	;; Save I4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+;; 114.05 clocks
+x4cl_four_complex_cpm01_fft MACRO srcreg,srcinc,d1,d2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm4, [srcreg+16]	;; R5
+	movapd	xmm1, [srcreg+d1]	;; R2
+	movapd	xmm5, [srcreg+d1+16]	;; R6
+	movapd	xmm2, [srcreg+d2]	;; R3
+	movapd	xmm6, [srcreg+d2+16]	;; R7
+	x4c_cpm_fft_0 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1], [srcreg+d2+d1+16], [srcreg+d1], srcreg+srcinc, d1
+	movapd	[srcreg], xmm1		;; Save R1
+	movapd	[srcreg+16], xmm5	;; Save I1
+	movapd	xmm1, [srcreg+32]	;; R1
+	movapd	xmm5, [srcreg+48]	;; R5
+	movapd	[srcreg+32], xmm0	;; Save R2
+	movapd	[srcreg+48], xmm4	;; Save I2
+	movapd	xmm0, [srcreg+d1+32]	;; R2
+	movapd	xmm4, [srcreg+d1+48]	;; R6
+	movapd	[srcreg+d1+16], xmm2	;; Save I3
+	movapd	[srcreg+d1+32], xmm6	;; Save R4
+	movapd	[srcreg+d1+48], xmm7	;; Save I4
+	movapd	xmm2, [srcreg+d2+32]	;; R3
+	movapd	xmm3, [srcreg+d2+48]	;; R7
+	x4c_cpm_fft_1 xmm1, xmm0, xmm2, xmm6, xmm5, xmm4, xmm3, xmm7, [srcreg+d2+d1+32], [srcreg+d2+d1+48], [srcreg+d2+32], [srcreg+d2+48], srcreg+srcinc+d2, d1
+	movapd	[srcreg+d2], xmm2	;; Save R1
+	movapd	[srcreg+d2+16], xmm0	;; Save I1
+	movapd	[srcreg+d2+d1], xmm5	;; Save R3
+	movapd	[srcreg+d2+d1+16], xmm4	;; Save I3
+	movapd	[srcreg+d2+d1+32], xmm3	;; Save R4
+	movapd	[srcreg+d2+d1+48], xmm7	;; Save I4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+x4cl_four_complex_cpm23_fft MACRO srcreg,srcinc,d1,d2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm4, [srcreg+16]	;; R5
+	movapd	xmm1, [srcreg+d1]	;; R2
+	movapd	xmm5, [srcreg+d1+16]	;; R6
+	movapd	xmm2, [srcreg+d2]	;; R3
+	movapd	xmm6, [srcreg+d2+16]	;; R7
+	x4c_cpm_fft_2 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1], [srcreg+d2+d1+16], [srcreg+d1], srcreg+srcinc, d1
+	movapd	[srcreg], xmm1		;; Save R1
+	movapd	[srcreg+16], xmm5	;; Save I1
+	movapd	xmm1, [srcreg+32]	;; R1
+	movapd	xmm5, [srcreg+48]	;; R5
+	movapd	[srcreg+32], xmm0	;; Save R2
+	movapd	[srcreg+48], xmm4	;; Save I2
+	movapd	xmm0, [srcreg+d1+32]	;; R2
+	movapd	xmm4, [srcreg+d1+48]	;; R6
+	movapd	[srcreg+d1+16], xmm2	;; Save I3
+	movapd	[srcreg+d1+32], xmm6	;; Save R4
+	movapd	[srcreg+d1+48], xmm7	;; Save I4
+	movapd	xmm2, [srcreg+d2+32]	;; R3
+	movapd	xmm3, [srcreg+d2+48]	;; R7
+	x4c_cpm_fft_3 xmm1, xmm0, xmm2, xmm6, xmm5, xmm4, xmm3, xmm7, [srcreg+d2+d1+32], [srcreg+d2+d1+48], [srcreg+d2+32], [srcreg+d2+48], srcreg+srcinc+d2, d1
+	movapd	[srcreg+d2], xmm2	;; Save R1
+	movapd	[srcreg+d2+16], xmm3	;; Save I1
+	movapd	[srcreg+d2+d1], xmm5	;; Save R3
+	movapd	[srcreg+d2+d1+16], xmm0	;; Save I3
+	movapd	[srcreg+d2+d1+32], xmm4	;; Save R4
+	movapd	[srcreg+d2+d1+48], xmm7	;; Save I4
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+x4c_cpm_fft_0 MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem4,mem8,dest3,pre1,pre2
+	x4c_fft4_cmn r1,r2,r3,r4,r5,r6,r7,r8,mem4,mem8,dest3,0,0,0,0,pre1,pre2
+	ENDM
+
+x4c_fft4_cmn MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem4,mem8,dest3,off1,off2,off3,off4,pre1,pre2
+	movapd	r4, [rdi+off1+16]	;; premul_real/premul_imag
+	mulpd	r4, r1			;; A1 = R1 * premul_real/premul_imag
+	movapd	r8, [rdi+off1+16]	;; premul_real/premul_imag
+	mulpd	r8, r5			;; B1 = I1 * premul_real/premul_imag
+	subpd	r4, r5			;; A1 = A1 - I1
+	addpd	r8, r1			;; B1 = B1 + R1
+
+	movapd	r1, [rdi+off3+16]	;; premul_real/premul_imag
+	mulpd	r1, r3			;; A3 = R3 * premul_real/premul_imag
+	movapd	r5, [rdi+off3+16]	;; premul_real/premul_imag
+	mulpd	r5, r7			;; B3 = I3 * premul_real/premul_imag
+	subpd	r1, r7			;; A3 = A3 - I3
+	addpd	r5, r3			;; B3 = B3 + R3
+	mulpd	r4, [rdi+off1]		;; A1 = A1 * premul_imag (new R1)
+	mulpd	r8, [rdi+off1]		;; B1 = B1 * premul_imag (new I1)
+
+	movapd	r3, [rdi+off2+16]	;; premul_real/premul_imag
+	mulpd	r3, r2		 	;; A2 = R2 * premul_real/premul_imag
+	movapd	r7, [rdi+off2+16]	;; premul_real/premul_imag
+	mulpd	r7, r6			;; B2 = I2 * premul_real/premul_imag
+	subpd	r3, r6			;; A2 = A2 - I2
+	addpd	r7, r2			;; B2 = B2 + R2
+	mulpd	r1, [rdi+off3]		;; A3 = A3 * premul_imag (new R3)
+	mulpd	r5, [rdi+off3]		;; B3 = B3 * premul_imag (new I3)
+
+	movapd	r2, [rdi+off4+16]	;; premul_real/premul_imag
+	mulpd	r2, mem4	 	;; A4 = R4 * premul_real/premul_imag
+	movapd	r6, [rdi+off4+16]	;; premul_real/premul_imag
+	mulpd	r6, mem8		;; B4 = I4 * premul_real/premul_imag
+	subpd	r2, mem8		;; A4 = A4 - I4
+	addpd	r6, mem4		;; B4 = B4 + R4
+	mulpd	r3, [rdi+off2]		;; A2 = A2 * premul_imag (new R2)
+	mulpd	r2, [rdi+off4]		;; A4 = A4 * premul_imag (new R4)
+	mulpd	r7, [rdi+off2]		;; B2 = B2 * premul_imag (new I2)
+	mulpd	r6, [rdi+off4]		;; B4 = B4 * premul_imag (new I4)
+
+	subpd	r4, r1			;; R1 = R1 - R3 (new R3)
+	multwo	r1			;; R3 = R3 * 2
+	xprefetchw [pre1]
+	subpd	r8, r5			;; I1 = I1 - I3 (new I3)
+	multwo	r5			;; I3 = I3 * 2
+	subpd	r3, r2			;; R2 = R2 - R4 (new R4)
+	multwo	r2			;; R4 = R4 * 2
+	subpd	r7, r6			;; I2 = I2 - I4 (new I4)
+	multwo	r6			;; I4 = I4 * 2
+	addpd	r1, r4			;; R3 = R1 + R3 (new R1)
+	addpd	r2, r3			;; R4 = R2 + R4 (new R2)
+	xprefetchw [pre1][pre2]
+	addpd	r5, r8			;; I3 = I1 + I3 (new I1)
+	addpd	r6, r7			;; I4 = I2 + I4 (new I2)
+
+	subpd	r4, r7			;; R3 = R3 - I4 (final R3)
+	movapd	dest3, r4
+	multwo	r7			;; R2 = R2 * 2
+	addpd	r7, r4			;; I4 = R3 + I4 (final R4)
+	movapd	r4, r8
+	subpd	r8, r3			;; I3 = I3 - R4 (final I4)
+	addpd	r3, r4			;; R4 = I3 + R4 (final I3)
+	movapd	r4, r1
+	subpd	r1, r2			;; R1 = R1 - R2 (final R2)
+	addpd	r2, r4			;; R2 = R1 + R2 (final R1)
+	movapd	r4, r5
+	subpd	r5, r6			;; I1 = I1 - I2 (final I2)
+	addpd	r6, r4			;; I2 = I1 + I2 (final I1)
+	ENDM
+
+x4c_cpm_fft_1 MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem4,mem8,destr2,desti2,pre1,pre2
+	movapd	r4, [rdi+16]		;; premul_real/premul_imag
+	mulpd	r4, r1	 		;; A1 = R1 * premul_real/premul_imag
+	movapd	r8, [rdi+16]		;; premul_real/premul_imag
+	mulpd	r8, r5			;; B1 = I1 * premul_real/premul_imag
+	subpd	r4, r5			;; A1 = A1 - I1
+	addpd	r8, r1			;; B1 = B1 + R1
+
+	movapd	r1, [rdi+16]		;; premul_real/premul_imag
+	mulpd	r1, r3			;; A3 = R3 * premul_real/premul_imag
+	movapd	r5, [rdi+16]		;; premul_real/premul_imag
+	mulpd	r5, r7			;; B3 = I3 * premul_real/premul_imag
+	subpd	r1, r7			;; A3 = A3 - I3
+	addpd	r5, r3			;; B3 = B3 + R3
+	mulpd	r4, [rdi]		;; A1 = A1 * premul_imag (new R1)
+	mulpd	r8, [rdi]		;; B1 = B1 * premul_imag (new I1)
+
+	movapd	r3, [rdi+80]		;; premul_real/premul_imag
+	mulpd	r3, r2			;; A2 = R2 * premul_real/premul_imag
+	movapd	r7, [rdi+80]		;; premul_real/premul_imag
+	mulpd	r7, r6			;; B2 = I2 * premul_real/premul_imag
+	subpd	r3, r6			;; A2 = A2 - I2
+	addpd	r7, r2			;; B2 = B2 + R2
+	mulpd	r1, [rdi]		;; A3 = A3 * premul_imag (new I3)
+	mulpd	r5, [rdi]		;; B3 = B3 * premul_imag (new negR3)
+
+	movapd	r2, [rdi+80]		;; premul_real/premul_imag
+	mulpd	r2, mem4		;; A4 = R4 * premul_real/premul_imag
+	movapd	r6, [rdi+80]		;; premul_real/premul_imag
+	mulpd	r6, mem8		;; B4 = I4 * premul_real/premul_imag
+	subpd	r2, mem8		;; A4 = A4 - I4
+	addpd	r6, mem4		;; B4 = B4 + R4
+	mulpd	r7, [rdi+64]		;; B2 = B2 * premul_imag (new I2)
+	mulpd	r2, [rdi+64]		;; A4 = A4 * premul_imag (new I4)
+	mulpd	r3, [rdi+64]		;; A2 = A2 * premul_imag (new R2)
+	mulpd	r6, [rdi+64]		;; B4 = B4 * premul_imag (new negR4)
+
+	subpd	r4, r5			;; R1 = R1 - negR3 (new R1)
+	xprefetchw [pre1]
+	multwo	r5			;; negR3 = negR3 * 2
+	subpd	r8, r1			;; I1 = I1 - I3 (new I3)
+	multwo	r1			;; I3 = I3 * 2
+	subpd	r7, r2			;; I2 = I2 - I4 (new I4)
+	multwo	r2			;; I4 = I4 * 2
+	subpd	r3, r6			;; R2 = R2 - negR4 (new R2)
+	multwo	r6			;; negR4 = negR4 * 2
+	addpd	r5, r4			;; negR3 = R1 + negR3 (new R3)
+	addpd	r1, r8			;; I3 = I1 + I3 (new I1)
+	xprefetchw [pre1][pre2]
+	addpd	r2, r7			;; I4 = I2 + I4 (new I2)
+	addpd	r6, r3			;; negR4 = R2 + negR4 (new R4)
+
+	subpd	r4, r3			;; R1 = R1 - R2 (final R2)
+	movapd	destr2, r4
+	multwo	r3
+	addpd	r3, r4			;; R2 = R1 + R2 (final R1)
+	movapd	r4, r1
+	subpd	r1, r2			;; I1 = I1 - I2 (final I2)
+	movapd	desti2, r1
+	addpd	r2, r4			;; I2 = I1 + I2 (final I1)
+	movapd	r4, r5
+	subpd	r5, r7			;; R3 = R3 - I4 (final R3)
+	addpd	r7, r4			;; I4 = R3 + I4 (final R4)
+	movapd	r4, r8
+	subpd	r8, r6			;; I3 = I3 - R4 (final I4)
+	addpd	r6, r4			;; R4 = I3 + R4 (final I3)
+	ENDM
+
+x4c_cpm_fft_2 MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem4,mem8,dest3,pre1,pre2
+	x4c_fft4_cmn r1,r2,r3,r4,r5,r6,r7,r8,mem4,mem8,dest3,0,32,64,96,pre1,pre2
+	ENDM
+
+x4c_cpm_fft_3 MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem4,mem8,destr2,desti2,pre1,pre2
+	movapd	r4, [rdi+16]		;; premul_real/premul_imag
+	mulpd	r4, r1			;; A1 = R1 * premul_real/premul_imag
+	movapd	r8, [rdi+16]		;; premul_real/premul_imag
+	mulpd	r8, r5			;; B1 = I1 * premul_real/premul_imag
+	subpd	r4, r5			;; A1 = A1 - I1
+	addpd	r8, r1			;; B1 = B1 + R1
+
+	movapd	r1, [rdi+80]		;; premul_real/premul_imag
+	mulpd	r1, r3			;; A3 = R3 * premul_real/premul_imag
+	movapd	r5, [rdi+80]		;; premul_real/premul_imag
+	mulpd	r5, r7			;; B3 = I3 * premul_real/premul_imag
+	subpd	r1, r7			;; A3 = A3 - I3
+	addpd	r5, r3			;; B3 = B3 + R3
+	mulpd	r4, [rdi]		;; A1 = A1 * premul_imag (new R1)
+	mulpd	r8, [rdi]		;; B1 = B1 * premul_imag (new I1)
+
+	movapd	r3, [rdi+112]		;; premul_real/premul_imag
+	mulpd	r3, r2			;; A2 = R2 * premul_real/premul_imag
+	movapd	r7, [rdi+112]		;; premul_real/premul_imag
+	mulpd	r7, r6			;; B2 = I2 * premul_real/premul_imag
+	subpd	r3, r6			;; A2 = A2 - I2
+	addpd	r7, r2			;; B2 = B2 + R2
+	mulpd	r1, [rdi+64]		;; A3 = A3 * premul_imag (new I3)
+	mulpd	r5, [rdi+64]		;; B3 = B3 * premul_imag (new negR3)
+
+	movapd	r2, [rdi+48]		;; premul_real/premul_imag
+	mulpd	r2, mem4		;; A4 = R4 * premul_real/premul_imag
+	movapd	r6, [rdi+48]		;; premul_real/premul_imag
+	mulpd	r6, mem8		;; B4 = I4 * premul_real/premul_imag
+	subpd	r2, mem8		;; A4 = A4 - I4
+	addpd	r6, mem4		;; B4 = B4 + R4
+	mulpd	r7, [rdi+96]		;; B2 = B2 * premul_imag (new I2)
+	mulpd	r6, [rdi+32]		;; B4 = B4 * premul_imag (new negI4)
+	mulpd	r3, [rdi+96]		;; A2 = A2 * premul_imag (new R2)
+	mulpd	r2, [rdi+32]		;; A4 = A4 * premul_imag (new negR4)
+
+	subpd	r4, r5			;; R1 = R1 - negR3 (new R1)
+	multwo	r5			;; negR3 = negR3 * 2
+	xprefetchw [pre1]
+	subpd	r8, r1			;; I1 = I1 - I3 (new I3)
+	multwo	r1			;; I3 = I3 * 2
+	subpd	r7, r6			;; I2 = I2 - negI4 (new I2)
+	multwo	r6			;; negI4 = negI4 * 2
+	subpd	r3, r2			;; R2 = R2 - negR4 (new R2)
+	multwo	r2			;; negR4 = negR4 * 2
+	addpd	r5, r4			;; negR3 = R1 + negR3 (new R3)
+	addpd	r1, r8			;; I3 = I1 + I3 (new I1)
+	xprefetchw [pre1][pre2]
+	addpd	r6, r7			;; I4 = I2 + negI4 (new I4)
+	addpd	r2, r3			;; negR4 = R2 + negR4 (new R4)
+
+	subpd	r4, r3			;; R1 = R1 - R2 (final R2)
+	movapd	destr2, r4
+	multwo	r3
+	addpd	r3, r4			;; R2 = R1 + R2 (final R1)
+	movapd	r4, r1
+	subpd	r1, r7			;; I1 = I1 - I2 (final I2)
+	movapd	desti2, r1
+	addpd	r7, r4			;; I2 = I1 + I2 (final I1)
+	movapd	r4, r5
+	subpd	r5, r6			;; R3 = R3 - I4 (final R3)
+	addpd	r6, r4			;; I4 = R3 + I4 (final R4)
+	movapd	r4, r8
+	subpd	r8, r2			;; I3 = I3 - R4 (final I4)
+	addpd	r2, r4			;; R4 = I3 + R4 (final I3)
+	ENDM
+
+x4cl_four_complex_cpm_unfft MACRO srcreg,srcinc,d1,d2
+	x4cl_cpm_unfft_2 srcreg,srcinc,d1,d2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+;; 112.45 clocks
+x4cl_four_complex_cpm0_unfft MACRO srcreg,srcinc,d1,d2
+	x4cl_cpm_unfft_0 srcreg,srcinc,d1,d2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x4cl_four_complex_cpm1_unfft MACRO srcreg,srcinc,d1,d2
+	x4cl_cpm_unfft_1 srcreg,srcinc,d1,d2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x4cl_four_complex_cpm2_unfft MACRO srcreg,srcinc,d1,d2
+	x4cl_cpm_unfft_2 srcreg,srcinc,d1,d2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x4cl_four_complex_cpm3_unfft MACRO srcreg,srcinc,d1,d2
+	x4cl_cpm_unfft_3 srcreg,srcinc,d1,d2
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+x4cl_cpm_unfft_0 MACRO srcreg,srcinc,d1,d2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	x4c_cpm_unfft_0 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1], [srcreg+d2+d1+32], [srcreg], [srcreg+32], srcreg+srcinc, d1
+	movapd	[srcreg+d2], xmm0	;; Save R2
+	movapd	[srcreg+d2+32], xmm1	;; Save I2
+	movapd	xmm5, [srcreg+16]	;; R1
+	movapd	xmm6, [srcreg+48]	;; R2
+	movapd	xmm0, [srcreg+d2+16]	;; R5
+	movapd	xmm1, [srcreg+d2+48]	;; R6
+	movapd	[srcreg+16], xmm4	;; Save R3
+	movapd	[srcreg+48], xmm7	;; Save I3
+	movapd	[srcreg+d2+16], xmm2	;; Save R4
+	movapd	[srcreg+d2+48], xmm3	;; Save I4
+	movapd	xmm4, [srcreg+d1+16]	;; R3
+	movapd	xmm7, [srcreg+d1+48]	;; R4
+	x4c_cpm_unfft_0 xmm5, xmm6, xmm4, xmm7, xmm0, xmm1, xmm2, xmm3, [srcreg+d2+d1+16], [srcreg+d2+d1+48], [srcreg+d1], [srcreg+d1+32], srcreg+srcinc+d2, d1
+	movapd	[srcreg+d1+16], xmm0	;; Save R3
+	movapd	[srcreg+d1+48], xmm3	;; Save I3
+	movapd	[srcreg+d2+d1], xmm5	;; Save R2
+	movapd	[srcreg+d2+d1+16], xmm4	;; Save R4
+	movapd	[srcreg+d2+d1+32], xmm6	;; Save I2
+	movapd	[srcreg+d2+d1+48], xmm7	;; Save I4
+	ENDM
+x4cl_cpm_unfft_1 MACRO srcreg,srcinc,d1,d2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	x4c_cpm_unfft_1 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1], [srcreg+d2+d1+32], [srcreg], [srcreg+32], srcreg+srcinc, d1
+	movapd	[srcreg+d2], xmm1	;; Save R2
+	movapd	[srcreg+d2+32], xmm5	;; Save I2
+	movapd	xmm0, [srcreg+16]	;; R1
+	movapd	xmm6, [srcreg+48]	;; R2
+	movapd	xmm1, [srcreg+d2+16]	;; R5
+	movapd	xmm5, [srcreg+d2+48]	;; R6
+	movapd	[srcreg+16], xmm7	;; Save R3
+	movapd	[srcreg+48], xmm2	;; Save I3
+	movapd	[srcreg+d2+16], xmm4	;; Save R4
+	movapd	[srcreg+d2+48], xmm3	;; Save I4
+	movapd	xmm7, [srcreg+d1+16]	;; R3
+	movapd	xmm2, [srcreg+d1+48]	;; R4
+	x4c_cpm_unfft_1 xmm0, xmm6, xmm7, xmm2, xmm1, xmm5, xmm3, xmm4, [srcreg+d2+d1+16], [srcreg+d2+d1+48], [srcreg+d1], [srcreg+d1+32], srcreg+srcinc+d2, d1
+	movapd	[srcreg+d1+16], xmm4	;; Save R3
+	movapd	[srcreg+d1+48], xmm7	;; Save I3
+	movapd	[srcreg+d2+d1], xmm6	;; Save R2
+	movapd	[srcreg+d2+d1+16], xmm1	;; Save R4
+	movapd	[srcreg+d2+d1+32], xmm5	;; Save I2
+	movapd	[srcreg+d2+d1+48], xmm2	;; Save I4
+	ENDM
+x4cl_cpm_unfft_2 MACRO srcreg,srcinc,d1,d2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	x4c_cpm_unfft_2 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1], [srcreg+d2+d1+32], [srcreg], [srcreg+32], srcreg+srcinc, d1
+	movapd	[srcreg+d2], xmm0	;; Save R2
+	movapd	[srcreg+d2+32], xmm1	;; Save I2
+	movapd	xmm5, [srcreg+16]	;; R1
+	movapd	xmm6, [srcreg+48]	;; R2
+	movapd	xmm0, [srcreg+d2+16]	;; R5
+	movapd	xmm1, [srcreg+d2+48]	;; R6
+	movapd	[srcreg+16], xmm4	;; Save R3
+	movapd	[srcreg+48], xmm7	;; Save I3
+	movapd	[srcreg+d2+16], xmm2	;; Save R4
+	movapd	[srcreg+d2+48], xmm3	;; Save I4
+	movapd	xmm4, [srcreg+d1+16]	;; R3
+	movapd	xmm7, [srcreg+d1+48]	;; R4
+	x4c_cpm_unfft_2 xmm5, xmm6, xmm4, xmm7, xmm0, xmm1, xmm2, xmm3, [srcreg+d2+d1+16], [srcreg+d2+d1+48], [srcreg+d1], [srcreg+d1+32], srcreg+srcinc+d2, d1
+	movapd	[srcreg+d1+16], xmm0	;; Save R3
+	movapd	[srcreg+d1+48], xmm3	;; Save I3
+	movapd	[srcreg+d2+d1], xmm5	;; Save R2
+	movapd	[srcreg+d2+d1+16], xmm4	;; Save R4
+	movapd	[srcreg+d2+d1+32], xmm6	;; Save I2
+	movapd	[srcreg+d2+d1+48], xmm7	;; Save I4
+	ENDM
+x4cl_cpm_unfft_3 MACRO srcreg,srcinc,d1,d2
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+d2]	;; R5
+	movapd	xmm5, [srcreg+d2+32]	;; R6
+	x4c_cpm_unfft_3 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, [srcreg+d2+d1], [srcreg+d2+d1+32], [srcreg], [srcreg+32], srcreg+srcinc, d1
+	movapd	[srcreg+d2], xmm6	;; Save R2
+	movapd	[srcreg+d2+32], xmm5	;; Save I2
+	movapd	xmm3, [srcreg+16]	;; R1
+	movapd	xmm4, [srcreg+48]	;; R2
+	movapd	xmm5, [srcreg+d2+16]	;; R5
+	movapd	xmm6, [srcreg+d2+48]	;; R6
+	movapd	[srcreg+16], xmm1	;; Save R3
+	movapd	[srcreg+48], xmm0	;; Save I3
+	movapd	[srcreg+d2+16], xmm2	;; Save R4
+	movapd	[srcreg+d2+48], xmm7	;; Save I4
+	movapd	xmm0, [srcreg+d1+16]	;; R3
+	movapd	xmm1, [srcreg+d1+48]	;; R4
+	x4c_cpm_unfft_3 xmm3, xmm4, xmm0, xmm1, xmm5, xmm6, xmm2, xmm7, [srcreg+d2+d1+16], [srcreg+d2+d1+48], [srcreg+d1], [srcreg+d1+32], srcreg+srcinc+d2, d1
+	xprefetchw [srcreg+srcinc+d2+d1]
+	movapd	[srcreg+d1+16], xmm4	;; Save R3
+	movapd	[srcreg+d1+48], xmm3	;; Save I3
+	movapd	[srcreg+d2+d1], xmm2	;; Save R2
+	movapd	[srcreg+d2+d1+16], xmm0	;; Save R4
+	movapd	[srcreg+d2+d1+32], xmm6	;; Save I2
+	movapd	[srcreg+d2+d1+48], xmm7	;; Save I4
+	ENDM
+
+x4c_cpm_unfft_0 MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,pre1,pre2
+	x4c_cpm_unfft_cmn r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,0,0,0,pre1,pre2
+	ENDM
+
+x4c_cpm_unfft_cmn MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,off2,off3,off4,pre1,pre2
+	x4c_unfft4_cmn r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,0,off2,off3,off4,pre1,pre2
+	movapd	dest1, r6		;; Save R1
+	movapd	dest2, r7		;; Save I1
+	ENDM
+
+x4c_cpm_unfft_1 MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,pre1,pre2
+	subpd	r2, r4			;; new I2 = I1 - I2
+	multwo	r4
+	addpd	r4, r2			;; new I1 = I1 + I2
+	movapd	r8, mem8
+	addpd	r8, r6			;; new I3 = I3 + I4
+	subpd	r1, r3			;; new R2 = R1 - R2
+	multwo	r3
+	addpd	r3, r1			;; new R1 = R1 + R2
+	movapd	r7, mem7
+	subpd	r7, r5			;; new I4 = R4 - R3
+	addpd	r5, mem7		;; new R3 = R3 + R4
+	subpd	r6, mem8		;; new R4 = I3 - I4
+
+	subpd	r4, r8			;; I1 = I1 - I3 (new I3)
+	multwo	r8			;; I3 = I3 * 2
+	xprefetchw [pre1]
+	subpd	r5, r3			;; R3 = R3 - R1 (new negR3)
+	multwo	r3			;; R1 = R1 * 2
+	subpd	r2, r7			;; I2 = I2 - I4 (new I4)
+	multwo	r7			;; I4 = I4 * 2
+	subpd	r6, r1			;; R4 = R4 - R2 (new negR4)
+	multwo	r1			;; R2 = R2 * 2
+	addpd	r8, r4			;; I3 = I1 + I3 (new I1)
+	addpd	r3, r5			;; R1 = R1 + R3 (new R1)
+	xprefetchw [pre1][pre2]
+	addpd	r7, r2			;; I4 = I2 + I4 (new I2)
+	addpd	r1, r6			;; R2 = R2 + R4 (new R2)
+
+	movapd	dest1, r3		;; save intermediate R1
+	movapd	dest2, r8		;; save intermediate I1
+	movapd	r3, [rdi+16]		;; pre_real/pre_imag
+	mulpd	r3, r5			;; A3 = negR3 * pre_real/pre_imag
+	movapd	r8, [rdi+16]		;; pre_real/pre_imag
+	mulpd	r8, r4			;; B3 = I3 * pre_real/pre_imag
+	subpd	r3, r4			;; A3 = A3 - I3
+	addpd	r8, r5			;; B3 = B3 + negR3
+	movapd	r4, [rdi+80]		;; pre_real/pre_imag
+	mulpd	r4, r6			;; A4 = negR4 * pre_real/pre_imag
+	movapd	r5, [rdi+80]		;; pre_real/pre_imag
+	mulpd	r5, r2			;; B4 = I4 * pre_real/pre_imag
+	subpd	r4, r2			;; A4 = A4 - I4
+	addpd	r5, r6			;; B4 = B4 + negR4
+	movapd	r2, [rdi+80]		;; pre_real/pre_imag
+	mulpd	r2, r1			;; A2 = R2 * pre_real/pre_imag
+	movapd	r6, [rdi+80]		;; pre_real/pre_imag
+	mulpd	r6, r7			;; B2 = I2 * pre_real/pre_imag
+	mulpd	r3, [rdi]		;; A3 = A3 * pre_imag (final I3)
+	mulpd	r8, [rdi]		;; B3 = B3 * pre_imag (final R3)
+	addpd	r2, r7			;; A2 = A2 + I2
+	subpd	r6, r1			;; B2 = B2 - R2
+	mulpd	r4, [rdi+64]		;; A4 = A4 * pre_imag (final I4)
+	mulpd	r5, [rdi+64]		;; B4 = B4 * pre_imag (final R4)
+	movapd	r1, [rdi+16]		;; pre_real/pre_imag
+	mulpd	r1, dest1		;; A1 = R1 * pre_real/pre_imag
+	movapd	r7, [rdi+16]		;; pre_real/pre_imag
+	mulpd	r7, dest2		;; B1 = I1 * pre_real/pre_imag
+	addpd	r1, dest2		;; A1 = A1 + I1
+	subpd	r7, dest1		;; B1 = B1 - R1
+	mulpd	r2, [rdi+64]		;; A2 = A2 * pre_imag (final R2)
+	mulpd	r6, [rdi+64]		;; B2 = B2 * pre_imag (final I2)
+	mulpd	r1, [rdi]		;; A1 = A1 * pre_imag (final R1)
+	mulpd	r7, [rdi]		;; B1 = B1 * pre_imag (final I1)
+	movapd	dest1, r1		;; Save R1
+	movapd	dest2, r7		;; Save I1
+	ENDM
+
+x4c_cpm_unfft_2 MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,pre1,pre2
+	x4c_cpm_unfft_cmn r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,32,64,96,pre1,pre2
+	ENDM
+
+x4c_cpm_unfft_3 MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,pre1,pre2
+	subpd	r2, r4			;; new I2 = I1 - I2
+	multwo	r4
+	addpd	r4, r2			;; new I1 = I1 + I2
+	movapd	r8, mem8
+	addpd	r8, r6			;; new I3 = I3 + I4
+	subpd	r6, mem8		;; new R4 = I3 - I4
+	subpd	r1, r3			;; new R2 = R1 - R2
+	multwo	r3
+	addpd	r3, r1			;; new R1 = R1 + R2
+	movapd	r7, mem7
+	subpd	r7, r5			;; new I4 = R4 - R3
+	addpd	r5, mem7		;; new R3 = R3 + R4
+
+	subpd	r4, r8			;; I1 = I1 - I3 (new I3)
+	multwo	r8			;; I3 = I3 * 2
+	xprefetchw [pre1]
+	subpd	r5, r3			;; R3 = R3 - R1 (new negR3)
+	multwo	r3			;; R1 = R1 * 2
+	subpd	r7, r2			;; I4 = I4 - I2 (new negI4)
+	multwo	r2			;; I2 = I2 * 2
+	subpd	r6, r1			;; R4 = R4 - R2 (new negR4)
+	multwo	r1			;; R2 = R2 * 2
+	addpd	r8, r4			;; I3 = I1 + I3 (new I1)
+	addpd	r3, r5			;; R1 = R1 + R3 (new R1)
+	xprefetchw [pre1][pre2]
+	addpd	r2, r7			;; I2 = I2 + I4 (new I2)
+	addpd	r1, r6			;; R2 = R2 + R4 (new R2)
+
+	movapd	dest1, r3		;; save intermediate R1
+	movapd	dest2, r8		;; save intermediate I1
+	movapd	r3, [rdi+48]		;; pre_real/pre_imag
+	mulpd	r3, r6			;; A4 = negR4 * pre_real/pre_imag
+	movapd	r8, [rdi+48]		;; pre_real/pre_imag
+	mulpd	r8, r7			;; B4 = negI4 * pre_real/pre_imag
+	addpd	r3, r7			;; A4 = A4 + negI4
+	subpd	r8, r6			;; B4 = B4 - negR4
+	movapd	r7, [rdi+112]		;; pre_real/pre_imag
+	mulpd	r7, r1			;; A2 = R2 * pre_real/pre_imag
+	movapd	r6, [rdi+112]		;; pre_real/pre_imag
+	mulpd	r6, r2			;; B2 = I2 * pre_real/pre_imag
+	addpd	r7, r2			;; A2 = A2 + I2
+	subpd	r6, r1			;; B2 = B2 - R2
+	movapd	r1, [rdi+80]		;; pre_real/pre_imag
+	mulpd	r1, r5			;; A3 = negR3 * pre_real/pre_imag
+	movapd	r2, [rdi+80]		;; pre_real/pre_imag
+	mulpd	r2, r4			;; B3 = I3 * pre_real/pre_imag
+	mulpd	r3, [rdi+32]		;; A4 = A4 * pre_imag (final R4)
+	mulpd	r8, [rdi+32]		;; B4 = B4 * pre_imag (final I4)
+	subpd	r1, r4			;; A3 = A3 - I3
+	addpd	r2, r5			;; B3 = B3 + negR3
+	mulpd	r7, [rdi+96]		;; A2 = A2 * pre_imag (final R2)
+	mulpd	r6, [rdi+96]		;; B2 = B2 * pre_imag (final I2)
+	movapd	r4, [rdi+16]		;; pre_real/pre_imag
+	mulpd	r4, dest1		;; A1 = R1 * pre_real/pre_imag
+	movapd	r5, [rdi+16]		;; pre_real/pre_imag
+	mulpd	r5, dest2		;; B1 = I1 * pre_real/pre_imag
+	addpd	r4, dest2		;; A1 = A1 + I1
+	subpd	r5, dest1		;; B1 = B1 - R1
+	mulpd	r1, [rdi+64]		;; A3 = A3 * pre_imag (final I3)
+	mulpd	r2, [rdi+64]		;; B3 = B3 * pre_imag (final R3)
+	mulpd	r4, [rdi]		;; A1 = A1 * pre_imag (final R1)
+	mulpd	r5, [rdi]		;; B1 = B1 * pre_imag (final I1)
+	movapd	dest1, r4		;; Save R1
+	movapd	dest2, r5		;; Save I1
+	ENDM
+
+x4c_unfft4_cmn MACRO r1,r2,r3,r4,r5,r6,r7,r8,mem7,mem8,dest1,dest2,off1,off2,off3,off4,pre1,pre2
+	subpd	r2, r4			;; new I2 = I1 - I2
+	multwo	r4
+	addpd	r4, r2			;; new I1 = I1 + I2
+	movapd	r8, mem8
+	addpd	r8, r6			;; new I3 = I3 + I4
+	subpd	r1, r3			;; new R2 = R1 - R2
+	multwo	r3
+	addpd	r3, r1			;; new R1 = R1 + R2
+	movapd	r7, mem7
+	subpd	r7, r5			;; new I4 = R4 - R3
+	addpd	r5, mem7		;; new R3 = R4 + R3
+	subpd	r6, mem8		;; new R4 = I3 - I4
+	xprefetchw [pre1]
+
+	subpd	r4, r8			;; I1 = I1 - I3 (new I3)
+	multwo	r8			;; I3 = I3 * 2
+	subpd	r3, r5			;; R1 = R1 - R3 (new R3)
+	multwo	r5			;; R3 = R3 * 2
+	subpd	r2, r7			;; I2 = I2 - I4 (new I4)
+	multwo	r7			;; I4 = I4 * 2
+	subpd	r1, r6			;; R2 = R2 - R4 (new R4)
+	multwo	r6			;; R4 = R4 * 2
+	xprefetchw [pre1][pre2]
+	addpd	r8, r4			;; I3 = I1 + I3 (new I1)
+	addpd	r5, r3			;; R3 = R1 + R3 (new R1)
+	addpd	r7, r2			;; I4 = I2 + I4 (new I2)
+	addpd	r6, r1			;; R4 = R2 + R4 (new R2)
+
+	movapd	dest1, r5		;; save intermediate R1
+	movapd	dest2, r8		;; save intermediate I1
+	movapd	r5, [rdi+off3+16]	;; pre_real/pre_imag
+	mulpd	r5, r3			;; A3 = R3 * pre_real/pre_imag
+	movapd	r8, [rdi+off3+16]	;; pre_real/pre_imag
+	mulpd	r8, r4			;; B3 = I3 * pre_real/pre_imag
+	addpd	r5, r4			;; A3 = A3 + I3
+	subpd	r8, r3			;; B3 = B3 - R3
+	movapd	r3, [rdi+off4+16]	;; pre_real/pre_imag
+	mulpd	r3, r1			;; A4 = R4 * pre_real/pre_imag
+	movapd	r4, [rdi+off4+16]	;; pre_real/pre_imag
+	mulpd	r4, r2			;; B4 = I4 * pre_real/pre_imag
+	addpd	r3, r2			;; A4 = A4 + I4
+	subpd	r4, r1			;; B4 = B4 - R4
+	movapd	r1, [rdi+off2+16]	;; pre_real/pre_imag
+	mulpd	r1, r6			;; A2 = R2 * pre_real/pre_imag
+	movapd	r2, [rdi+off2+16]	;; pre_real/pre_imag
+	mulpd	r2, r7			;; B2 = I2 * pre_real/pre_imag
+	mulpd	r3, [rdi+off4]		;; A4 = A4 * pre_imag (final R4)
+	mulpd	r4, [rdi+off4]		;; B4 = B4 * pre_imag (final I4)
+	addpd	r1, r7			;; A2 = A2 + I2
+	subpd	r2, r6			;; B2 = B2 - R2
+	mulpd	r5, [rdi+off3]		;; A3 = A3 * pre_imag (final R3)
+	mulpd	r8, [rdi+off3]		;; B3 = B3 * pre_imag (final I3)
+	movapd	r6, [rdi+off1+16]	;; pre_real/pre_imag
+	mulpd	r6, dest1		;; A1 = R1 * pre_real/pre_imag
+	movapd	r7, [rdi+off1+16]	;; pre_real/pre_imag
+	mulpd	r7, dest2		;; B1 = I1 * pre_real/pre_imag
+	addpd	r6, dest2		;; A1 = A1 + I1
+	subpd	r7, dest1		;; B1 = B1 - R1
+	mulpd	r1, [rdi+off2]		;; A2 = A2 * pre_imag (final R2)
+	mulpd	r2, [rdi+off2]		;; B2 = B2 * pre_imag (final I2)
+	mulpd	r6, [rdi+off1]		;; A1 = A1 * pre_imag (final R1)
+	mulpd	r7, [rdi+off1]		;; B1 = B1 * pre_imag (final I1)
+	ENDM
+
+
+x3cl_three_complex_first_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg][rbx]		;; R1
+	movapd	xmm3, [srcreg+32][rbx]		;; R4
+	movapd	xmm2, [srcreg+d1+16][rbx]	;; R3
+	movapd	xmm5, [srcreg+d1+48][rbx]	;; R6
+	movapd	xmm1, [srcreg+2*d1][rbx]	;; R2
+	movapd	xmm4, [srcreg+2*d1+32][rbx]	;; R5
+	x3c_premult xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, 0
+	x3c_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	xmm6, [srcreg+d1][rbx]		;; R1
+	movapd	xmm7, [srcreg+d1+32][rbx]	;; R4
+	movapd	[srcreg], xmm2			;; Save R1
+	movapd	[srcreg+32], xmm5		;; Save R2
+	movapd	[srcreg+d1], xmm0		;; Save R3
+	movapd	[srcreg+d1+16], xmm1		;; Save R4
+	movapd	[srcreg+d1+32], xmm4		;; Save R5
+	movapd	[srcreg+d1+48], xmm3		;; Save R6
+	movapd	xmm1, [srcreg+16][rbx]		;; R2
+	movapd	xmm4, [srcreg+48][rbx]		;; R5
+	movapd	xmm2, [srcreg+2*d1+16][rbx]	;; R3
+	movapd	xmm5, [srcreg+2*d1+48][rbx]	;; R6
+	x3c_premult xmm6, xmm1, xmm2, xmm7, xmm4, xmm5, xmm0, xmm3, 96
+	x3c_fft xmm6, xmm1, xmm2, xmm7, xmm4, xmm5, xmm0, xmm3
+	movapd	[srcreg+16], xmm2		;; Save R1
+	movapd	[srcreg+48], xmm5		;; Save R2
+	movapd	[srcreg+2*d1], xmm6		;; Save R3
+	movapd	[srcreg+2*d1+16], xmm1		;; Save R4
+	movapd	[srcreg+2*d1+32], xmm4		;; Save R5
+	movapd	[srcreg+2*d1+48], xmm7		;; Save R6
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+; Same as above except we don't use the rbx offset as the FFT data has
+; already been copied to the scratch area using the rbx offset.
+x3cl_three_complex_fft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]			;; R1
+	movapd	xmm3, [srcreg+32]		;; R4
+	movapd	xmm2, [srcreg+d1+16]		;; R3
+	movapd	xmm5, [srcreg+d1+48]		;; R6
+	movapd	xmm1, [srcreg+2*d1]		;; R2
+	movapd	xmm4, [srcreg+2*d1+32]		;; R5
+	x3c_premult xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, 0
+	x3c_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	movapd	xmm6, [srcreg+d1]		;; R1
+	movapd	xmm7, [srcreg+d1+32]		;; R4
+	movapd	[srcreg], xmm2			;; Save R1
+	movapd	[srcreg+32], xmm5		;; Save R2
+	movapd	[srcreg+d1], xmm0		;; Save R3
+	movapd	[srcreg+d1+16], xmm1		;; Save R4
+	movapd	[srcreg+d1+32], xmm4		;; Save R5
+	movapd	[srcreg+d1+48], xmm3		;; Save R6
+	movapd	xmm1, [srcreg+16]		;; R2
+	movapd	xmm4, [srcreg+48]		;; R5
+	movapd	xmm2, [srcreg+2*d1+16]		;; R3
+	movapd	xmm5, [srcreg+2*d1+48]		;; R6
+	x3c_premult xmm6, xmm1, xmm2, xmm7, xmm4, xmm5, xmm0, xmm3, 96
+	x3c_fft xmm6, xmm1, xmm2, xmm7, xmm4, xmm5, xmm0, xmm3
+	movapd	[srcreg+16], xmm2		;; Save R1
+	movapd	[srcreg+48], xmm5		;; Save R2
+	movapd	[srcreg+2*d1], xmm6		;; Save R3
+	movapd	[srcreg+2*d1+16], xmm1		;; Save R4
+	movapd	[srcreg+2*d1+32], xmm4		;; Save R5
+	movapd	[srcreg+2*d1+48], xmm7		;; Save R6
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+;; This code is identical to the above except it is used in the single pass
+;; all-complex FFTs and swizzles the inputs.
+s3cl_three_complex_first_fft MACRO srcreg,srcinc,d1
+	low_load xmm0, [srcreg][rbx], [srcreg+16][rbx] ;; R1
+	low_load xmm3, [srcreg+32][rbx], [srcreg+48][rbx] ;; R4
+	high_load xmm2, [srcreg+d1][rbx], [srcreg+d1+16][rbx] ;; R3
+	high_load xmm5, [srcreg+d1+32][rbx], [srcreg+d1+48][rbx] ;; R6
+	low_load xmm1, [srcreg+2*d1][rbx], [srcreg+2*d1+16][rbx] ;; R2
+	low_load xmm4, [srcreg+2*d1+32][rbx], [srcreg+2*d1+48][rbx] ;; R5
+	x3c_premult xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, 0
+	x3c_fft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	high_load xmm6, [srcreg][rbx], [srcreg+16][rbx] ;; R2
+	high_load xmm7, [srcreg+32][rbx], [srcreg+48][rbx] ;; R5
+	movapd	[srcreg], xmm2			;; Save R1
+	movapd	[srcreg+32], xmm5		;; Save R2
+	low_load xmm2, [srcreg+d1][rbx], [srcreg+d1+16][rbx] ;; R1
+	low_load xmm5, [srcreg+d1+32][rbx], [srcreg+d1+48][rbx]	;; R4
+	movapd	[srcreg+d1], xmm0		;; Save R3
+	movapd	[srcreg+d1+16], xmm1		;; Save R4
+	movapd	[srcreg+d1+32], xmm4		;; Save R5
+	movapd	[srcreg+d1+48], xmm3		;; Save R6
+	high_load xmm0, [srcreg+2*d1][rbx], [srcreg+2*d1+16][rbx] ;; R3
+	high_load xmm1, [srcreg+2*d1+32][rbx], [srcreg+2*d1+48][rbx] ;; R6
+	x3c_premult xmm2, xmm6, xmm0, xmm5, xmm7, xmm1, xmm3, xmm4, 96
+	x3c_fft xmm2, xmm6, xmm0, xmm5, xmm7, xmm1, xmm3, xmm4
+	movapd	[srcreg+16], xmm0		;; Save R1
+	movapd	[srcreg+48], xmm1		;; Save R2
+	movapd	[srcreg+2*d1], xmm2		;; Save R3
+	movapd	[srcreg+2*d1+16], xmm6		;; Save R4
+	movapd	[srcreg+2*d1+32], xmm7		;; Save R5
+	movapd	[srcreg+2*d1+48], xmm5		;; Save R6
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+x3c_premult MACRO r1, r2, r3, r4, r5, r6, t1, t2, off
+	movapd	t1, r1			;; Copy R1
+	mulpd	r1, [rdi+off+16]	;; A1 = R1 * premul_real/premul_imag
+	subpd	r1, r4			;; A1 = A1 - I1
+	mulpd	r4, [rdi+off+16]	;; B1 = I1 * premul_real/premul_imag
+	addpd	r4, t1			;; B1 = B1 + R1
+
+	movapd	t1, r3			;; Copy R3
+	mulpd	r3, [rdi+off+80]	;; A3 = R3 * premul_real/premul_imag
+	subpd	r3, r6			;; A3 = A3 - I3
+	mulpd	r6, [rdi+off+80]	;; B3 = I3 * premul_real/premul_imag
+	addpd	r6, t1			;; B3 = B3 + R3
+	mulpd	r1, [rdi+off]		;; A1 = A1 * premul_imag (new R1)
+	mulpd	r4, [rdi+off]		;; B1 = B1 * premul_imag (new I1)
+
+	movapd	t1, r2			;; Copy R2
+	mulpd	r2, [rdi+off+48]	;; A2 = R2 * premul_real/premul_imag
+	subpd	r2, r5			;; A2 = A2 - I2
+	mulpd	r5, [rdi+off+48]	;; B2 = I2 * premul_real/premul_imag
+	addpd	r5, t1			;; B2 = B2 + R2
+	mulpd	r3, [rdi+off+64]	;; A3 = A3 * premul_imag (new R3)
+	mulpd	r6, [rdi+off+64]	;; B3 = B3 * premul_imag (new I3)
+
+	mulpd	r2, [rdi+off+32]	;; A2 = A2 * premul_imag (new R2)
+	mulpd	r5, [rdi+off+32]	;; B2 = B2 * premul_imag (new I2)
+	ENDM
+
+;; Do a 3-complex FFT.  The input values are R1+R4i, R2+R5i, R3+R6i
+;; A 3-complex FFT is:
+;; Res1:  (R1+R2+R3) + (I1+I2+I3)i
+;; Res2:  (R1-.5R2-.866I2-.5R3+.866I3) + (I1-.5I2+.866R2-.5I3-.866R3)i
+;; Res3:  (R1-.5R2+.866I2-.5R3-.866I3) + (I1-.5I2-.866R2-.5I3+.866R3)i
+x3c_fft MACRO r1, r2, r3, r4, r5, r6, t1, t2
+	subpd	r2, r3			;; R2 - R3
+	multwo	r3			;; R3 * 2
+	addpd	r3, r2			;; R2 + R3
+	mulpd	r2, XMM_P866		;; 0.866 * (R2 - R3)
+	subpd	r5, r6			;; I2 - I3
+	multwo	r6			;; I3 * 2
+	addpd	r6, r5			;; I2 + I3
+	mulpd	r5, XMM_P866		;; 0.866 * (I2 - I3)
+	movapd	t1, XMM_HALF
+	mulpd	t1, r3			;; 0.5 * (R2 + R3)
+	addpd	r3, r1			;; R1 + R2 + R3 (final R1)
+	subpd	r1, t1			;; (R1-.5R2-.5R3)
+	movapd	t1, XMM_HALF
+	mulpd	t1, r6			;; 0.5 * (I2 + I3)
+	addpd	r6, r4			;; I1 + I2 + I3 (final I1)
+	subpd	r4, t1			;; (I1-.5I2-.5I3)
+	subpd	r1, r5			;; Final R2
+	multwo	r5
+	addpd	r5, r1			;; Final R3
+	subpd	r4, r2			;; Final I3
+	multwo	r2
+	addpd	r2, r4			;; Final I2
+	ENDM
+
+x3cl_three_complex_last_unfft MACRO srcreg,srcinc,d1
+	movapd	xmm0, [srcreg]		;; R1
+	movapd	xmm1, [srcreg+32]	;; R2
+	movapd	xmm2, [srcreg+d1]	;; R3
+	movapd	xmm3, [srcreg+d1+32]	;; R4
+	movapd	xmm4, [srcreg+2*d1]	;; R5
+	movapd	xmm5, [srcreg+2*d1+32]	;; R6
+	x3c_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	x3c_postmult xmm4, xmm5, xmm3, xmm1, xmm0, xmm2, xmm6, xmm7, 0
+	movapd	[srcreg], xmm3		;; Save R1
+	movapd	[srcreg+32], xmm1	;; Save R4
+	movapd	[srcreg+2*d1], xmm0	;; Save R2
+	movapd	[srcreg+2*d1+32], xmm2	;; Save R5
+	movapd	xmm2, [srcreg+d1+16]	;; R3
+	movapd	xmm3, [srcreg+d1+48]	;; R4
+	movapd	[srcreg+d1+16], xmm6	;; Save R3
+	movapd	[srcreg+d1+48], xmm7	;; Save R6
+	movapd	xmm0, [srcreg+16]	;; R1
+	movapd	xmm1, [srcreg+48]	;; R2
+	movapd	xmm4, [srcreg+2*d1+16]	;; R5
+	movapd	xmm5, [srcreg+2*d1+48]	;; R6
+	x3c_unfft xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+	x3c_postmult xmm4, xmm5, xmm3, xmm1, xmm0, xmm2, xmm6, xmm7, 96
+	movapd	[srcreg+16], xmm0	;; Save R2
+	movapd	[srcreg+48], xmm2	;; Save R5
+	movapd	[srcreg+d1], xmm3	;; Save R1
+	movapd	[srcreg+d1+32], xmm1	;; Save R4
+	movapd	[srcreg+2*d1+16], xmm6	;; Save R3
+	movapd	[srcreg+2*d1+48], xmm7	;; Save R6
+	lea	srcreg, [srcreg+srcinc]
+	ENDM
+
+;; Do a 3-complex inverse FFT.  The input values are R1+R2i, R3+R4i, R5+R6i
+;; A 3-complex inverse FFT is:
+;; Res1:  (R1+R2+R3) + (I1+I2+I3)i
+;; Res2:  (R1-.5R2+.866I2-.5R3-.866I3) + (I1-.5I2-.866R2-.5I3+.866R3)i
+;; Res3:  (R1-.5R2-.866I2-.5R3+.866I3) + (I1-.5I2+.866R2-.5I3-.866R3)i
+x3c_unfft MACRO r1, r2, r3, r4, r5, r6, t1, t2
+	subpd	r3, r5			;; R2 - R3
+	multwo	r5			;; R3 * 2
+	addpd	r5, r3			;; R2 + R3
+	mulpd	r3, XMM_P866		;; 0.866 * (R2 - R3)
+	subpd	r4, r6			;; I2 - I3
+	multwo	r6			;; I3 * 2
+	addpd	r6, r4			;; I2 + I3
+	mulpd	r4, XMM_P866		;; 0.866 * (I2 - I3)
+	movapd	t1, XMM_HALF
+	mulpd	t1, r5			;; 0.5 * (R2 + R3)
+	addpd	r5, r1			;; R1 + R2 + R3 (final R1)
+	subpd	r1, t1			;; (R1-.5R2-.5R3)
+	movapd	t1, XMM_HALF
+	mulpd	t1, r6			;; 0.5 * (I2 + I3)
+	addpd	r6, r2			;; I1 + I2 + I3 (final I1)
+	subpd	r2, t1			;; (I1-.5I2-.5I3)
+	subpd	r1, r4			;; Final R3
+	multwo	r4
+	addpd	r4, r1			;; Final R2
+	subpd	r2, r3			;; Final I2
+	multwo	r3
+	addpd	r3, r2			;; Final I3
+	ENDM
+
+x3c_postmult MACRO r1, r2, r3, r4, r5, r6, t1, t2, off
+	movapd	t1, [rdi+off+80]	;; pre_real/pre_imag
+	mulpd	t1, r5			;; A3 = R3 * pre_real/pre_imag
+	movapd	t2, [rdi+off+80]	;; pre_real/pre_imag
+	mulpd	t2, r6			;; B3 = I3 * pre_real/pre_imag
+	addpd	t1, r6			;; A3 = A3 + I3
+	subpd	t2, r5			;; B3 = B3 - R3
+
+	movapd	r5, [rdi+off+48]	;; pre_real/pre_imag
+	mulpd	r5, r3			;; A2 = R2 * pre_real/pre_imag
+	movapd	r6, [rdi+off+48]	;; pre_real/pre_imag
+	mulpd	r6, r4			;; B2 = I2 * pre_real/pre_imag
+	addpd	r5, r4			;; A2 = A2 + I2
+	subpd	r6, r3			;; B2 = B2 - R2
+	mulpd	t1, [rdi+off+64]	;; A3 = A3 * pre_imag (final R3)
+	mulpd	t2, [rdi+off+64]	;; B3 = B3 * pre_imag (final I3)
+
+	movapd	r3, [rdi+off+16]	;; pre_real/pre_imag
+	mulpd	r3, r1			;; A1 = R1 * pre_real/pre_imag
+	movapd	r4, [rdi+off+16]	;; pre_real/pre_imag
+	mulpd	r4, r2			;; B1 = I1 * pre_real/pre_imag
+	addpd	r3, r2			;; A1 = A1 + I1
+	subpd	r4, r1			;; B1 = B1 - R1
+	mulpd	r5, [rdi+off+32]	;; A2 = A2 * pre_imag (final R2)
+	mulpd	r6, [rdi+off+32]	;; B2 = B2 * pre_imag (final I2)
+	mulpd	r3, [rdi+off]		;; A1 = A1 * pre_imag (final R1)
+	mulpd	r4, [rdi+off]		;; B1 = B1 * pre_imag (final I1)
+	ENDM
+
+;; Do the brute-force multiplication of the 7 words near the half-way point.
+;; These seven words were copied to an area 32-96 bytes before the FFT data.
+;; This is done for zero-padded FFTs only.
+
+xmult7	MACRO	src1, src2
+	LOCAL	nozpad
+	cmp	ZERO_PADDED_FFT, 0	;; Is this a zero-padded FFT?
+	je	nozpad			;; No, skip 7 word multiply
+	movsd	xmm0, Q [src1-40]	;; Result0 = word0 * word0
+	mulsd	xmm0, Q [src2-40]
+	movsd	xmm1, Q [src1-48]	;;	   + word1 * word-1
+	mulsd	xmm1, Q [src2-72]
+	addsd	xmm0, xmm1
+	movsd	xmm2, Q [src1-56]	;;	   + word2 * word-2
+	mulsd	xmm2, Q [src2-80]
+	addsd	xmm0, xmm2
+	movsd	xmm3, Q [src1-64]	;;	   + word3 * word-3
+	mulsd	xmm3, Q [src2-88]
+	addsd	xmm0, xmm3
+	movsd	xmm1, Q [src1-72]	;;	   + word-1 * word1
+	mulsd	xmm1, Q [src2-48]
+	addsd	xmm0, xmm1
+	movsd	xmm2, Q [src1-80]	;;	   + word-2 * word2
+	mulsd	xmm2, Q [src2-56]
+	addsd	xmm0, xmm2
+	movsd	xmm3, Q [src1-88]	;;	   + word-3 * word3
+	mulsd	xmm3, Q [src2-64]
+	addsd	xmm0, xmm3
+	movsd	ZPAD0, xmm0
+
+	movsd	xmm0, Q [src1-40]	;; Result1 = word0 * word1
+	mulsd	xmm0, Q [src2-48]
+	movsd	xmm1, Q [src1-48]	;;	   + word1 * word0
+	mulsd	xmm1, Q [src2-40]
+	addsd	xmm0, xmm1
+	movsd	xmm2, Q [src1-56]	;;	   + word2 * word-1
+	mulsd	xmm2, Q [src2-72]
+	addsd	xmm0, xmm2
+	movsd	xmm3, Q [src1-64]	;;	   + word3 * word-2
+	mulsd	xmm3, Q [src2-80]
+	addsd	xmm0, xmm3
+	movsd	xmm2, Q [src1-72]	;;	   + word-1 * word2
+	mulsd	xmm2, Q [src2-56]
+	addsd	xmm0, xmm2
+	movsd	xmm3, Q [src1-80]	;;	   + word-2 * word3
+	mulsd	xmm3, Q [src2-64]
+	addsd	xmm0, xmm3
+	movsd	ZPAD1, xmm0
+
+	movsd	xmm0, Q [src1-40]	;; Result2 = word0 * word2
+	mulsd	xmm0, Q [src2-56]
+	movsd	xmm1, Q [src1-48]	;;	   + word1 * word1
+	mulsd	xmm1, Q [src2-48]
+	addsd	xmm0, xmm1
+	movsd	xmm2, Q [src1-56]	;;	   + word2 * word0
+	mulsd	xmm2, Q [src2-40]
+	addsd	xmm0, xmm2
+	movsd	xmm3, Q [src1-64]	;;	   + word3 * word-1
+	mulsd	xmm3, Q [src2-72]
+	addsd	xmm0, xmm3
+	movsd	xmm3, Q [src1-72]	;;	   + word-1 * word3
+	mulsd	xmm3, Q [src2-64]
+	addsd	xmm0, xmm3
+	movsd	ZPAD2, xmm0
+
+	movsd	xmm0, Q [src1-40]	;; Result3 = word0 * word3
+	mulsd	xmm0, Q [src2-64]
+	movsd	xmm1, Q [src1-48]	;;	   + word1 * word2
+	mulsd	xmm1, Q [src2-56]
+	addsd	xmm0, xmm1
+	movsd	xmm2, Q [src1-56]	;;	   + word2 * word1
+	mulsd	xmm2, Q [src2-48]
+	addsd	xmm0, xmm2
+	movsd	xmm3, Q [src1-64]	;;	   + word3 * word0
+	mulsd	xmm3, Q [src2-40]
+	addsd	xmm0, xmm3
+	movsd	ZPAD3, xmm0
+
+	movsd	xmm0, Q [src1-48]	;; Result4 = word1 * word3
+	mulsd	xmm0, Q [src2-64]
+	movsd	xmm1, Q [src1-56]	;;	   + word2 * word2
+	mulsd	xmm1, Q [src2-56]
+	addsd	xmm0, xmm1
+	movsd	xmm2, Q [src1-64]	;;	   + word3 * word1
+	mulsd	xmm2, Q [src2-48]
+	addsd	xmm0, xmm2
+	movsd	ZPAD4, xmm0
+
+	movsd	xmm0, Q [src1-56]	;; Result5 = word2 * word3
+	mulsd	xmm0, Q [src2-64]
+	movsd	xmm1, Q [src1-64]	;;	   + word3 * word2
+	mulsd	xmm1, Q [src2-56]
+	addsd	xmm0, xmm1
+	movsd	ZPAD5, xmm0
+
+	movsd	xmm0, Q [src1-64]	;; Result6 = word3 * word3
+	mulsd	xmm0, Q [src2-64]
+	movsd	ZPAD6, xmm0
+
+nozpad:
+	ENDM
+
+;
+; On AMD64 machines, replace some of the macros above with identical macros
+; that use slightly different instruction sequences for a little more speed.
+;
+
+IFDEF AMD
+INCLUDE	xlucasa.mac
+ENDIF
+
+;
+; On 64-bit machines, replace some of the macros above with identical macros
+; that use the extra 8 SSE2 registers for a little more speed.
+;
+
+IFDEF X86_64
+INCLUDE	xlucas64.mac
+ENDIF

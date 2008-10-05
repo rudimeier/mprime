@@ -1,0 +1,1826 @@
+; Copyright 1995-2008 - Mersenne Research, Inc.  All rights reserved
+; Author:  George Woltman
+; Email: woltman@alum.mit.edu
+;
+; Utility macros used throughout the assembly code
+;
+
+	OPTION	NOSCOPED
+
+; So that source code can assemble in both 32-bit and 64-bit mode, 
+; define the x86_64 registers as their 32-bit counterparts.  As long as
+; we use the x86_64 registers to hold pointers, the code will execute
+; successfully on both platforms.
+
+IFNDEF	X86_64
+rax	EQU	eax
+rbx	EQU	ebx
+rcx	EQU	ecx
+rdx	EQU	edx
+rsi	EQU	esi
+rdi	EQU	edi
+rbp	EQU	ebp
+rsp	EQU	esp
+ENDIF
+
+IFDEF	X86_64
+INCLUDE ksamd64.inc
+ENDIF
+
+;; We must be very careful to obey the various ABIs on the OSes we run.
+;; These macros help us do just that.
+
+;; This prolog is for the more complicated assembly helper routines called
+;; from C code.  This code saves required registers and allocates optional
+;; stack space.
+
+ah_prolog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
+	LOCAL	xmm_loc, xmm_space, stack_space
+
+;; In 32-bit mode, save registers and set push_amt.  The caller needs to
+;; know how much data was pushed so that it can access the C arguments
+
+	IFNDEF X86_64
+
+	;; Save registers that 32-bit C code expects us to preserve 
+	push_amt = 0
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push	rbx
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push	rbp
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push	rsi
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push	rdi
+		push_amt = push_amt + SZPTR
+	ENDIF
+
+	;; Allocate extra stack space for local variables.  Mac OS X requires
+	;; requires us to align the stack if the routine calls back into C code
+	stack_space = space_needed
+	first_local = 0
+	IF (calls_C_code NE 0) AND (((stack_space + push_amt) MOD 16) NE 0)
+		stack_space = stack_space + (16 - ((stack_space + push_amt) MOD 16))
+	ENDIF
+	IF stack_space NE 0
+		lea	esp, [esp-stack_space]
+		push_amt = push_amt + stack_space
+	ENDIF
+
+	ENDIF
+
+;; Windows 64 requires us to save registers and create frame information
+;; for stack unwinding.  Stack must be aligned on a 16-byte boundary.
+
+	IFDEF WINDOWS64
+
+	;; Optionally save registers used to pass arguments
+	IF num_C_args GE 1
+		opt_save_reg rcx, 8
+	ENDIF
+	IF num_C_args GE 2
+		opt_save_reg rdx, 16
+	ENDIF
+	IF num_C_args GE 3
+		opt_save_reg r8, 24
+	ENDIF
+	IF num_C_args GE 4
+		opt_save_reg r9, 32
+	ENDIF
+
+	;; Save registers that callee must preserve.  Set push_amt so that
+	;; caller can find arguments passed on the stack
+	push_amt = 0
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push_reg rbx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push_reg rbp
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push_reg rsi
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push_reg rdi
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		push_reg r12
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		push_reg r13
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		push_reg r14
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		push_reg r15
+		push_amt = push_amt+8
+	ENDIF
+
+	;; Compute space needed to save XMM registers
+	xmm_space = 0
+	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+
+	;; Sum up and allocate space needed including pad for proper alignment.
+	;; If we call back into C code, allocate an extra 32 bytes for the
+	;; called C code to save arguments (required by Windows 64-bit ABI).
+	;; Adjust push_amt so that caller can access args on the stack.
+	xmm_loc = space_needed
+	first_local = 0
+	IF calls_C_code NE 0
+		xmm_loc = xmm_loc + 32
+		first_local = 32
+	ENDIF
+	IF (xmm_space NE 0) AND ((xmm_loc MOD 16) NE 0)
+		xmm_loc = xmm_loc + (16 - (xmm_loc MOD 16))
+	ENDIF
+	stack_space = xmm_loc + xmm_space
+	IF ((stack_space + push_amt + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	ENDIF
+	IF stack_space NE 0
+		alloc_stack(stack_space)
+		push_amt = push_amt + stack_space
+	ENDIF
+
+	;; Save the XMM registers in the stack space we just allocated
+	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+		save_xmm128 xmm6, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+		save_xmm128 xmm7, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+		save_xmm128 xmm8, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+		save_xmm128 xmm9, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+		save_xmm128 xmm10, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+		save_xmm128 xmm11, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+		save_xmm128 xmm12, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+		save_xmm128 xmm13, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+		save_xmm128 xmm14, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+		save_xmm128 xmm15, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+
+	.endprolog
+
+	ENDIF
+
+;; In Linux 64-bit, we are required to save fewer registers than
+;; Windows 64-bit.  Stack must be maintained on a 16-byte boundary.
+
+	IFDEF LINUX64
+
+	;; Save registers that callee must preserve
+	push_amt = 0
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push	rbx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push	rbp
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		push	r12
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		push	r13
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		push	r14
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		push	r15
+		push_amt = push_amt+8
+	ENDIF
+
+	;; Sum up and allocate space needed including pad for proper alignment
+	;; Adjust push_amt so that caller can access args on the stack.
+	stack_space = space_needed
+	first_local = 0
+	IF ((stack_space + push_amt + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	ENDIF
+	IF stack_space NE 0
+		lea	rsp, [rsp-stack_space]
+		push_amt = push_amt + stack_space
+	ENDIF
+
+	ENDIF
+
+	ENDM
+
+;; Epilog macro that restores the requested registers and the stack pointer
+
+ah_epilog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
+	LOCAL	xmm_loc, xmm_space, stack_space
+
+;; In 32-bit mode, deallocate stack space and restore registers
+
+	IFNDEF X86_64
+
+	;; Calculate stack usage just like prolog did
+	push_amt = 0
+
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	ENDIF
+
+	stack_space = space_needed
+	IF (calls_C_code NE 0) AND (((stack_space + push_amt) MOD 16) NE 0)
+		stack_space = stack_space + (16 - ((stack_space + push_amt) MOD 16))
+	ENDIF
+
+	;; Deallocate extra stack space
+	IF stack_space NE 0
+		lea	esp, [esp+stack_space]
+	ENDIF
+
+	;; Restore registers that prolog saved
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		pop	rdi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		pop	rsi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		pop	rbp
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		pop	rbx
+	ENDIF
+
+	ret
+	ENDIF
+
+;; In Windows 64-bit mode, switch the stack pointer and restore registers
+;; Use only the instructions required by the exception handling stack unwind
+;; procedure.
+
+	IFDEF WINDOWS64
+
+	;; Calculate stack usage just like prolog did
+	push_amt = 0
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+
+	xmm_space = 0
+	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+
+	xmm_loc = space_needed
+	IF calls_C_code NE 0
+		xmm_loc = xmm_loc + 32
+	ENDIF
+	IF (xmm_space NE 0) AND ((xmm_loc MOD 16) NE 0)
+		xmm_loc = xmm_loc + (16 - (xmm_loc MOD 16))
+	ENDIF
+	stack_space = xmm_loc + xmm_space
+	IF ((stack_space + push_amt + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	ENDIF
+
+	;; Restore the saved XMM registers
+
+	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+		movapd	xmm6, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+		movapd	xmm7, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+		movapd	xmm8, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+		movapd	xmm9, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+		movapd	xmm10, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+		movapd	xmm11, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+		movapd	xmm12, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+		movapd	xmm13, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+		movapd	xmm14, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+		movapd	xmm15, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+
+	;; De-allocate stack space prolog allocated
+	IF stack_space NE 0
+		add	rsp, stack_space
+	ENDIF
+
+	;; Pop registers that prolog saved
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		pop	r15
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		pop	r14
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		pop	r13
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		pop	r12
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		pop	rdi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		pop	rsi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		pop	rbp
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		pop	rbx
+	ENDIF
+
+	ret
+	ENDIF
+
+;; In Linux 64-bit mode, unreserve stack space, restore saved registers
+;; and return
+
+	IFDEF LINUX64
+
+	;; Calculate stack usage just like prolog did
+	push_amt = 0
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+
+	stack_space = space_needed
+	IF ((stack_space + push_amt + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	ENDIF
+
+	;; De-allocate stack space prolog allocated
+	IF stack_space NE 0
+		lea	rsp, [rsp+stack_space]
+	ENDIF
+
+	;; Pop registers that prolog saved
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		pop	r15
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		pop	r14
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		pop	r13
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		pop	r12
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		pop	rbp
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		pop	rbx
+	ENDIF
+
+	ret
+	ENDIF
+
+	ENDM
+
+
+;; This prolog is for assembly routines called from C code that take an
+;; asm_data pointer as an argument.  We save registers as required by
+;; calling conventions.  In 32-bit mode we switch stack pointers so that
+;; esp can be used to access the asm_data.  In 64-bit mode, we have more
+;; registers available and we use one of them to point to the asm_data.
+
+;; Windows 32-bit
+;; Linux 32-bit
+;;	Parameter gwdata_asm_area = [esp+4]
+;; Windows 64-bit
+;;	Parameter gwdata_asm_area = rcx
+;; Linux 64-bit
+;;	Parameter gwdata_asm_area = rdi
+
+ad_prolog MACRO space_needed, calls_C_code, regs:vararg
+	LOCAL	stack_space
+
+;; In 32-bit mode, save registers and switch the stack pointer
+
+	IFNDEF X86_64
+
+	;; Save registers that 32-bit C code expects us to preserve 
+	push_amt = 0
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push	rbx
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push	rbp
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push	rsi
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push	rdi
+		push_amt = push_amt + SZPTR
+	ENDIF
+
+	;; Switch stack pointers so that esp can do "double duty".  That is,
+	;; act as a traditional stack and also access asm_data.
+	mov	rax, rsp		; Get current stack pointer
+	mov	esp, [esp+push_amt+4]	; Replace stack pointer with first arg
+
+	;; Reset variable used to track the distance from the current
+	;; stack pointer to the start of the asm_data
+	push_amt = 0
+
+	;; Save old stack pointer
+	mov	SAVED_RSP, rax
+
+	;; Allocate extra stack space for local variables.  Mac OS X requires
+	;; requires us to align the stack if the routine calls back into C code
+	stack_space = space_needed
+	first_local = 0
+	IF (calls_C_code NE 0) AND ((stack_space MOD 16) NE 0)
+		stack_space = stack_space + (16 - (stack_space MOD 16))
+	ENDIF
+	IF stack_space NE 0
+		lea	esp, [esp-stack_space]
+		push_amt = push_amt + stack_space
+	ENDIF
+
+	ENDIF
+
+;; Windows 64 requires us to save registers and create frame information
+;; for stack unwinding.  Stack must be aligned on a 16-byte boundary.
+
+	IFDEF WINDOWS64
+
+	;; Do a standard asm_helper prolog, then process asm_data argument
+	ah_prolog 1,space_needed,calls_C_code,regs
+
+	;; Set register pointing to asm_data
+	mov	r11, rcx
+	ENDIF
+
+;; In Linux 64-bit, we are required to save fewer registers than
+;; Windows 64-bit.  Stack must be maintained on a 16-byte boundary.
+
+	IFDEF LINUX64
+
+	;; Do a standard asm_helper prolog, then process asm_data argument
+	ah_prolog 1,space_needed,calls_C_code,regs
+
+	;; Set register pointing to asm_data
+	mov	r11, rdi
+	ENDIF
+
+	ENDM
+
+;; Epilog macro that restores the requested registers and the stack pointer
+
+ad_epilog MACRO space_needed, calls_C_code, regs:vararg
+
+;; In 32-bit mode, switch the stack pointer and restore registers
+
+	IFNDEF X86_64
+
+	;; Restore the stack pointer
+	mov	rsp, SAVED_RSP		;; Restore saved stack pointer
+
+	;; Restore registers that prolog saved
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		pop	rdi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		pop	rsi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		pop	rbp
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		pop	rbx
+	ENDIF
+
+	ret
+	ENDIF
+
+;; In Windows 64-bit mode, switch the stack pointer and restore registers
+;; Use only the instructions required by the exception handling stack unwind
+;; procedure.
+
+	IFDEF WINDOWS64
+
+	;; Perform a standard asm helper epilog
+	ah_epilog 1,space_needed,calls_C_code,regs
+
+	ENDIF
+
+;; In Linux 64-bit mode, unreserve stack space, restore saved registers
+;; and return
+
+	IFDEF LINUX64
+
+	;; Perform a standard asm helper epilog
+	ah_epilog 1,space_needed,calls_C_code,regs
+
+	ENDIF
+
+	ENDM
+
+
+;; This prolog is for the internal assembler routines.  We do not strictly
+;; obey the various ABIs when our assembly routines call each other.
+;; In particular, there is no requirement as to which registers are saved
+;; and restored.  Stack alignment is not required unless this assembly
+;; routine calls back into C code.
+;;
+;; Note that the way we use the stack pointer to access asm_data in 32-bit
+;; mode requires that all callers of our internal assembly routines
+;; push the same amount of data on the stack.
+
+int_prolog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
+	LOCAL	xmm_loc, xmm_space, stack_space
+
+;; In 32-bit mode, save registers and set new push_amt.
+
+	IFNDEF X86_64
+
+	;; Set the amount of data pushed to the caller's push_amt plus
+	;; the return address pushed in calling this routine.
+	push_amt = callers_push_amt + SZPTR
+
+	;; Save registers that 32-bit C code expects us to preserve
+	;; keep track of the push_amt
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		push	rax
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push	rbx
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		push	rcx
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		push	rdx
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push	rbp
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push	rsi
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push	rdi
+		push_amt = push_amt + SZPTR
+	ENDIF
+	ENDIF
+
+	;; Allocate extra stack space for local variables.  Mac OS X requires
+	;; requires us to align the stack if the routine calls back into C code
+	stack_space = space_needed
+	first_local = 0
+	IF (calls_C_code NE 0) AND (((stack_space + push_amt) MOD 16) NE 0)
+		stack_space = stack_space + (16 - ((stack_space + push_amt) MOD 16))
+	ENDIF
+	IF stack_space NE 0
+		lea	esp, [esp-stack_space]
+		push_amt = push_amt + stack_space
+	ENDIF
+
+	ENDIF
+
+;; Windows 64 requires us to save registers and create frame information
+;; for stack unwinding.  Stack must be aligned on a 16-byte boundary.
+
+	IFDEF WINDOWS64
+
+	;; Save registers that callee must preserve.  Set push_amt so that
+	;; caller can find arguments passed on the stack
+	push_amt = 0
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		push_reg rax
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push_reg rbx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		push_reg rcx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		push_reg rdx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push_reg rbp
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push_reg rsi
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push_reg rdi
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		push_reg r12
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		push_reg r13
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		push_reg r14
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		push_reg r15
+		push_amt = push_amt+8
+	ENDIF
+	ENDIF
+
+	;; Compute space needed to save XMM registers
+	xmm_space = 0
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	ENDIF
+
+	;; Sum up and allocate space needed including pad for proper alignment.
+	;; If we call back into C code, allocate an extra 32 bytes for the
+	;; called C code to save arguments (required by Windows 64-bit ABI).
+	xmm_loc = space_needed
+	first_local = 0
+	IF calls_C_code NE 0
+		xmm_loc = xmm_loc + 32
+		first_local = 32
+	ENDIF
+	IF (xmm_space NE 0) AND ((xmm_loc MOD 16) NE 0)
+		xmm_loc = xmm_loc + (16 - (xmm_loc MOD 16))
+	ENDIF
+	stack_space = xmm_loc + xmm_space
+	IF ((stack_space + push_amt + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	ENDIF
+	IF stack_space NE 0
+		alloc_stack(stack_space)
+		push_amt = push_amt + stack_space
+	ENDIF
+
+	;; Save the XMM registers in the stack space we just allocated
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+		save_xmm128 xmm6, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+		save_xmm128 xmm7, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+		save_xmm128 xmm8, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+		save_xmm128 xmm9, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+		save_xmm128 xmm10, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+		save_xmm128 xmm11, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+		save_xmm128 xmm12, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+		save_xmm128 xmm13, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+		save_xmm128 xmm14, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+		save_xmm128 xmm15, xmm_loc
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	ENDIF
+
+	.endprolog
+
+	ENDIF
+
+;; In Linux 64-bit, we are required to save fewer registers than
+;; Windows 64-bit.  Stack must be maintained on a 16-byte boundary.
+
+	IFDEF LINUX64
+
+	;; Save registers that callee must preserve
+	push_amt = 0
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		push	rax
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push	rbx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		push	rcx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		push	rdx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push	rbp
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push	rsi
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push	rdi
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		push	r12
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		push	r13
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		push	r14
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		push	r15
+		push_amt = push_amt+8
+	ENDIF
+	ENDIF
+
+	;; Sum up and allocate space needed including pad for proper alignment
+	;; Adjust push_amt so that caller can access args on the stack.
+	stack_space = space_needed
+	first_local = 0
+	IF ((stack_space + push_amt + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	ENDIF
+	IF stack_space NE 0
+		lea	rsp, [rsp-stack_space]
+		push_amt = push_amt + stack_space
+	ENDIF
+
+	ENDIF
+
+	ENDM
+
+;; Epilog macro that reverses our internal prolog routine
+
+int_epilog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
+	LOCAL	xmm_loc, xmm_space, stack_space
+
+;; In 32-bit mode, deallocate stack space and restore registers
+
+	IFNDEF X86_64
+
+	;; Calculate stack usage just like prolog did
+	push_amt = callers_push_amt + SZPTR
+
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push_amt = push_amt + SZPTR
+	ENDIF
+	ENDIF
+
+	stack_space = space_needed
+	IF (calls_C_code NE 0) AND (((stack_space + push_amt) MOD 16) NE 0)
+		stack_space = stack_space + (16 - ((stack_space + push_amt) MOD 16))
+	ENDIF
+
+	;; Deallocate allocated stack space
+	IF stack_space NE 0
+		lea	esp, [esp+stack_space]
+	ENDIF
+
+	;; Restore registers that prolog saved
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		pop	rdi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		pop	rsi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		pop	rbp
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		pop	rdx
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		pop	rcx
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		pop	rbx
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		pop	rax
+	ENDIF
+	ENDIF
+
+	ret
+	ENDIF
+
+;; In Windows 64-bit mode, switch the stack pointer and restore registers
+;; Use only the instructions required by the exception handling stack unwind
+;; procedure.
+
+	IFDEF WINDOWS64
+
+	;; Calculate stack usage just like prolog did
+	push_amt = 0
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	ENDIF
+
+	xmm_space = 0
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+		xmm_space = xmm_space + 16
+	ENDIF
+	ENDIF
+
+	xmm_loc = space_needed
+	IF calls_C_code NE 0
+		xmm_loc = xmm_loc + 32
+	ENDIF
+	IF (xmm_space NE 0) AND ((xmm_loc MOD 16) NE 0)
+		xmm_loc = xmm_loc + (16 - (xmm_loc MOD 16))
+	ENDIF
+	stack_space = xmm_loc + xmm_space
+	IF ((stack_space + push_amt + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	ENDIF
+
+	;; Restore the saved XMM registers
+
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+		movapd	xmm6, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+		movapd	xmm7, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+		movapd	xmm8, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+		movapd	xmm9, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+		movapd	xmm10, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+		movapd	xmm11, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+		movapd	xmm12, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+		movapd	xmm13, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+		movapd	xmm14, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+		movapd	xmm15, [rsp+xmm_loc]
+		xmm_loc = xmm_loc + 16
+	ENDIF
+	ENDIF
+
+	;; De-allocate stack space prolog allocated
+	IF stack_space NE 0
+		add	rsp, stack_space
+	ENDIF
+
+	;; Pop registers that prolog saved
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		pop	r15
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		pop	r14
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		pop	r13
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		pop	r12
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		pop	rdi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		pop	rsi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		pop	rbp
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		pop	rdx
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		pop	rcx
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		pop	rbx
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		pop	rax
+	ENDIF
+	ENDIF
+
+	ret
+	ENDIF
+
+;; In Linux 64-bit mode, unreserve stack space, restore saved registers
+;; and return
+
+	IFDEF LINUX64
+
+	;; Calculate stack usage just like prolog did
+	push_amt = 0
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		push_amt = push_amt+8
+	ENDIF
+	ENDIF
+
+	stack_space = space_needed
+	IF ((stack_space + push_amt + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	ENDIF
+
+	;; De-allocate stack space prolog allocated
+	IF stack_space NE 0
+		lea	rsp, [rsp+stack_space]
+	ENDIF
+
+	;; Pop registers that prolog saved
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		pop	r15
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		pop	r14
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		pop	r13
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		pop	r12
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		pop	rdi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		pop	rsi
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		pop	rbp
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		pop	rdx
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		pop	rcx
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		pop	rbx
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		pop	rax
+	ENDIF
+	ENDIF
+
+	ret
+	ENDIF
+
+	ENDM
+
+; Save a Windows64 parameter that was passed in a register.  The register is
+; saved in the caller allocated 32-byte shadow space.  This is done in the
+; called function's prolog.  I'm not sure if debuggers require this when the
+; called function changes the parameter value.  I don't think so.  Thus,
+; this macro does nothing right now.
+
+opt_save_reg MACRO reg, offset
+	IFDEF WINDOWS64
+;;	save_reg reg, offset		;; Save parameter in home area
+	ENDIF
+	ENDM
+
+; Call a C callback routine
+
+c_call MACRO routine
+	LOCAL	pad_bytes
+
+	;; Push argument to call C code
+
+	;; See Agner Fog's document on calling conventions.  It states
+	;; that GCC routines expect the stack to be aligned 12 mod 16.
+	;; In fact, the Mac OS X will crash if that is not the case.
+	;; Consequently, we align the stack properly before pushing 
+	;; the offset of ASM_DATA.  We don't need to do this in Windows,
+	;; but at present we do not compile the Linux/Mac objects separately
+	;; from the Window's objects.  The prolog code should have aligned the
+	;; stack to 0 mod 16.
+	IFNDEF X86_64
+	IF (push_amt MOD 16) NE 0
+		bad_op_code		;; Assert properly aligned stack
+	ENDIF
+	bump	esp, -12		;; Align stack so that it is 0 mod 16
+					;; after argument is pushed
+	push_amt=push_amt+12
+	lea	eax, ASM_DATA		;; Load offset of asm_data
+	pusher	eax			;; Push argument
+	ENDIF
+	;; See Agner Fog's document on calling conventions.  It talks
+	;; about a "shadow space" that must be protected.  It also states
+	;; that the called routine expects the stack aligned 8 mod 16.
+	;; Prolog code should have aligned stack properly.
+	IFDEF WINDOWS64
+	mov	rcx, r11		;; Load offset of asm_data
+	mov	rbx, r11		;; And save a copy for later restore
+	ENDIF
+	;; See Agner Fog's document on calling conventions.  It states
+	;; that the called routine expects the stack aligned 8 mod 16.
+	;; Prolog code should have aligned stack properly.
+	IFDEF LINUX64
+	mov	rdi, r11		;; Load offset of asm_data
+	mov	rbx, r11		;; And save a copy for later restore
+	ENDIF
+
+	;; Call the C routine
+	mov	rax, routine		;; Load C callback routine address
+	call	rax			;; Call the C routine
+
+	;; Pop the asm data pointer argument to the C callback routine.
+
+	IFNDEF X86_64
+	bump	esp, 16
+	push_amt=push_amt-16
+	ELSE
+	mov	r11, rbx		;; Restore asm_data pointer
+	ENDIF
+
+	ENDM
+
+; Macro to declare storage for a pointer.  Pointers are different sizes
+; in 32-bit and 64-bit mode.
+
+IFNDEF	X86_64
+DP	EQU	DD
+SZPTR	EQU	4
+ELSE
+DP	EQU	DQ
+SZPTR	EQU	8
+ENDIF
+
+; Macros that help us keep track of how much data has been pushed / popped
+; WARNING:  These cannot be used in SSE2 code.  This is because the Windows
+; 64-bit ABI only lets us use push and pop in the prolog / epilog.
+
+pusher MACRO reg
+	push	reg
+	push_amt = push_amt + SZPTR
+	ENDM
+popper MACRO reg
+	pop	reg
+	push_amt = push_amt - SZPTR
+	ENDM
+
+; Cool macro to execute a statement and a cool macro to not execute
+; a statement.  Some macros expect one of these as an argument to
+; optionally execute assembly statements.
+
+exec	MACRO ops:vararg
+	&ops
+	ENDM
+noexec	MACRO ops:vararg
+	ENDM
+
+no	MACRO ops:vararg
+	no&ops
+	ENDM
+nonoexec MACRO ops:vararg
+	&ops
+	ENDM
+
+; Macro to execute a statement only if we are including every possible
+; FFT implementation.  We do this when benchmarking all FFTs on a new machine
+; architecture to find the fastest FFT implementation.
+
+;;ENABLE_ALLFFT EQU  1
+allfft	MACRO ops:vararg
+	IFDEF ENABLE_ALLFFT
+	&ops
+	ENDIF
+	ENDM
+
+; Handy macro to only include statement if we are prefetching
+
+pfing MACRO stmt:vararg
+	IF PREFETCHING NE 0
+	&stmt
+	ENDIF
+	ENDM
+
+;; A handy shortcut:
+
+Q	EQU	<QWORD PTR>
+
+;; Bump a pointer by an amount - generates no code if amount is zero
+
+bump	MACRO	reg, amt
+	IF amt NE 0
+	lea	reg, [reg+amt]
+	ENDIF
+	ENDM
+
+; Macro to flush the P4 trace cache
+
+trace_cache_flush MACRO
+	LOCAL	rrr
+rrr:	mov	ds:BYTE PTR rrr, 0C6h
+	ENDM
+
+; Macros to create PROC statements.
+;
+; PROCF generates PROC FRAME on Windows64, PROC otherwise.  All routines
+; except some "leaf" routines must generate FRAME information for proper
+; stack unwinding in 64-bit Windows exception handling.
+; PROCL generates PROC statement and in 32-bit mode also generates a
+; label with a preceding underscore.  The underscore versions are for any
+; routine called by C code by name.  The Windows C compiler generates a
+; preceeding underscore whereas the Linux C compiler does not.
+; PROCFL generates PROC FRAME on Windows64, PROC on Linux64, and in 32-bit
+; mode generates a PROC and a label with a preceding underscore.
+; PROCFP is like PROCF except that it generates different names based on
+; the some command line DEFINEs.  The "P" comes from the fact that the
+; first DEFINE this worked on was PPRO.
+; PROCFLP is like PROCFL except that it generates different names based on
+; the some command line DEFINEs.  This is only used by the gwtimeit routine
+; as in all other cases we hide these funny generated names from the C code.
+
+PROCF	MACRO x
+	PUBLIC	&x
+IFDEF WINDOWS64
+&x	PROC FRAME
+ELSE
+&x	PROC
+ENDIF
+	ENDM
+
+PROCL	MACRO x
+	PUBLIC	&x
+&x	PROC
+IFNDEF X86_64
+	PUBLIC	_&x
+_&x	LABEL NEAR
+ENDIF
+	ENDM
+
+PROCFL	MACRO x
+	PUBLIC	&x
+	PROCF	x
+IFNDEF X86_64
+	PUBLIC	_&x
+_&x	LABEL NEAR
+ENDIF
+	ENDM
+
+PROCFP	MACRO x
+IFDEF AMD
+	PROCF	&x&AMD
+ELSE
+IFDEF PFETCH
+	PROCF	&x&P3
+ELSE
+IFDEF PPRO
+	PROCF	&x&PPRO
+ELSE
+	PROCF	&x
+ENDIF
+ENDIF
+ENDIF
+	ENDM
+
+
+PROCFLP	MACRO x
+IFDEF AMD
+	PROCFL	&x&AMD
+ELSE
+IFDEF PFETCH
+	PROCFL	&x&P3
+ELSE
+IFDEF PPRO
+	PROCFL	&x&PPRO
+ELSE
+	PROCFL	&x
+ENDIF
+ENDIF
+ENDIF
+	ENDM
+
+;
+; Macros to create different labels from the same source code.  This
+; allows us to use the same source to create AMD, P3, Pentium Pro, and Pentium
+; specific versions of the code.
+;
+
+EXTRNP	MACRO x
+IFDEF AMD
+EXTRN	&x&AMD:PROC
+ELSE
+IFDEF PFETCH
+EXTRN	&x&P3:PROC
+ELSE
+IFDEF PPRO
+EXTRN	&x&PPRO:PROC
+ELSE
+EXTRN	&x:PROC
+ENDIF
+ENDIF
+ENDIF
+	ENDM
+
+PROCP	MACRO x
+IFDEF X86_64
+IFDEF AMD
+&x&AMD	PROC
+ELSE
+&x	PROC
+ENDIF
+ELSE
+IFDEF AMD
+&x&AMD	PROC NEAR
+ELSE
+IFDEF PFETCH
+&x&P3	PROC NEAR
+ELSE
+IFDEF PPRO
+&x&PPRO	PROC NEAR
+ELSE
+&x	PROC NEAR
+ENDIF
+ENDIF
+ENDIF
+ENDIF
+	ENDM
+
+ENDPP	MACRO x
+IFDEF AMD
+&x&AMD	ENDP
+ELSE
+IFDEF PFETCH
+&x&P3	ENDP
+ELSE
+IFDEF PPRO
+&x&PPRO ENDP
+ELSE
+&x	ENDP
+ENDIF
+ENDIF
+ENDIF
+	ENDM
+
+CALLP	MACRO x
+IFDEF AMD
+	CALL_Y	&x&AMD
+ELSE
+IFDEF PFETCH
+	CALL_Y	&x&P3
+ELSE
+IFDEF PPRO
+	CALL_Y	&x&PPRO
+ELSE
+	CALL_Y	&x
+ENDIF
+ENDIF
+ENDIF
+	ENDM
+
+JMPP	MACRO x
+IFDEF AMD
+	JMP_Y	&x&AMD
+ELSE
+IFDEF PFETCH
+	JMP_Y	&x&P3
+ELSE
+IFDEF PPRO
+	JMP_Y	&x&PPRO
+ELSE
+	JMP_Y	&x
+ENDIF
+ENDIF
+ENDIF
+	ENDM
+
+;
+; Call and Jump instructions to make Linux objcopy happy (it has an off
+; by 4 bug jumping to labels defined outside the current file).
+; Use these for calling or jumping to labels defined outside the current file
+;
+; Now that we are using Agner Fog's objconv, we don't need these tricks
+;
+
+IFDEF USING_BUGGY_OBJCOPY
+
+CALL_Y	MACRO	DEST
+	LOCAL	xxx
+	IFNDEF	X86_64
+	push	OFFSET xxx
+	JMP_Y	DEST
+xxx:
+	ELSE
+	IFDEF	LINUX64
+	call	DEST-4
+	ELSE
+	call	DEST
+	ENDIF
+	ENDIF
+	ENDM
+
+JL_Y	MACRO	DEST
+	LOCAL	xxx
+	IFNDEF	X86_64
+	jge	short xxx
+	JMP_Y	DEST
+xxx:
+	ELSE
+	IFDEF	LINUX64
+	jl	DEST-4
+	ELSE
+	jl	DEST
+	ENDIF
+	ENDIF
+	ENDM
+
+JE_Y	MACRO	DEST
+	LOCAL	xxx
+	IFNDEF	X86_64
+	jne	short xxx
+	JMP_Y	DEST
+xxx:
+	ELSE
+	IFDEF	LINUX64
+	je	DEST-4
+	ELSE
+	je	DEST
+	ENDIF
+	ENDIF
+	ENDM
+
+JMP_Y	MACRO	DEST
+	IFNDEF	X86_64
+	push	OFFSET DEST
+	retn
+	ELSE
+	IFDEF	LINUX64
+	jmp	DEST-4
+	ELSE
+	jmp	DEST
+	ENDIF
+	ENDIF
+	ENDM
+
+ELSE
+
+CALL_Y	MACRO	DEST
+	call	DEST
+	ENDM
+
+JL_Y	MACRO	DEST
+	jl	DEST
+	ENDM
+
+JE_Y	MACRO	DEST
+	je	DEST
+	ENDM
+
+JMP_Y	MACRO	DEST
+	jmp	DEST
+	ENDM
+
+ENDIF
+
+;; Linux x86-64 objcopy has trouble relocating offsets of labels or data
+;; declared in the same file.  We trick MASM into generating RIP-relative
+;; addressing instead.
+
+IFDEF USING_BUGGY_OBJCOPY
+
+MOVOFFSET MACRO reg, addr
+	LOCAL	x, y
+	IFNDEF X86_64
+	mov	reg, OFFSET addr
+	ELSE
+	IFIDN <reg>,<rax>
+x:	nop			;; Use call instruction to generate offset
+	nop
+	call	addr
+y:	org x
+	DB	48h		;; LEA rax, rip-relative opcodes
+	DB	8Dh
+	DB	05h
+	org y
+	ELSE
+	not_implemented
+	ENDIF
+	ENDIF
+	ENDM
+
+ELSE
+
+MOVOFFSET MACRO reg, addr
+	mov	reg, OFFSET addr
+	ENDM
+
+ENDIF
+
+;
+; Macros to manage 32 timer values (only used when optimizing code)
+;
+
+;;TIMERS EQU 3
+
+clear_timers MACRO
+IFDEF TIMERS
+	pusher	rax
+	pusher	rcx
+	pusher	rdi
+	sub	rax, rax
+	mov	rcx, 32
+	mov	rdi, ASM_TIMERS
+	rep	stosd
+	popper	rdi
+	popper	rcx
+	popper	rax
+ENDIF
+	ENDM
+
+start_timer MACRO n
+IFDEF TIMERS
+	pusher	rax
+	pusher	rdx
+	rdtsc
+	mov	rdx, ASM_TIMERS
+	sub	DWORD PTR [rdx+n*4], eax
+	popper	rdx
+	popper	rax
+ENDIF
+	ENDM
+
+end_timer MACRO n
+IFDEF TIMERS
+	pusher	rax
+	pusher	rdx
+	rdtsc
+	mov	rdx, ASM_TIMERS
+	add	DWORD PTR [rdx+n*4], eax
+	popper	rdx
+	popper	rax
+ENDIF
+	ENDM

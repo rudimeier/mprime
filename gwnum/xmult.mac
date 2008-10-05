@@ -1,0 +1,274 @@
+; Copyright 2001-2007 - Mersenne Research, Inc.  All rights reserved
+; Author:  George Woltman
+; Email: woltman@alum.mit.edu
+;
+; These macros take the basic FFT building blocks and build even
+; larger building blocks.
+;
+
+; *************** macros to expand 4 types of fft macros ******************
+
+;;
+;; Generate the 4 types of FFTs for the given run length.
+;; The 4 types are:
+;;	1) forward FFT,
+;;	2) square (forward FFT, multiply, inverse FFT)
+;;	3) multiply (forward FFT src1, multiply by src2, inverse FFT)
+;;	4) multiply (multiply src1 by src2, inverse FFT)
+;;
+
+xfft	MACRO fft_length
+	LOCAL	common_label
+	type1	common_label, &fft_length, _1
+	type2	common_label, &fft_length, _2
+	type3	common_label, &fft_length, _3
+	type4	common_label, &fft_length, _4
+	purge	xfft&fft_length
+	ENDM
+
+xfftclm	MACRO fft_length, clm
+	LOCAL	common_label
+	type1	common_label, &fft_length, _1, clm, %(xpass2_levels)
+	type2	common_label, &fft_length, _2, clm, %(xpass2_levels)
+	type3	common_label, &fft_length, _3, clm, %(xpass2_levels)
+	type4	common_label, &fft_length, _4, clm, %(xpass2_levels)
+	ENDM
+
+;;
+;; Perform an FFT in preparation for a later multiply
+;; Do the forward FFT
+;;
+
+type1	MACRO common_label, fft_length, suffix, clm, levels
+	PROCFP	xfft&fft_length&clm&levels&suffix
+	ad_prolog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	mov	rsi, DESTARG
+	mov	rbx, SRCARG
+	sub	rbx, rsi
+	mov	DIST_TO_FFTSRCARG, rbx
+	IF EXPANDING GE 2
+	mov	ffttype, 1
+	jmp	common_label
+	ELSE
+	xfft&fft_length 1
+	ENDIF
+	ENDPP	xfft&fft_length&clm&levels&suffix
+	ENDM
+;;
+;; Square a number mod 2**p-1
+;; Do the forward FFT, squaring, and inverse FFT
+;;
+
+type2	MACRO common_label, fft_length, suffix, clm, levels
+	PROCFP	xfft&fft_length&clm&levels&suffix
+	ad_prolog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	mov	rsi, DESTARG
+	sub	rbx, rbx
+	mov	DIST_TO_FFTSRCARG, rbx
+	IF EXPANDING GE 2
+	mov	ffttype, 2
+common_label:
+	IFB <clm>
+	xfft&fft_length
+	ELSE
+	xscfft&fft_length clm
+	ENDIF
+	ELSE
+	xfft&fft_length 2
+	ENDIF
+	ENDPP	xfft&fft_length&clm&levels&suffix
+	ENDM
+
+;;
+;; Multiply two numbers mod 2**p-1.  One of the input numbers (SRCARG) must
+;; have already been passed through gw_fft.
+;; Do the forward FFT, multiply, and inverse FFT
+;;
+
+type3	MACRO common_label, fft_length, suffix, clm, levels
+	PROCFP	xfft&fft_length&clm&levels&suffix
+	ad_prolog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	mov	rsi, DESTARG
+	sub	rbx, rbx
+	mov	DIST_TO_FFTSRCARG, rbx
+	mov	rbp, SRCARG
+	sub	rbp, rsi
+	mov	DIST_TO_MULSRCARG, rbp
+	IF EXPANDING GE 2
+	mov	ffttype, 3
+	jmp	common_label
+	ELSE
+	xfft&fft_length 3
+	ENDIF
+	ENDPP	xfft&fft_length&clm&levels&suffix
+	ENDM
+
+;;
+;; Multiply two numbers mod 2**p-1.  Both of the input numbers must
+;; have already been passed through gw_fft.
+;; Do the multiply and inverse FFT
+;;
+
+type4	MACRO common_label, fft_length, suffix, clm, levels
+	PROCFP	xfft&fft_length&clm&levels&suffix
+	ad_prolog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	mov	rsi, DESTARG
+	mov	rbx, SRC2ARG
+	sub	rbx, rsi
+	mov	DIST_TO_FFTSRCARG, rbx
+	mov	rbp, SRCARG
+	sub	rbp, rsi
+	mov	DIST_TO_MULSRCARG, rbp
+	IF EXPANDING GE 2
+	mov	ffttype, 4
+	jmp	common_label
+	ELSE
+	xfft&fft_length 4
+	ENDIF
+	ENDPP	xfft&fft_length&clm&levels&suffix
+	ENDM
+
+; Return from a type 1 FFT - return to caller
+
+xfft_1_ret MACRO
+	ad_epilog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	ENDM
+
+; Return from a type 2,3, or 4 FFT - jump to the common normalization code
+; used in one-pass FFTs only.
+
+xfft_3_ret MACRO
+	mov	rax, NORMRTN
+	call	rax
+	ad_epilog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	ENDM
+
+;;
+;; Common definitions in SSE2 FFTs
+;;
+
+XMM_SCD	= 96			;; Sizeof an SSE2 sin/cos table entry
+XMM_PMD = 128			;; Sizeof an entry in premultiplier table
+
+;; 
+;; Number of pad bytes between two pass 2 data blocks.  For best distribution
+;; of data in the L2 cache during pass 1, this should be an odd multiple
+;; of the amount of data read in during a pass 1 iteration (clm*128 if not
+;; prefetching, 2*clm*128 if we are prefetching).  This odd multiple must also
+;; take into account the 128 pad bytes already added every 8KB in the block.
+;; We also want to avoid gaps that are a multiple of 2KB as that hurts the
+;; g4cl macros on a P4.
+;;
+;; A summary follows below:
+;;
+;; pass2 levels 8:
+;;		read		skip
+;; clm1:	256		128+128
+;; clm4:	1K		128+896
+;;
+;; pass2 levels 10:
+;;		read		skip
+;; clm0:	128		512+/-128
+;; clm1:	256		512+256
+;; clm2:	512		512+0		0 is perfect!
+;; clm4:	1K		512+512		512 IS perfect!
+;; clm8:	2K		512+512		decent solution
+;;
+;; pass2 levels 11:
+;;		read		skip
+;; clm0:	128		1K+/-128	perfect
+;; clm1:	256		1K+256		perfect
+;; clm2:	512		1k+512		perfect
+;; clm4:	1K		1K+0		0 IS perfect!
+;; clm8:	2K		1k+0		decent solution
+;;
+;; pass2 levels 12:
+;;		read		skip
+;; clm0:	128		2K+/-128	perfect!
+;; clm1:	256		2K+256		perfect!
+;; clm2:	512		2k+512		perfect!
+;; clm4:	1K		2K+1K		perfect!
+;; clm8:	2K		2k+1k		decent solution
+;;
+;; pass2 levels 13:
+;;		read		skip
+;; clm0:	128		4K+/-128	perfect!
+;; clm1:	256		4K+256		PERFECT!
+;; clm2:	512		4k+512		perfect
+;; clm4:	1K		4K+1024		perfect
+;; clm8:	2K		4k+1024		decent solution
+
+GAP2_8_1	= 128
+GAP2_8_4	= 896
+GAP2_10_0	= -128
+GAP2_10_1	= 256
+GAP2_10_2	= 0
+GAP2_10_4	= 512
+GAP2_10_8	= 512
+GAP2_11_0	= -128
+GAP2_11_1	= 256
+GAP2_11_2	= 512
+GAP2_11_4	= 0
+GAP2_11_8	= 0
+GAP2_12_0	= -128
+GAP2_12_1	= 256
+GAP2_12_2	= 512
+GAP2_12_4	= 1024
+GAP2_12_8	= 1024
+GAP2_13_0	= -128
+GAP2_13_1	= 256
+GAP2_13_2	= 512
+GAP2_13_4	= 1024
+GAP2_13_8	= 1024
+
+;;
+;; Cacheline multiples.  In SSE2 first pass, how many cache lines should
+;; be processed in each loop.  Note that the clm value must be at least 2.
+;;
+
+clm = 4				;; Used for all FFTs <= 512K
+
+;;
+;; Common utility macros used in one and two pass SSE2 FFTs
+;;
+
+multwo	MACRO	r
+	mulpd	r, XMM_TWO
+	ENDM
+
+mulhalf	MACRO	r
+	mulpd	r, XMM_HALF
+	ENDM
+
+xtouch	MACRO	addr
+	IF PREFETCHING NE 0
+	cmp	rsp, addr
+	ENDIF
+	ENDM
+
+; Macro to prefetch a line into the L2 cache
+
+xprefetcht1 MACRO addr
+	IF PREFETCHING NE 0
+	IFDEF AMD
+	prefetchw addr
+	prefetchw addr[64]
+	ELSE
+	prefetcht1 addr
+	ENDIF
+	ENDIF
+	ENDM
+
+; Macro to prefetch a line into the L1 cache (AMD only)
+
+xprefetch MACRO addr
+	IFDEF AMD
+	prefetch addr
+	ENDIF
+	ENDM
+xprefetchw MACRO addr
+	IFDEF AMD
+	prefetchw addr
+	ENDIF
+	ENDM
+
