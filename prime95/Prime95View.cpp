@@ -178,7 +178,7 @@ void CPrime95View::OnEditCopy()
 	i = Lines[0][0] ? NumLines - 1 : NumLines;
 	for (j = NumLines; j; i--, j--) {
 		sf.Write (Lines[i], (UINT) strlen (Lines[i]));
-		sf.Write ("\r\n", 1);
+		sf.Write ("\r\n", 2);
 	}
 
 // Put data in clipboard

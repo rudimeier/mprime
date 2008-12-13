@@ -38,6 +38,9 @@
 #include <sys/timeb.h>
 #define PTHREAD_MIN_PRIORITY 0		/* Missing #defines from pthreads.h */
 #define PTHREAD_MAX_PRIORITY 31		/* Missing #defines from pthreads.h */
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/ps/IOPowerSources.h>
+#include <IOKit/ps/IOPSKeys.h>
 #endif
 
 /* Required FreeBSD files */
@@ -502,6 +505,95 @@ static	int	last_char_out_was_newline = TRUE;
 
 int OnBattery (void)
 {
+#ifdef __APPLE__
+/* The following copyright applies to the battery detection code below.  I did modify */
+/* substantially as it did far more than I needed. */
+
+/* Copyright (c) 2003 Thomas Runge (coto@core.de)
+ * Mach and Darwin specific code is Copyright (c) 2006 Eric Pooch (epooch@tenon.com)
+ *
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the author nor the names of its contributors
+ *    may be used to endorse or promote products derived from this
+ *    software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+	CFTypeRef blob = IOPSCopyPowerSourcesInfo();
+	CFArrayRef sources = IOPSCopyPowerSourcesList(blob);
+
+	int i, acstat;
+	CFDictionaryRef pSource = NULL;
+	const void *psValue;
+
+	acstat = TRUE;
+
+	for(i = 0; i < CFArrayGetCount(sources); i++)
+	{
+		pSource = IOPSGetPowerSourceDescription(blob, CFArrayGetValueAtIndex(sources, i));
+		if(!pSource) break;
+
+		psValue = (CFStringRef)CFDictionaryGetValue(pSource, CFSTR(kIOPSNameKey));
+
+		if (CFDictionaryGetValueIfPresent(pSource, CFSTR(kIOPSIsPresentKey), &psValue) && (CFBooleanGetValue(psValue) > 0))
+		{
+			psValue = (CFStringRef)CFDictionaryGetValue(pSource, CFSTR(kIOPSPowerSourceStateKey));
+
+			if (CFStringCompare(psValue,CFSTR(kIOPSBatteryPowerValue),0)==kCFCompareEqualTo)
+			{
+				/* We are running on a battery power source. */
+				acstat = FALSE;
+			}
+		}
+	}
+
+	CFRelease(blob);
+	CFRelease(sources);
+
+	return(!acstat);
+#endif
+#ifdef __linux__
+	FILE	*fd;
+	char	buf[180];
+	int	ac_state;
+
+	ac_state = -1;
+	fd = fopen ("/proc/acpi/battery/BAT0/state", "r");
+	if (fd != NULL) {
+		for ( ; ; ) {
+			char	*p;
+			if (fscanf (fd, "%s", buf) == EOF) break;
+			p = strstr (buf, "charging state:");
+			if (p == NULL) continue;
+			if (strstr (p+14, "discharging") != NULL) ac_state = 0;
+			else if (strstr (p+14, "charging") != NULL) ac_state = 1;
+			else if (strstr (p+14, "charged") != NULL) ac_state = 1;
+		}
+		fclose (fd);
+	}
+	return (ac_state == 0);
+#endif
 }
 
 /* The current implementation comes courtesy of Tim Wood and Dennis Gregorovic */

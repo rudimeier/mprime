@@ -1807,7 +1807,6 @@ void ecm_stage1_memory_usage (
 
 int choose_stage2_plan (
 	int	thread_num,
-	int	pass,
 	ecmhandle *ecmdata,
 	uint64_t B,			/* Stage 1 bound */
 	uint64_t C)			/* Stage 2 bound */
@@ -2219,10 +2218,7 @@ error:
 int ecm (
 	int	thread_num,
 	struct PriorityInfo *sp_info,	/* SetPriority information */
-	struct work_unit *w,
-	int	pass)		/* Pass 2 = optionally abort if stage 2 */
-				/* lacks maximum memory.  Pass 3 = always */
-				/* run stage 2. */
+	struct work_unit *w)
 {
 	ecmhandle ecmdata;
 	uint64_t B;		/* Stage 1 bound */
@@ -2864,7 +2860,7 @@ restart3:
 /* Choose a good value for D.  One that reduces the number of */
 /* multiplications, yet doesn't use too much memory. */
 
-	stop_reason = choose_stage2_plan (thread_num, pass, &ecmdata, B, C);
+	stop_reason = choose_stage2_plan (thread_num, &ecmdata, B, C);
 	if (stop_reason) {
 		if (gg == NULL) {
 			ecm_save (&ecmdata, filename, w, ECM_STAGE1, curve,
@@ -3478,7 +3474,7 @@ print out each test case (all relevant data)*/
 		w.curves_to_do = 1;
 		w.curve = sigma;
 		QA_IN_PROGRESS = TRUE;
-		stop_reason = ecm (0, sp_info, &w, 3);
+		stop_reason = ecm (0, sp_info, &w);
 		QA_IN_PROGRESS = FALSE;
 		free (QA_FACTOR);
 		if (stop_reason) {
@@ -4474,10 +4470,7 @@ void calc_exp (
 int pminus1 (
 	int	thread_num,
 	struct PriorityInfo *sp_info,	/* SetPriority information */
-	struct work_unit *w,
-	int	pass)		/* Pass 2 = optionally abort if stage 2 */
-				/* lacks maximum memory.  Pass 3 = always */
-				/* run stage 2. */
+	struct work_unit *w)
 {
 	pm1handle pm1data;
 	uint64_t B;		/* Stage 1 bound */
@@ -5152,8 +5145,8 @@ more_C:	pm1data.C_start = (C_start > pm1data.C_done) ? C_start : pm1data.C_done;
 
 	clear_restart_if_max_memory_change (thread_num);
 
-/* Restart here when in the middle of pass stage 2 or */
-/* Move to the next pass of a multi-pass stage 2 run */
+/* Restart here when in the middle of stage 2 or */
+/* move to the next pass of a multi-pass stage 2 run */
 
 restart3b:
 	stage = 2;
@@ -5793,7 +5786,7 @@ print out each test case (all relevant data)*/
 		w.B2_start = B2_start;
 		w.B2 = B2_end;
 		QA_IN_PROGRESS = TRUE;
-		stop_reason = pminus1 (0, sp_info, &w, 3);
+		stop_reason = pminus1 (0, sp_info, &w);
 		QA_IN_PROGRESS = FALSE;
 		free (QA_FACTOR);
 		if (stop_reason) {
@@ -6028,12 +6021,6 @@ void guess_pminus1_bounds (
 
 	pass2_squarings *= 1.2;
 
-/* No matter what the user has entered in the worktodo file, assume he has */
-/* had the common sense to at least trial factor to 2^32.  We don't want to */
-/* wildly over-estimate our chance of success. */
-
-	if (how_far_factored < 32.0) how_far_factored = 32.0;
-
 /* What is the "average" value that must be smooth for P-1 to succeed? */
 /* Ordinarily this is 1.5 * 2^how_far_factored.  However, for Mersenne */
 /* numbers the factor must be of the form 2kp+1.  Consequently, the */
@@ -6055,23 +6042,31 @@ void guess_pminus1_bounds (
 	for (h = how_far_factored; ; ) {
 		double	prob1, prob2;
 
+/* If temp < 1.0, then there are no factor to find in this bit level */
+
+		if (logtemp > 0.0) {
+
 /* See how many smooth k's we should find using B1 */
 /* Using Dickman's function (see Knuth pg 382-383) we want k^a <= B1 */
 
-		prob1 = F (logB1 / logkk);
+			prob1 = F (logB1 / logkk);
 
 /* See how many smooth k's we should find using B2 */
 /* Adjust this slightly to eliminate k's that have two primes > B1 and < B2 */
 /* Do this by assuming the largest factor is the average of B1 and B2 */
 /* and the remaining cofactor is B1 smooth */
 
-		prob2 = prob1 + (F (logB2 / logkk) - prob1) *
-				(F (logB1 / logtemp) / F (logB2 / logtemp));
-		if (prob2 < 0.0001) break;
+			prob2 = prob1 + (F (logB2 / logkk) - prob1) *
+				        (F (logB1 / logtemp) / F (logB2 / logtemp));
+			if (prob2 < 0.0001) break;
 
 /* Add this data in to the total chance of finding a factor */
 
-		prob += prob2 / (h + 0.5);
+			prob += prob2 / (h + 0.5);
+		}
+
+/* Move to next bit level */
+
 		h += 1.0;
 		logkk += log2;
 		logtemp += log2;
@@ -6141,10 +6136,7 @@ void guess_pminus1_bounds (
 int pfactor (
 	int	thread_num,
 	struct PriorityInfo *sp_info,	/* SetPriority information */
-	struct work_unit *w,
-	int	pass)		/* Pass 2 = optionally abort if stage 2 */
-				/* lacks maximum memory.  Pass 3 = always */
-				/* run stage 2. */
+	struct work_unit *w)
 {
 	unsigned long bound1, bound2, squarings;
 	double	prob;
@@ -6219,5 +6211,5 @@ int pfactor (
 	w->B1 = bound1;
 	w->B2_start = bound1;
 	w->B2 = bound2;
-	return (pminus1 (thread_num, sp_info, w, pass));
+	return (pminus1 (thread_num, sp_info, w));
 }

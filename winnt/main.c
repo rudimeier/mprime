@@ -1,5 +1,7 @@
 
 #include <windows.h> 
+#include <winnls.h>
+#include <tchar.h>
 #include "service.h"
 #include "main.h"
 #include "prime95.h"
@@ -10,9 +12,7 @@
 
 
 // Globals
-int THREAD_STOP = FALSE;
 int DEBUGGING = FALSE;
-int C_OPTION = FALSE;
 
 //
 //  FUNCTION: ServiceStart
@@ -63,19 +63,13 @@ VOID ServiceStart (DWORD dwArgc, LPTSTR *lpszArgv)
     //
     ////////////////////////////////////////////////////////
 
-	if (C_OPTION) {
-		MANUAL_COMM = 3;
-		CHECK_WORK_QUEUE = 1;
-		communicateWithServer ();
-	}
-    
     ////////////////////////////////////////////////////////
     //
     // Service is now running, perform work until shutdown
     //
 
-	else
-		primeContinue ();
+    // Start the threads
+    LaunchWorkerThreads (ALL_WORKERS, TRUE);
 
 }
 
@@ -101,7 +95,8 @@ VOID ServiceStart (DWORD dwArgc, LPTSTR *lpszArgv)
 VOID ServiceStop()
 {
 	SetThreadPriority (GetCurrentThread (), THREAD_PRIORITY_NORMAL);
-	THREAD_STOP = TRUE;
+	raiseAllWorkerThreadPriority ();
+	stop_workers_for_escape ();
 }
 
 /* GetIniSettings -- Get initial settings from INI files
@@ -134,4 +129,3 @@ void GetIniSettings()
 			      sizeof (SZSERVICEDISPLAYNAME), "Prime Service");
 	}
 }
-

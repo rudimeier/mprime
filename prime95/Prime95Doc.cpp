@@ -198,85 +198,6 @@ void CPrime95Doc::OnPrimenet()
 	update_computer_info = FALSE;
 	primenet_debug = IniSectionGetInt (INI_FILE, "PrimeNet", "Debug", 0);
 
-if (USE_V4) {
-PrimenetV4Dlg dlg;
-char	szProxyHost[120], szProxyUser[50], szProxyPassword[50];
-unsigned short nProxyPort;
-dlg.m_primenet = USE_PRIMENET;
-dlg.m_userid = V4_USERID;
-dlg.m_userpwd = V4_USERPWD;
-dlg.m_username = V4_USERNAME;
-dlg.m_compid = COMPID;
-dlg.m_dialup = DIAL_UP;
-dlg.m_debug = primenet_debug;
-getProxyInfo (szProxyHost, &nProxyPort, szProxyUser, szProxyPassword);
-if (szProxyHost[0]) {
-	dlg.m_proxyhost = szProxyHost;
-	dlg.m_proxyport = nProxyPort;
-	dlg.m_proxyuser = szProxyUser;
-	dlg.m_proxypassword = szProxyPassword;
-}
-if (dlg.DoModal () == IDOK) {
-	DIAL_UP = dlg.m_dialup;
-	IniWriteInt (INI_FILE, "DialUp", DIAL_UP);
-	strcpy (szProxyHost, dlg.m_proxyhost);
-	if (szProxyHost[0] && dlg.m_proxyport != 8080)
-		sprintf (szProxyHost + strlen (szProxyHost), ":%d",
-			 dlg.m_proxyport);
-	IniSectionWriteString (INI_FILE, "PrimeNet",
-			       "ProxyHost", szProxyHost);
-	IniSectionWriteString (INI_FILE, "PrimeNet",
-			       "ProxyUser", dlg.m_proxyuser);
-	if (strcmp (szProxyPassword, dlg.m_proxypassword)) {
-		IniSectionWriteString (INI_FILE, "PrimeNet",
-				"ProxyPass", dlg.m_proxypassword);
-		IniSectionWriteInt (INI_FILE, "PrimeNet",
-				"ProxyMask", 0);
-	}
-	if (!dlg.m_debug != !primenet_debug) {
-		IniSectionWriteInt (INI_FILE, "PrimeNet", "Debug",
-				    dlg.m_debug ? 2 : 0);
-	}
-	if (strcmp (COMPID, dlg.m_compid) != 0) {
-		strcpy (COMPID, dlg.m_compid);
-		sanitizeString (COMPID);
-		IniWriteString (LOCALINI_FILE, "ComputerID", COMPID);
-		update_computer_info = TRUE;
-	}
-	if (strcmp (V4_USERID, dlg.m_userid) != 0) {
-		strcpy (V4_USERID, dlg.m_userid);
-		sanitizeString (V4_USERID);
-		IniWriteString (INI_FILE, "UserID", V4_USERID);
-		update_computer_info = TRUE;
-	}
-	if (strcmp (V4_USERPWD, dlg.m_userpwd) != 0) {
-		strcpy (V4_USERPWD, dlg.m_userpwd);
-		sanitizeString (V4_USERPWD);
-		IniWriteString (INI_FILE, "UserPWD", V4_USERPWD);
-		update_computer_info = TRUE;
-	}
-	if (strcmp (V4_USERNAME, dlg.m_username) != 0) {
-		strcpy (V4_USERNAME, dlg.m_username);
-		IniWriteString (INI_FILE, "UserName", V4_USERNAME);
-		update_computer_info = TRUE;
-	}
-	if (!USE_PRIMENET && dlg.m_primenet) {
-		USE_PRIMENET = 1;
-		create_window (COMM_THREAD_NUM);
-		base_title (COMM_THREAD_NUM, "Communication thread");
-		if (!STARTUP_IN_PROGRESS) set_comm_timers ();
-		spoolMessage (PRIMENET_UPDATE_COMPUTER_INFO, NULL);
-		spoolExistingResultsFile ();
-	} else if (USE_PRIMENET && !dlg.m_primenet) {
-		USE_PRIMENET = 0;
-		if (!STARTUP_IN_PROGRESS) set_comm_timers ();
-	} else if (update_computer_info)
-		spoolMessage (PRIMENET_UPDATE_COMPUTER_INFO, NULL);
-	IniWriteInt (INI_FILE, "UsePrimenet", USE_PRIMENET);
-	if (!STARTUP_IN_PROGRESS && USE_PRIMENET) OnContinue ();
-}
-/*End V4 code */
-} else {
 	PrimenetDlg dlg;
 	char	szProxyHost[120], szProxyUser[50], szProxyPassword[50];
 	unsigned short nProxyPort;
@@ -354,7 +275,6 @@ if (dlg.DoModal () == IDOK) {
 		if (!STARTUP_IN_PROGRESS && USE_PRIMENET) OnContinue ();
 	} else
 		STARTUP_IN_PROGRESS = 0;
-}
 }
 
 void CPrime95Doc::OnUpdateQuit(CCmdUI* pCmdUI) 
@@ -780,7 +700,7 @@ again:	if (dlg.DoModal () == IDOK) {
 
 		if (!IniGetInt (INI_FILE, "AskedAboutMemory", 0)) {
 			IniWriteInt (INI_FILE, "AskedAboutMemory", 1);
-			if (day_memory == 8 && night_memory == 8 &&
+			if (dlg.m_day_memory == 8 && dlg.m_night_memory == 8 &&
 			    AfxMessageBox (MSG_MEMORY, MB_YESNO | MB_ICONQUESTION) == IDYES)
 				goto again;
 		}
@@ -1183,26 +1103,6 @@ void PreLaunchCallback (
 void PostLaunchCallback (
 	int	launch_type)
 {
-}
-
-/* Return TRUE if we are on battery power. */
-
-int OnBattery (void)
-{
-	SYSTEM_POWER_STATUS power;
-
-// We might be able to optimize this by caching the system power status
-// and only regetting it after a PBT_APMPOWERSTATUSCHANGE message.
-
-	if (GetSystemPowerStatus (&power) &&
-	    (power.ACLineStatus != 1 ||
-	     (power.ACLineStatus == 1 &&
-	      power.BatteryLifePercent < BATTERY_PERCENT)))
-		return (TRUE);
-
-// Return FALSE, were on AC power */
-
-	return (FALSE);
 }
 
 /* OSes that must poll for whether the ESC key was hit do it here. */

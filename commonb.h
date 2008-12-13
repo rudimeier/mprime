@@ -63,9 +63,9 @@ int primeBench (int);
 int primeFactor (int, struct PriorityInfo *, struct work_unit *, unsigned int);
 int prime (int, struct PriorityInfo *, struct work_unit *, int);
 int prp (int, struct PriorityInfo *, struct work_unit *, int);
-int ecm (int, struct PriorityInfo *, struct work_unit *, int);
-int pminus1 (int, struct PriorityInfo *, struct work_unit *, int);
-int pfactor (int, struct PriorityInfo *, struct work_unit *, int);
+int ecm (int, struct PriorityInfo *, struct work_unit *);
+int pminus1 (int, struct PriorityInfo *, struct work_unit *);
+int pfactor (int, struct PriorityInfo *, struct work_unit *);
 
 /* Utility routines */
 

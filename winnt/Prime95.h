@@ -1,6 +1,10 @@
 // Prime95.h : main header file for the PRIME95 application
 //
 
+#ifdef _WIN64
+#define X86_64
+#endif
+
 #include <time.h>
 //#define SERVER_TESTING
 #define NO_GUI		1

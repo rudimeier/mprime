@@ -4743,7 +4743,10 @@ unsigned long gwmap_to_estimated_size (
 
 #define REL_AMD64_SPEED	1.1	/* AMD64 is slightly slower than a P4 */
 #define REL_PM_SPEED	1.4	/* Pentium M, Core are much slower than a P4 */
-#define REL_CORE2_SPEED	0.6	/* Core 2 is much faster than a P4 */
+#define REL_ATOM_SPEED	5.0	/* Atoms are much, much slower than a P4 */
+#define REL_CORE2_SPEED	0.625	/* Core 2 is much faster than a P4 */
+#define REL_I7_SPEED	0.59	/* Core i7 is even faster than a Core 2 */
+#define REL_PHENOM_SPEED 0.67	/* AMD Phenom is faster that a P4 */
 
 /* Make a guess as to how long a squaring will take.  If the number cannot */
 /* be handled, then kludgily return 100.0. */
@@ -4778,11 +4781,14 @@ double gwmap_to_timing (
 
 	if (gwdata.cpu_flags & CPU_SSE2) {
 		timing = 0.10 * timing + 0.90 * timing * 1400.0 / CPU_SPEED;
-		if (strstr (CPU_BRAND, "AMD")) timing *= REL_AMD64_SPEED;
-		if (strstr (CPU_BRAND, "Core 2")) timing *= REL_CORE2_SPEED;
-		if (strstr (CPU_BRAND, "Core(TM)2")) timing *= REL_CORE2_SPEED;
-		if (strstr (CPU_BRAND, "Pentium(R) M")) timing *= REL_PM_SPEED;
-		if (strstr (CPU_BRAND, "Core")) timing *= REL_PM_SPEED;
+		if (strstr (CPU_BRAND, "Phenom")) timing *= REL_PHENOM_SPEED;
+		else if (strstr (CPU_BRAND, "AMD")) timing *= REL_AMD64_SPEED;
+		else if (strstr (CPU_BRAND, "Atom")) timing *= REL_ATOM_SPEED;
+		else if (strstr (CPU_BRAND, "Core 2")) timing *= REL_CORE2_SPEED;
+		else if (strstr (CPU_BRAND, "Core(TM)2")) timing *= REL_CORE2_SPEED;
+		else if (strstr (CPU_BRAND, "Core(TM) i7")) timing *= REL_I7_SPEED;
+		else if (strstr (CPU_BRAND, "Pentium(R) M")) timing *= REL_PM_SPEED;
+		else if (strstr (CPU_BRAND, "Core")) timing *= REL_PM_SPEED;
 	} else {
 		timing = 0.10 * timing + 0.90 * timing * 400.0 / CPU_SPEED;
 		if (strstr (CPU_BRAND, "486")) timing *= REL_486_SPEED;

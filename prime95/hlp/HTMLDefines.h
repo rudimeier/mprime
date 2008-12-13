@@ -56,7 +56,6 @@
 #define HIDD_TORTURE                            0x2009B
 #define HIDD_WORKER_THREADS                     0x200A0
 #define HIDD_PRIMENET_CONNECTION                0x200A1
-#define HIDD_PRIMENET_V4                        0x200A2
 #define HIDD_WORKER_START                       0x200A3
 #define HIDD_WORKER_STOP                        0x200A4
  

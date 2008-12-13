@@ -4,7 +4,7 @@
 | This file contains various utility routines that may be used by gwnum
 | routines, prime95, or PRP.
 | 
-|  Copyright 2004-2007 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2004-2008 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 /* Include files */
@@ -13,6 +13,7 @@
 #ifndef __APPLE__
 #include <malloc.h>
 #endif
+#include "gwcommon.h"
 #include "gwutil.h"
 
 
@@ -25,7 +26,15 @@ void * aligned_offset_malloc (
 	size_t	mod)
 {
 #ifdef _WIN64
-	return (_aligned_offset_malloc (size, alignment, mod));
+	char	*p, *q;
+	p = (char *) malloc (sizeof (void *) + size + alignment);
+	if (p == NULL) return (NULL);
+	q = (char *) (((uint64_t) p + sizeof (void *) + mod + alignment - 1) & ~(alignment - 1)) - mod;
+	* (void **) ((char *) q - sizeof (void *)) = p;
+	return (q);
+// For compatibility with 32-bit versions of the program, I've elected to use
+// my own implementation rather than the Microsoft routine below.
+//	return (_aligned_offset_malloc (size, alignment, mod));
 #else
 	char	*p, *q;
 	p = (char *) malloc (sizeof (void *) + size + alignment);
@@ -41,7 +50,10 @@ void * aligned_malloc (
 	size_t	alignment)
 {
 #ifdef _WIN64
-	return (_aligned_malloc (size, alignment));
+	return (aligned_offset_malloc (size, alignment, 0));
+// For compatibility with 32-bit versions of the program, I've elected to use
+// my own implementation rather than the Microsoft routine below.
+//	return (_aligned_malloc (size, alignment));
 #else
 	return (aligned_offset_malloc (size, alignment, 0));
 #endif
@@ -51,7 +63,11 @@ void aligned_free (
 	void	*ptr)
 {
 #ifdef _WIN64
-	_aligned_free (ptr);
+	if (ptr == NULL) return;
+	free (* (void **) ((char *) ptr - sizeof (void *)));
+// For compatibility with 32-bit versions of the program, I've elected to use
+// my own implementation rather than the Microsoft routine below.
+//	_aligned_free (ptr);
 #else
 	if (ptr == NULL) return;
 	free (* (void **) ((char *) ptr - sizeof (void *)));

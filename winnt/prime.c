@@ -1,5 +1,7 @@
 
 #include "windows.h"
+#include <winnls.h>
+#include <tchar.h>
 #include "main.h"
 #include "prime95.h"
 #include <direct.h>
@@ -24,8 +26,27 @@
 #include "comm95b.c"
 #include "comm95c.c"
 #include "primenet.c"
+#include "gwtest.c"
 
-void title (char *msg)
+void create_window (
+	int	thread_num)
+{
+}
+
+void destroy_window (
+	int	thread_num)
+{
+}
+
+void title (
+	int	thread_num,
+	char	*msg)
+{
+}
+
+void base_title (
+	int	thread_num,
+	char	*msg)
 {
 }
 
@@ -34,47 +55,50 @@ void flashWindowAndBeep ()
 	MessageBeep (0xFFFFFFFF);
 }
 
-/* Return TRUE if we should stop calculating */
-
-int escapeCheck ()
+void RealOutputStr (
+	int	thread_num,
+	char	*buf)
 {
-	return (THREAD_STOP);
-}
-
-void OutputStr (char *buf)
-{
-	if (DEBUGGING) printf ("%s", buf);
+	if (DEBUGGING) printf ("thread_num %d: %s", thread_num, buf);
 }
 
 void ChangeIcon (
+	int	thread_num,
 	int	icon_id)
 {
 }
 
 void BlinkIcon (
+	int	thread_num,
 	int	duration)
 {
 }
 
-void BroadcastMessage (
-	char	*message)
+void stopCheckCallback (
+	int	thread_num)
 {
-	char	filename[33];
-	int	fd;
-
-/* Generate broadcast message file name */
-
-        strcpy (filename, "bcastmsg");
-        strcat (filename, EXTENSION);
-
-/* If this is a call to check if a broadcast message exists, then do so */
-
-	if (message == NULL) return;
-
-/* Otherwise, this is a new message - write it to the file */
-
-	fd = _open (filename, _O_TEXT | _O_RDWR | _O_CREAT | _O_APPEND, 0666);
-	if (fd < 0) return;
-	_write (fd, message, strlen (message));
-	_close (fd);
 }
+
+/* Do some work prior to launching worker threads */
+
+void PreLaunchCallback (
+	int	launch_type)
+{
+
+// Stall if we've just booted (within 5 minutes of Windows starting)
+
+	if (GetTickCount () < 300000 && launch_type == LD_CONTINUE) {
+		int	delay;
+		delay = IniGetInt (INI_FILE, "BootDelay", 90);
+		delay -= GetTickCount () / 1000;
+		if (delay > 0) Sleep (delay * 1000);
+	}
+}
+
+/* Do some work after worker threads have terminated */
+
+void PostLaunchCallback (
+			 int	launch_type)
+{
+}
+

@@ -52,7 +52,6 @@
 #define ID_TRAY_RESTORE                 158
 #define IDD_WORKER_THREADS              160
 #define IDD_PRIMENET_CONNECTION         161
-#define IDD_PRIMENET_V4                 162
 #define IDD_WORKER_START                163
 #define IDD_WORKER_STOP                 164
 #define IDC_LL                          1000
@@ -81,7 +80,6 @@
 #define IDC_USERID                      1015
 #define IDC_P4                          1015
 #define IDC_P5                          1016
-#define IDC_USERPWD                     1016
 #define IDC_FACTOR                      1017
 #define IDC_IN_PLACE_FFT                1017
 #define IDC_COMPID                      1017

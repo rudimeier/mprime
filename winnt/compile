@@ -1,10 +1,10 @@
-# Use the latest C compiler even though it does not optimize code
+# Choose compiler switches 
 
 cl=cl /GF /W3 /MT /D_CRT_SECURE_NO_DEPRECATE /O2 /c
 cld=cl /GF /W3 /MT /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Zi /c
 
 # Standard options
-copt=/I.. /I..\gwnum
+copt=/I.. /I..\gwnum /I\libcurl
 
 # This line allows NMAKE to work as well
 

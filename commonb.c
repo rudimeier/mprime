@@ -182,11 +182,12 @@ gwmutex	MEM_MUTEX;		/* Lock for accessing mem globals */
 
 /* This routine is also responsible for setting the thread's CPU affinity. */
 /* If there are N cpus with hyperthreading, then physical cpu 0 is logical */
-/* cpu 0 and N, physical cpu 1 is logical cpu 1 and N+1, etc. */
+/* cpu 0 and 1, physical cpu 1 is logical cpu 2 and 3, etc. */
 
 void SetPriority (
 	struct PriorityInfo *info)
 {
+static	char	AFFINITY_SCRAMBLE[33] = {0};
 	unsigned int i;
 	int	mask;
 
@@ -194,9 +195,7 @@ void SetPriority (
 /* threads onto the logical CPUs before moving onto the next physical CPU. */  
 
 	if (info->type == SET_PRIORITY_BENCHMARKING) {
-		mask = 1 << (info->aux_thread_num / CPU_HYPERTHREADS);
-		for (i = 1; i < CPU_HYPERTHREADS; i++)
-			mask |= (mask << NUM_CPUS);
+		mask = 1 << (info->aux_thread_num);
 	}
 
 /* Torture test affinity.  If we're running the same number of torture */
@@ -207,9 +206,8 @@ void SetPriority (
 		if (info->num_threads == NUM_CPUS * CPU_HYPERTHREADS) {
 			mask = 1 << info->thread_num;
 		} else if (info->num_threads == NUM_CPUS) {
-			mask = 1 << (info->thread_num / CPU_HYPERTHREADS);
-			for (i = 1; i < CPU_HYPERTHREADS; i++)
-				mask |= (mask << NUM_CPUS);
+			mask = 1 << (info->thread_num * CPU_HYPERTHREADS);
+			for (i = 1; i < CPU_HYPERTHREADS; i++) mask |= (mask << 1);
 		} else
 			mask = -1;
 	}
@@ -231,20 +229,19 @@ void SetPriority (
 
 /* A small CPU_AFFINITY setting means run only on that CPU.  Since there is */
 /* no way to explicitly tell us which CPU to run an auxillary thread on, */
-/* we put the first auxillary thread on any hyperthreaded logical CPUs. */
-/* The next auxillary thread goes on the next physical CPU. */
+/* we put the auxillary threads on the subsequent logical CPUs. */
 
 	else if (CPU_AFFINITY[info->thread_num] < 100) {
-		mask = 1 << CPU_AFFINITY[info->thread_num];
-		mask <<= ((info->aux_thread_num % CPU_HYPERTHREADS) *
-							CPU_HYPERTHREADS);
-		mask <<= (info->aux_thread_num / CPU_HYPERTHREADS);
+		if (CPU_AFFINITY[info->thread_num] + info->aux_thread_num >= NUM_CPUS * CPU_HYPERTHREADS)
+			mask = -1;
+		else
+			mask = 1 << (CPU_AFFINITY[info->thread_num] + info->aux_thread_num);
 	}
 
 /* A CPU_AFFINITY setting of 100 means "smart affinity assignments". */
 /* We've now reached that case. */
 
-/* If all worker threadts are not set to smart affinity, then it is */
+/* If all worker threads are not set to smart affinity, then it is */
 /* just too hard to figure out what is best.  Just let the OS run the */
 /* threads on any CPU. */
 
@@ -256,27 +253,60 @@ void SetPriority (
 /* auxillary threads, then the user has made a really bad decision and a */
 /* performance hit will occur. */
 
-	else if (NUM_WORKER_THREADS == NUM_CPUS * CPU_HYPERTHREADS) { 
+	else if (NUM_WORKER_THREADS == NUM_CPUS * CPU_HYPERTHREADS) {
 		mask = 1 << info->thread_num;
 		if (info->aux_thread_num) mask = -1;
 	}
 
 /* If number of worker threads equals number of physical cpus then run each */
 /* worker thread on its own physical CPU.  Run auxillary threads on the same */
-/* physical CPU.  This should be advantageous on hyperthreaded CPUs.  The */
+/* physical CPU.  This should be advantageous on hyperthreaded CPUs.  We */
 /* should be careful to not run more auxillary threads than available */
 /* logical CPUs created by hyperthreading. */ 
 
 	else if (NUM_WORKER_THREADS == NUM_CPUS) {
-		mask = 1 << (info->thread_num / CPU_HYPERTHREADS);
-		for (i = 1; i < CPU_HYPERTHREADS; i++)
-			mask |= (mask << NUM_CPUS);
+		mask = 1 << (info->thread_num * CPU_HYPERTHREADS);
+		for (i = 1; i < CPU_HYPERTHREADS; i++) mask |= (mask << 1);
 	}
 
 /* Otherwise, just run on any CPU. */
 
 	else
 		mask = -1;
+
+/* Get the optional string used to scramble the affiniity mask bits to */
+/* new or odd optimizations we had not considered. */
+
+	if (!AFFINITY_SCRAMBLE[0]) {
+		IniGetString (LOCALINI_FILE, "AffinityScramble", AFFINITY_SCRAMBLE, sizeof (AFFINITY_SCRAMBLE), "x");
+		if (AFFINITY_SCRAMBLE[0] != 'x') {
+			for (i = 0; i < 32; i++) {
+				if (AFFINITY_SCRAMBLE[i] >= '0' && AFFINITY_SCRAMBLE[i] <= '9')
+					AFFINITY_SCRAMBLE[i] -= '0';
+				else if (AFFINITY_SCRAMBLE[i] >= 'A' && AFFINITY_SCRAMBLE[i] <= 'Z')
+					AFFINITY_SCRAMBLE[i] = AFFINITY_SCRAMBLE[i] - 'A' + 10;
+				else
+					AFFINITY_SCRAMBLE[i] = -1;
+			}
+		}
+	}
+
+/* Apply the optional affinity mask scrambling */
+
+	if (AFFINITY_SCRAMBLE[0] != 'x' && mask != -1) {
+		int	new_mask;
+		new_mask = 0;
+		for (i = 0; i < 32; i++) {
+			if (mask & (1L << i)) {
+				if (AFFINITY_SCRAMBLE[i] < 0 ||
+				    AFFINITY_SCRAMBLE[i] >= (char) (NUM_CPUS * CPU_HYPERTHREADS))
+					new_mask = -1;
+				else
+					new_mask |= (1L << AFFINITY_SCRAMBLE[i]);
+			}
+		}
+		mask = new_mask;
+	}
 
 /* Output an informative message */
 
@@ -675,7 +705,7 @@ void read_mem_info (void)
 
 /* Get the maximum number of workers that can use lots of memory */
 /* Default is AVAIL_MEM / 200MB rounded off. */
-	
+
 	MAX_HIGH_MEM_WORKERS = IniGetTimedInt (LOCALINI_FILE, "MaxHighMemWorkers",
 					       (AVAIL_MEM + 100) / 200, &seconds);
 	if (seconds && (seconds_until_reread == 0 || seconds < seconds_until_reread))
@@ -961,8 +991,12 @@ int set_memory_usage (
 
 /* If a worker is waiting for a reduction in the number of workers */
 /* using lots of memory, then check to see if it can run now. */
+/* The 32 is an arbitrary figure that makes sure a significant amount */
+/* of new memory is available before restarting worker threads. */
+/* Be careful subtracting from AVAIL_MEM.  Since it is an unsigned long */
+/* if it goes negative it will become a large positive value instead */	
 
-	if (all_threads_set && mem_usage < AVAIL_MEM - 32) {
+	if (all_threads_set && AVAIL_MEM > mem_usage + 32 ) {
 		for (i = 0; i < (int) NUM_WORKER_THREADS; i++) {
 			if (! (MEM_RESTART_FLAGS[i] & MEM_RESTART_TOO_MANY_HIGHMEM)) continue;
 			if (are_threads_using_lots_of_memory (i)) continue;
@@ -976,7 +1010,7 @@ int set_memory_usage (
 /* then if we have enough free memory restart a work unit that could use */
 /* more memory. */
 
-	if (all_threads_set && mem_usage < AVAIL_MEM - 32) {
+	if (all_threads_set && AVAIL_MEM > mem_usage + 32) {
 		best_thread = -1;
 		for (i = 0; i < (int) NUM_WORKER_THREADS; i++) {
 			if (MEM_RESTART_FLAGS[i] & MEM_RESTART_IF_MORE &&
@@ -993,7 +1027,7 @@ int set_memory_usage (
 /* then if we have enough free memory restart a thread that couldn't */
 /* run a work unit due to lack of available memory. */
 
-	if (all_threads_set && mem_usage < AVAIL_MEM - 32) {
+	if (all_threads_set && AVAIL_MEM > mem_usage + 32) {
 		best_thread = -1;
 		for (i = 0; i < (int) NUM_WORKER_THREADS; i++) {
 			if (MEM_RESTART_FLAGS[i] & MEM_RESTART_MORE_AVAIL &&
@@ -1400,7 +1434,7 @@ void implement_stop_battery (
 
 void start_priority_work_timer (void)
 {
-	if (IniGetInt (INI_FILE, "SequentialWorkToDo", 1)) return;
+	if (SEQUENTIAL_WORK) return;
 	add_timed_event (TE_PRIORITY_WORK, TE_PRIORITY_WORK_FREQ);
 }
 
@@ -2594,7 +2628,7 @@ int primeContinue (
 {
 	struct PriorityInfo sp_info;
 	struct work_unit *w;
-	unsigned int pass, sequential;
+	unsigned int pass;
 	int	stop_reason;
 
 /* Set the process/thread priority */
@@ -2607,7 +2641,6 @@ int primeContinue (
 /* Loop until the ESC key is hit or the entire work-to-do INI file */
 /* is processed and we are not connected to the server. */
 
-	sequential = IniGetInt (INI_FILE, "SequentialWorkToDo", 1);
 	for ( ; ; ) {
 
 /* Check for a stop code.  We do this here in case the work-to-do file */
@@ -2634,7 +2667,7 @@ int primeContinue (
 /* factoring is stalled because of low memory. */
 /* Skip first pass on large well-behaved work files. */
 
-	for (pass = (WELL_BEHAVED_WORK || sequential) ? 2 : 1;
+	for (pass = (WELL_BEHAVED_WORK || SEQUENTIAL_WORK) ? 2 : 1;
 	     pass <= 3;
 	     pass++) {
 
@@ -2662,7 +2695,7 @@ int primeContinue (
 /* Do special P-1 factoring work. */
 
 		if (w->work_type == WORK_PFACTOR && pass == 2) {
-			stop_reason = pfactor (thread_num, &sp_info, w, pass);
+			stop_reason = pfactor (thread_num, &sp_info, w);
 		}
 
 /* Run the LL test */
@@ -2676,13 +2709,13 @@ int primeContinue (
 /* See if this is an ECM factoring line */
 
 		if (w->work_type == WORK_ECM && pass == 2) {
-			stop_reason = ecm (thread_num, &sp_info, w, pass);
+			stop_reason = ecm (thread_num, &sp_info, w);
 		}
 
 /* See if this is an P-1 factoring line */
 
 		if (w->work_type == WORK_PMINUS1 && pass == 2) {
-			stop_reason = pminus1 (thread_num, &sp_info, w, pass);
+			stop_reason = pminus1 (thread_num, &sp_info, w);
 		}
 
 /* Run a PRP test */
@@ -4222,17 +4255,22 @@ int prime (
 	}
 
 /* See if this exponent needs P-1 factoring.  We treat P-1 factoring */
-/* that is part of an LL test as priority work (done in pass 1). */
-
+/* that is part of an LL test as priority work done in pass 1 or as */
+/* regular work done in pass 2 if WellBehavedWork or SequentialWorkTodo */
+/* is set.  The only way we can get to pass 3 and P-1 still needs to be */
+/* done is if pfactor returned STOP_NOT_ENOUGH_MEM on an earlier pass. */
+/* In that case, skip onto doing the LL test until more memory becomes */
+/* available. */
+	
 	if ((w->work_type == WORK_TEST || w->work_type == WORK_DBLCHK) &&
-	    ! w->pminus1ed) {
-		stop_reason = pfactor (thread_num, sp_info, w, pass);
-		if (stop_reason) {
-			if (pass == 3 && stop_reason == STOP_NOT_ENOUGH_MEM)
-				stop_reason = 0;
-			else
-				return (stop_reason);
-		}
+	    ! w->pminus1ed && pass != 3) {
+		int	pass_to_pfactor;
+
+		pass_to_pfactor = (WELL_BEHAVED_WORK || SEQUENTIAL_WORK) ? 2 : 1;
+		if (pass != pass_to_pfactor) return (0);
+
+		stop_reason = pfactor (thread_num, sp_info, w);
+		if (stop_reason) return (stop_reason);
 	}
 
 /* Do the rest of the trial factoring. */
@@ -4564,14 +4602,16 @@ readloop:
 			if (first_iter_msg) {
 				strcat (buf, ".\n");
 				clear_timer (timers, 0);
+			} else if (CUMULATIVE_TIMING) {
+				strcat (buf, ".  Total time: ");
+				print_timer (timers, 0, buf, TIMER_NL);
 			} else {
 				strcat (buf, ".  Per iteration time: ");
 				divide_timer (timers, 0, iters);
-				print_timer (timers, 0, buf,
-					     TIMER_NL | TIMER_OPT_CLR);
+				print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+				iters = 0;
 			}
 			OutputStr (thread_num, buf);
-			if (!CUMULATIVE_TIMING) iters = 0;
 			first_iter_msg = FALSE;
 		}
 
@@ -5557,10 +5597,19 @@ restart_test:	dbltogw (&lldata.gwdata, 4.0, lldata.lldata);
 			}
 		}
 
-/* Compare final 32 bits with the pre-computed array of correct residues */
+/* Copy the final result back to lldata.  If more than one gwnum was used */
+/* then free the extra gwnums so that generateResidue64 has some memory */
+/* to work with. */
 
 		if (g != lldata.lldata)
 			gwcopy (&lldata.gwdata, g, lldata.lldata);
+		for (k = 1; k < num_gwnums; k++) {
+			if (gwarray[k] != lldata.lldata)
+				gwfree (&lldata.gwdata, gwarray[k]);
+		}
+
+/* Compare final 32 bits with the pre-computed array of correct residues */
+
 		generateResidue64 (&lldata, &reshi, &reslo);
 		lucasDone (&lldata);
 		free (gwarray);
@@ -6156,7 +6205,7 @@ int primeTime (
 }
 
 #define BENCH1 "Your timings will be written to the results.txt file.\n"
-#define BENCH2 "Compare your results to other computers at http://www.mersenne.org/bench.htm\n"
+#define BENCH2 "Compare your results to other computers at http://www.mersenne.org/report_benchmarks\n"
 
 int factorBench (
 	int	thread_num,
@@ -6179,11 +6228,11 @@ int factorBench (
 
 		stop_reason = factorSetup (thread_num, 35000011, &facdata);
 		if (stop_reason) return (stop_reason);
-		if (bit_lengths[i] < 64) {
+		if (bit_lengths[i] <= 64) {
 			facdata.asm_data->FACHSW = 0;
-			facdata.asm_data->FACMSW = 1L << (bit_lengths[i]-32);
+			facdata.asm_data->FACMSW = 1L << (bit_lengths[i]-33);
 		} else {
-			facdata.asm_data->FACHSW = 1L << (bit_lengths[i]-64);
+			facdata.asm_data->FACHSW = 1L << (bit_lengths[i]-65);
 			facdata.asm_data->FACMSW = 0;
 		}
 		stop_reason = factorPassSetup (thread_num, 0, &facdata);
@@ -6572,17 +6621,23 @@ int prp (
 	char	string_rep[80];
 	int	string_rep_truncated;
 
-/* See if this exponent needs P-1 factoring.  We treat P-1 factoring */
-/* that is part of a PRP test as priority work (done in pass 1). */
+/* See if this number needs P-1 factoring.  We treat P-1 factoring */
+/* that is part of a PRP test as priority work done in pass 1 or as */
+/* regular work done in pass 2 if WellBehavedWork or SequentialWorkTodo */
+/* is set.  The only way we can get to pass 3 and P-1 still needs to be */
+/* done is if pfactor returned STOP_NOT_ENOUGH_MEM on an earlier pass. */
+/* In that case, skip onto doing the LL test until more memory becomes */
+/* available. */
 
-	if (! w->pminus1ed) {
-		stop_reason = pfactor (thread_num, sp_info, w, pass);
-		if (stop_reason) {
-			if (pass == 3 && stop_reason == STOP_NOT_ENOUGH_MEM)
-				stop_reason = 0;
-			else
-				return (stop_reason);
-		}
+	if ((w->work_type == WORK_TEST || w->work_type == WORK_DBLCHK) &&
+	    ! w->pminus1ed && pass != 3) {
+		int	pass_to_pfactor;
+
+		pass_to_pfactor = (WELL_BEHAVED_WORK || SEQUENTIAL_WORK) ? 2 : 1;
+		if (pass != pass_to_pfactor) return (0);
+
+		stop_reason = pfactor (thread_num, sp_info, w);
+		if (stop_reason) return (stop_reason);
 	}
 
 /* Done with pass 1 priority work.  Return to do more priority work. */
@@ -6913,14 +6968,16 @@ OutputStr (thread_num, "Iteration failed.\n");
 			if (first_iter_msg) {
 				strcat (buf, ".\n");
 				clear_timer (timers, 0);
+			} if (CUMULATIVE_TIMING) {
+				strcat (buf, ".  Total time: ");
+				print_timer (timers, 0, buf, TIMER_NL);
 			} else {
 				strcat (buf, ".  Per iteration time: ");
 				divide_timer (timers, 0, iters);
-				print_timer (timers, 0, buf,
-					     TIMER_NL | TIMER_OPT_CLR);
+				print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+				iters = 0;
 			}
 			OutputStr (thread_num, buf);
-			if (!CUMULATIVE_TIMING) iters = 0;
 			first_iter_msg = FALSE;
 		}
 

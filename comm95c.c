@@ -1,7 +1,6 @@
 /*
  * Common routines and variables used by Prime95 and NTPrime
  *
- * Comm95a contains information used only during setup
  * Comm95b contains information used only during execution
  * Comm95c contains information used during setup and execution
  */ 
@@ -10,6 +9,7 @@
 #include <winsock.h>
 #include <wininet.h>
 #include <process.h>
+#include <sddl.h>
 
 int	SOCKETS_INITIALIZED = 0;
 
@@ -154,6 +154,44 @@ void getWindowsSerialNumber (
 			&disposition) == ERROR_SUCCESS &&
 	    RegQueryValueEx (hkey, "ProductId", NULL, &type,
 			(BYTE *) buf, &bufsize) == ERROR_SUCCESS &&
+	    type == REG_SZ)
+		strcpy (output, buf);
+	if (hkey) RegCloseKey (hkey);
+}
+
+/* Get Windows Serial Number - our second attempt.  This is more robust */
+/* as it works under Vista too. */
+
+void getWindowsSerialNumber_2 (
+	char	*output)
+{
+	HKEY	hkey;
+	char	buf[256];
+	DWORD	type;
+	DWORD	bufsize;
+
+	*output = 0;
+
+	hkey = 0;
+	bufsize = sizeof (buf);
+	if (RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+			  "Software\\Microsoft\\Windows\\CurrentVersion", 0,
+			  KEY_QUERY_VALUE, &hkey) == ERROR_SUCCESS &&
+	    RegQueryValueEx (hkey, "ProductId", NULL, &type,
+			     (BYTE *) buf, &bufsize) == ERROR_SUCCESS &&
+	    type == REG_SZ)
+		strcpy (output, buf);
+	if (hkey) RegCloseKey (hkey);
+
+	if (*output) return;
+
+	hkey = 0;
+	bufsize = sizeof (buf);
+	if (RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+			  "Software\\Microsoft\\Windows NT\\CurrentVersion", 0,
+			  KEY_QUERY_VALUE, &hkey) == ERROR_SUCCESS &&
+	    RegQueryValueEx (hkey, "ProductId", NULL, &type,
+			     (BYTE *) buf, &bufsize) == ERROR_SUCCESS &&
 	    type == REG_SZ)
 		strcpy (output, buf);
 	if (hkey) RegCloseKey (hkey);
@@ -373,17 +411,93 @@ void getWindowsSID (
 	free (vData);
 }
 
+/* Version 2.  My simpler attempt at getting the Windows SID. */
+/* Version 1 failed on RegOpenKey when I switch users on Vista. */
+
+void getWindowsSID_2 (
+	char	*output)
+{
+	char	computer_name[256];
+	SID	*sid;
+	SID_NAME_USE snu;
+	char	*domain;
+	char	*stringsid;
+	unsigned long size, domainsize;
+
+	*output = 0;
+
+/* Get the computer name */
+
+	size = sizeof (computer_name);
+	if (! GetComputerName ((LPSTR) computer_name, &size)) return;
+
+/* First find the size of buffers required for the SID and domain name */
+
+	sid = 0;
+	domain = 0;
+	size = domainsize = 0;
+	LookupAccountName(0, (LPCSTR) computer_name, sid, &size, domain, &domainsize, &snu);
+
+/* Should have failed with ERROR_INSUFFICIENT_BUFFER */
+
+	if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) return;
+
+/* Allocate memory */
+
+	sid = (SID *) malloc (size);
+	domain = (char *) malloc (domainsize);
+
+/* Get the SID */
+
+	if (sid != NULL && domain != NULL &&
+	    LookupAccountName (0, (LPCSTR) computer_name, sid, &size, domain, &domainsize, &snu) &&
+	    ConvertSidToStringSid(sid, &stringsid)) {
+		strcpy (output, stringsid);
+		LocalFree (stringsid);
+	}
+
+/* Cleanup */
+
+	free (sid);
+	free (domain);
+}
 
 
-/* Return the number of MB of physical memory.  Windows doesn't return the full amount */
-/* of physical memory - probably shadow ram or some such.  Compensate by rounding up. */
+/* Return the number of MB of physical memory. */
 
 unsigned long physical_memory (void)
 {
+#ifdef X86_64
+	MEMORYSTATUSEX mem;
+	mem.dwLength = sizeof (mem);
+	GlobalMemoryStatusEx (&mem);
+	return ((unsigned long) ((mem.ullTotalPhys + 1000000) >> 20));
+#else
+	HMODULE	hlib;
 	MEMORYSTATUS mem;
 
+/* Try using GlobalMemoryStatusEx - not available in Win98 and earlier */
+
+	hlib = LoadLibrary ("KERNEL32.DLL");
+	if (hlib) {
+		DWORD (__stdcall *proc)(MEMORYSTATUSEX *);
+		proc = (DWORD (__stdcall *)(MEMORYSTATUSEX *))
+		       GetProcAddress (hlib, "GlobalMemoryStatusEx");
+		if (proc != NULL) {
+			MEMORYSTATUSEX mem;
+			mem.dwLength = sizeof (mem);
+			(*proc) (&mem);
+			FreeLibrary (hlib);
+			return ((unsigned long) ((mem.ullTotalPhys + 1000000) >> 20));
+		}
+		FreeLibrary (hlib);
+	}
+
+/* Fall back to using GlobalMemoryStatus - it can't cope with machines having more than 2GB memory */
+
 	GlobalMemoryStatus (&mem);
-	return ((unsigned long) ((mem.dwTotalPhys + 1000000) >> 20));
+	return (mem.dwTotalPhys >> 20);
+#endif
 }
 
 /* Return a better guess for amount of memory to use in a torture test. */
@@ -394,15 +508,78 @@ unsigned long physical_memory (void)
 
 unsigned long GetSuggestedMemory (unsigned long nDesiredMemory)
 {
-	MEMORYSTATUS ms = {0};
+#ifdef X86_64
+	MEMORYSTATUSEX ms = {0};
+	DWORDLONG ullUsedMem;	// In-use Physical RAM in bytes
+	DWORDLONG ullDesiredMem = (DWORDLONG) nDesiredMemory << 20;	// Desired memory in bytes
+	DWORDLONG ullDesiredMemNew = ullDesiredMem;
 
-	// In-use Physical RAM in bytes
-	SIZE_T dwUsedMem	= ms.dwTotalPhys - ms.dwAvailPhys;
-	// Desired memory in bytes
-	SIZE_T dwDesiredMem	= nDesiredMemory << 20;
-	SIZE_T dwDesiredMemNew	= dwDesiredMem;
+	ms.dwLength = sizeof (ms);
+	GlobalMemoryStatusEx (&ms);
+	ullUsedMem = ms.ullTotalPhys - ms.ullAvailPhys;
+
+	// if very small/no page-file (pagefile <= total RAM) and
+	// in-use memory + desired memory > total RAM, then
+	// we have to set desired memory to free RAM,
+	// because the OS can't page out other apps to
+	// reclaim enough free memory since
+	// there's not enough space in the pagefile
+	// to store the paged-out apps
+	if ((ms.ullTotalPageFile <= ms.ullTotalPhys) &&
+	    (ullUsedMem + ullDesiredMem >= ms.ullTotalPhys)) {
+		ullDesiredMemNew = ms.ullAvailPhys;
+	}
+
+	return ((unsigned long) (ullDesiredMemNew >> 20));
+#else
+	HMODULE	hlib;
+	MEMORYSTATUS ms = {0};
+	DWORD dwUsedMem;	// In-use Physical RAM in bytes
+	DWORD dwDesiredMem; 	// Desired memory in bytes
+	DWORD dwDesiredMemNew;
+
+/* Try using GlobalMemoryStatusEx - not available in Win98 and earlier */
+
+	hlib = LoadLibrary ("KERNEL32.DLL");
+	if (hlib) {
+		DWORD (__stdcall *proc)(MEMORYSTATUSEX *);
+		proc = (DWORD (__stdcall *)(MEMORYSTATUSEX *))
+		       GetProcAddress (hlib, "GlobalMemoryStatusEx");
+		if (proc != NULL) {
+			MEMORYSTATUSEX ms = {0};
+			DWORDLONG ullUsedMem;	// In-use Physical RAM in bytes
+			DWORDLONG ullDesiredMem = (DWORDLONG) nDesiredMemory << 20;	// Desired memory in bytes
+			DWORDLONG ullDesiredMemNew = ullDesiredMem;
+
+			ms.dwLength = sizeof (ms);
+			(*proc) (&ms);
+			ullUsedMem = ms.ullTotalPhys - ms.ullAvailPhys;
+
+			// if very small/no page-file (pagefile <= total RAM) and
+			// in-use memory + desired memory > total RAM, then
+			// we have to set desired memory to free RAM,
+			// because the OS can't page out other apps to
+			// reclaim enough free memory since
+			// there's not enough space in the pagefile
+			// to store the paged-out apps
+			if ((ms.ullTotalPageFile <= ms.ullTotalPhys) &&
+			    (ullUsedMem + ullDesiredMem >= ms.ullTotalPhys)) {
+				ullDesiredMemNew = ms.ullAvailPhys;
+			}
+
+			FreeLibrary (hlib);
+			return ((unsigned long) (ullDesiredMemNew >> 20));
+		}
+		FreeLibrary (hlib);
+	}
+
+/* Fall back to using GlobalMemoryStatus - it can't cope with machines having more than 2GB memory */
+
+	dwDesiredMem = nDesiredMemory << 20;
+	dwDesiredMemNew	= dwDesiredMem;
 
 	GlobalMemoryStatus (&ms);
+	dwUsedMem = ms.dwTotalPhys - ms.dwAvailPhys;
 
 	// if very small/no page-file (pagefile <= total RAM) and
 	// in-use memory + desired memory > total RAM, then
@@ -412,12 +589,13 @@ unsigned long GetSuggestedMemory (unsigned long nDesiredMemory)
 	// there's not enough space in the pagefile
 	// to store the paged-out apps
 	if ((ms.dwTotalPageFile <= ms.dwTotalPhys) &&
-		  ((dwUsedMem + dwDesiredMem) >= ms.dwTotalPhys))
+	    ((dwUsedMem + dwDesiredMem) >= ms.dwTotalPhys))
 	{
 		dwDesiredMemNew = ms.dwAvailPhys;
 	}
 
-	return ((unsigned long) (dwDesiredMemNew >> 20));
+	return (dwDesiredMemNew >> 20);
+#endif
 }
 
 /* Return the number of CPUs in the system */
@@ -440,5 +618,25 @@ int getDefaultTimeFormat (void)
 	GetLocaleInfo (
 		LOCALE_USER_DEFAULT, LOCALE_ITIME, (LPTSTR) buf, sizeof (buf));
 	return (buf[0] == '0' ? 1 : 2);
+}
+
+/* Return TRUE if we are on battery power. */
+
+int OnBattery (void)
+{
+	SYSTEM_POWER_STATUS power;
+
+// We might be able to optimize this by caching the system power status
+// and only regetting it after a PBT_APMPOWERSTATUSCHANGE message.
+
+	if (GetSystemPowerStatus (&power) &&
+	    (power.ACLineStatus != 1 ||
+	     (power.ACLineStatus == 1 &&
+	      power.BatteryLifePercent < BATTERY_PERCENT)))
+		return (TRUE);
+
+// Return FALSE, were on AC power */
+
+	return (FALSE);
 }
 

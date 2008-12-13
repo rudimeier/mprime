@@ -50,52 +50,6 @@ protected:
 
 
 /////////////////////////////////////////////////////////////////////////////
-// PrimenetV4Dlg dialog
-
-class PrimenetV4Dlg : public CDialog
-{
-// Construction
-public:
-	PrimenetV4Dlg(CWnd* pParent = NULL);   // standard constructor
-
-// Dialog Data
-	//{{AFX_DATA(PrimenetV4Dlg)
-	enum { IDD = IDD_PRIMENET_V4 };
-	BOOL	m_primenet;
-	CString	m_userid;
-	CString	m_userpwd;
-	CString	m_username;
-	CString	m_compid;
-	CButton	c_connection;
-	BOOL	m_dialup;
-	CString	m_proxyhost;
-	UINT	m_proxyport;
-	CString	m_proxyuser;
-	CString	m_proxypassword;
-	BOOL	m_debug;
-	//}}AFX_DATA
-
-
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(PrimenetV4Dlg)
-	protected:
-	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
-	//}}AFX_VIRTUAL
-
-// Implementation
-protected:
-
-	// Generated message map functions
-	//{{AFX_MSG(PrimenetV4Dlg)
-	afx_msg void OnPrimenet();
-	afx_msg void OnConnection();
-	//}}AFX_MSG
-	DECLARE_MESSAGE_MAP()
-};
-
-
-/////////////////////////////////////////////////////////////////////////////
 // PrimenetConnectionDlg dialog
 
 class PrimenetConnectionDlg : public CDialog

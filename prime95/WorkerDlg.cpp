@@ -115,11 +115,11 @@ int map_work_pref_to_sel (
 	case PRIMENET_WP_WORLD_RECORD:
 		return (1);
 	case PRIMENET_WP_LL_FIRST:
-		return (USE_V4?1: 2);
+		return (2);
 	case PRIMENET_WP_LL_DBLCHK:
-		return (USE_V4?2: 3);
+		return (3);
 	case PRIMENET_WP_FACTOR:
-		return (USE_V4?3: 4);
+		return (4);
 	case PRIMENET_WP_PFACTOR:
 		return (5);
 	case PRIMENET_WP_FACTOR_LMH:
@@ -142,11 +142,11 @@ int map_sel_to_work_pref (
 	case 0:
 		return (PRIMENET_WP_WHATEVER);
 	case 1:
-		return (USE_V4?PRIMENET_WP_LL_FIRST: PRIMENET_WP_WORLD_RECORD);
+		return (PRIMENET_WP_WORLD_RECORD);
 	case 2:
-		return (USE_V4?PRIMENET_WP_LL_DBLCHK: PRIMENET_WP_LL_FIRST);
+		return (PRIMENET_WP_LL_FIRST);
 	case 3:
-		return (USE_V4?PRIMENET_WP_FACTOR: PRIMENET_WP_LL_DBLCHK);
+		return (PRIMENET_WP_LL_DBLCHK);
 	case 4:
 		return (PRIMENET_WP_FACTOR);
 	case 5:
@@ -199,22 +199,15 @@ void CWorkerDlg::InitComboBoxText (void)
 		sel = 0;
 	}
 	c_work_pref.AddString ("Whatever makes the most sense");
-	if (!USE_V4)
 	c_work_pref.AddString ("World record sized numbers to test");
 	c_work_pref.AddString ("First time tests");
 	c_work_pref.AddString ("Double-check tests");
 	c_work_pref.AddString ("Trial factoring");
-	if (!USE_V4)
 	c_work_pref.AddString ("P-1 factoring");
-	if (!USE_V4)
 	c_work_pref.AddString ("Trial factoring to low limits");
-	if (!USE_V4)
 	c_work_pref.AddString ("ECM on small Mersenne numbers");
-	if (!USE_V4)
 	c_work_pref.AddString ("ECM on Fermat numbers");
-	if (!USE_V4)
 	c_work_pref.AddString ("100,000,000 digit numbers to test");
-	if (!USE_V4)
 	if (sel == 10) c_work_pref.AddString ("Other");
 	c_work_pref.SetCurSel (sel);
 

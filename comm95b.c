@@ -77,6 +77,7 @@ void setThreadPriorityAndAffinity (
 	int	mask)			/* Affinity mask */
 {
 	HANDLE	h;
+	int	pri_class, thread_pri;
 
 /* Get and remember the thread handle */
 
@@ -86,10 +87,18 @@ void setThreadPriorityAndAffinity (
 
 /* Set the thread priority */
 
-	SetPriorityClass (GetCurrentProcess (), NORMAL_PRIORITY_CLASS);
-	SetThreadPriority (h,
-			   priority == 1 ?
-				THREAD_PRIORITY_IDLE : priority - 7);
+	if (priority <= 1) pri_class = NORMAL_PRIORITY_CLASS, thread_pri = THREAD_PRIORITY_IDLE;
+	if (priority == 2) pri_class = IDLE_PRIORITY_CLASS, thread_pri = THREAD_PRIORITY_LOWEST;
+	if (priority == 3) pri_class = IDLE_PRIORITY_CLASS, thread_pri = THREAD_PRIORITY_BELOW_NORMAL;
+	if (priority == 4) pri_class = BELOW_NORMAL_PRIORITY_CLASS, thread_pri = THREAD_PRIORITY_LOWEST;
+	if (priority == 5) pri_class = BELOW_NORMAL_PRIORITY_CLASS, thread_pri = THREAD_PRIORITY_BELOW_NORMAL;
+	if (priority == 6) pri_class = NORMAL_PRIORITY_CLASS, thread_pri = THREAD_PRIORITY_LOWEST;
+	if (priority == 7) pri_class = NORMAL_PRIORITY_CLASS, thread_pri = THREAD_PRIORITY_BELOW_NORMAL;
+	if (priority == 8) pri_class = ABOVE_NORMAL_PRIORITY_CLASS, thread_pri = THREAD_PRIORITY_LOWEST;
+	if (priority >= 9) pri_class = ABOVE_NORMAL_PRIORITY_CLASS, thread_pri = THREAD_PRIORITY_BELOW_NORMAL;
+
+	SetPriorityClass (GetCurrentProcess (), pri_class);
+	SetThreadPriority (h, thread_pri);
 
 /* Disable thread priority boost */
 

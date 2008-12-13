@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Just For Fun Software, Inc., all rights reserved
+; Copyright 1995-2008 Mersenne Research, Inc., all rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -122,7 +122,7 @@ last_global		EQU	[AD_BASE+14*SZPTR+210*4]
 ;
 
 _GWDATA SEGMENT PAGE
-rems		DD	1,7,17,23,31,41,47,49,71,73,79,89,97,103,113,119
+rems		DQ	1,7,17,23,31,41,47,49,71,73,79,89,97,103,113,119
 fac32endpt	DQ	100000000000h; Limit for brute force factoring code
 
 ;
@@ -1263,7 +1263,8 @@ flp1:	mov	rax, rdi		; Do a mod 120 in two parts
 	div	rbp
 	mov	rax, rbx		; Do a mod 120
 	div	rbp
-	cmp	edx, rems[rsi*4]	; Is this the desired remainder
+	mov	rax, OFFSET rems
+	cmp	rdx, [rax+rsi*8]	; Is this the desired remainder
 	jz	short flp2		; Yes, jump to flp2
 	add	rbx, twop		; No, try next factor
 	adc	rdi, 0

@@ -120,13 +120,6 @@ void main(int argc, char **argv)
         {
             CmdRemoveService();
         }
-        else if ( _stricmp( "c", argv[1]+1 ) == 0 )
-        {
-	    C_OPTION = TRUE;
-            bDebug = TRUE;
-	    DEBUGGING = TRUE;
-            CmdDebugService(argc, argv);
-        }
         else if ( _stricmp( "debug", argv[1]+1 ) == 0 )
         {
             bDebug = TRUE;
@@ -148,7 +141,6 @@ void main(int argc, char **argv)
         printf( "%s -install      to install the service\n", SZAPPNAME );
         printf( "%s -remove       to remove the service\n", SZAPPNAME );
         printf( "%s -debug        to run as a console app for debugging\n", SZAPPNAME );
-        printf( "%s -c	          contact PrimeNet server and exit\n", SZAPPNAME );
         printf( "\nStartServiceCtrlDispatcher being called.\n" );
         printf( "This may take several seconds.  Please wait.\n" );
 
@@ -560,7 +552,7 @@ void CmdDebugService(int argc, char ** argv)
     lpszArgv = argv;
 #endif
 
-    if (!C_OPTION) _tprintf(TEXT("Debugging %s.\n"), TEXT(SZSERVICEDISPLAYNAME));
+    _tprintf(TEXT("Debugging %s.\n"), TEXT(SZSERVICEDISPLAYNAME));
 
     SetConsoleCtrlHandler( ControlHandler, TRUE );
 

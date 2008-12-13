@@ -2715,7 +2715,6 @@ vhiok:	shl	ebx, cl			;4UV - Normalize (top bit always on)
 	inc	edi			;*U - Bump count of queued factors
 	jz	short vest2		; V - Jump if enough are queued
 	retn				; UV - return to sieve testing
-	push_amt = 0
 
 ;
 ; Now test the 2 factors
@@ -2723,6 +2722,7 @@ vhiok:	shl	ebx, cl			;4UV - Normalize (top bit always on)
 
 	; More miscellaneous initialization
 
+	push_amt = 4
 vest2:	mov	ecx, wqloop_counter	; U - Load loop counter
 	mov	edi, -2			; V - Restore queued factor counter
 
@@ -3200,6 +3200,7 @@ vincom:	fistp	QWORD PTR savefac2	; Save as an integer
 ; One sieve is done, save registers and see if another
 ; sieve will be tested before we check for an ESC.
 
+	push_amt = 0
 vlpdn:	cmp	edi, -2			; Is a factor queued up?
 	je	short vlpdn2		; No
 	fld	FACHI			; Yes, go test it

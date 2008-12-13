@@ -90,7 +90,7 @@ BEGIN
     END
     POPUP "&Edit"
     BEGIN
-        MENUITEM "&Copy...",                    ID_EDIT_COPY
+        MENUITEM "&Copy Window",                ID_EDIT_COPY
     END
     POPUP "&Advanced"
     BEGIN
@@ -154,7 +154,7 @@ BEGIN
     END
     POPUP "&Edit"
     BEGIN
-        MENUITEM "&Copy...",                    ID_EDIT_COPY
+        MENUITEM "&Copy Window",                ID_EDIT_COPY
     END
     POPUP "&Advanced"
     BEGIN
@@ -355,26 +355,6 @@ BEGIN
     PUSHBUTTON      "Connection...",IDC_CONNECTION,190,41,50,14
 END
 
-IDD_PRIMENET_V4 DIALOGEX 0, 0, 247, 87
-STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Configure PrimeNet"
-FONT 8, "MS Sans Serif", 0, 0, 0x0
-BEGIN
-    CONTROL         "Use &PrimeNet to get work and report results",IDC_PRIMENET,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,8,153,10
-    LTEXT           "User ID:",IDC_STATIC,8,22,57,10
-    EDITTEXT        IDC_USERID,97,20,64,12,ES_AUTOHSCROLL
-    LTEXT           "&Password:",IDC_STATIC,8,38,57,10
-    EDITTEXT        IDC_USERPWD,97,36,64,12,ES_AUTOHSCROLL
-    LTEXT           "&Your name (optional):",IDC_STATIC,8,54,74,10
-    EDITTEXT        IDC_USERNAME,97,52,83,12,ES_AUTOHSCROLL
-    LTEXT           "&Computer name (optional):",IDC_STATIC,8,70,85,8
-    EDITTEXT        IDC_COMPID,97,68,83,12,ES_AUTOHSCROLL
-    DEFPUSHBUTTON   "OK",IDOK,192,7,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,192,24,50,14
-    PUSHBUTTON      "Connection...",IDC_CONNECTION,192,41,50,14
-END
-
 IDD_PRIMENET_CONNECTION DIALOGEX 0, 0, 247, 108
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Configure PrimeNet Connection"
@@ -528,7 +508,7 @@ BEGIN
     LTEXT           "Multithreading (&CPUs to use):",IDC_NUMCPUS_TEXT,9,116,102,8
     EDITTEXT        IDC_NUMCPUS,126,114,36,12
     LTEXT           "WARNING: It is strongly recommended that you use the default priority of 1.  This program is unlikely to run any faster at a higher priority.",IDC_WARN1,7,143,293,18
-    LTEXT           "Pick a priority between 1 and 10 where 1 is the lowest priority and 10 is the highest.  Screen savers run at priority 4.  Most applications run at priority 9.",IDC_WARN2,7,162,293,18
+    LTEXT           "Pick a priority between 1 and 10 where 1 is the lowest priority and 10 is the highest.  Screen savers run at priority 4.  Most applications run at priority 7 or 9.",IDC_WARN2,7,162,293,18
     LTEXT           "The only time you should raise the priority is when another process, such as a screen saver, is stealing CPU cycles from this program.",IDC_WARN3,7,181,293,18
     DEFPUSHBUTTON   "OK",IDOK,255,7,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,255,24,50,14
@@ -565,8 +545,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 25,7,1,0
- PRODUCTVERSION 25,7,0,0
+ FILEVERSION 25,8,3,0
+ PRODUCTVERSION 25,8,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -582,12 +562,12 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "FileDescription", "PRIME95 Application"
-            VALUE "FileVersion", "25, 7, 1, 0"
+            VALUE "FileVersion", "25, 8, 3, 0"
             VALUE "InternalName", "PRIME95"
             VALUE "LegalCopyright", "Copyright © 1996-2008, Mersenne Research Inc."
             VALUE "OriginalFilename", "PRIME95.EXE"
             VALUE "ProductName", "PRIME95 Application"
-            VALUE "ProductVersion", "25, 7, 1, 0"
+            VALUE "ProductVersion", "25, 8, 0, 0"
         END
     END
     BLOCK "VarFileInfo"

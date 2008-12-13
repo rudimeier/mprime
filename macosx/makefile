@@ -10,7 +10,7 @@ CPP = g++
 CPPFLAGS = -I.. -I../gwnum -I../linux -O2 -march=i686 -malign-double
 
 LFLAGS = -Wl,-M
-LIBS   = ../gwnum/gwnum.a -lm -lpthread -lcurl -lstdc++
+LIBS   = ../gwnum/gwnum.a -lm -lpthread -lcurl -lIOKit -framework CoreFoundation -lstdc++
 
 FACTOROBJ = factor32.o
 LINUXOBJS = prime.o menu.o

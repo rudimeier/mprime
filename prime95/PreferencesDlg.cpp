@@ -58,7 +58,7 @@ void CPreferencesDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_WORK, m_work);
 	DDV_MinMaxUInt(pDX, m_work, 0, 90);
 	DDX_Text(pDX, IDC_END_DATES, m_end_dates);
-	DDV_MinMaxUInt(pDX, m_end_dates, 1, 60);
+	DDV_MinMaxUInt(pDX, m_end_dates, 1, 7);
 	DDX_Text(pDX, IDC_MODEM, m_modem);
 	DDV_MinMaxUInt(pDX, m_modem, 1, 300);
 	DDX_Check(pDX, IDC_BATTERY, m_battery);

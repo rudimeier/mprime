@@ -1,7 +1,7 @@
 /* Constants */
 
-#define VERSION		"25.7"
-#define BUILD_NUM	"3"
+#define VERSION		"25.8"
+#define BUILD_NUM	"4"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
 /* Linux (mprime)  #2 */
@@ -162,6 +162,8 @@ extern unsigned int PRECISION;		/* Number of decimal places to output*/
 extern int RDTSC_TIMING;		/* True if RDTSC is used to time */
 extern int TIMESTAMPING;		/* True is timestamps to be output */
 extern int CUMULATIVE_TIMING;		/* True if outputting cumulative time*/
+extern int SEQUENTIAL_WORK;		/* TRUE (the  default) if undocumented */
+					/* SequentialWorkToDo is set */
 extern int WELL_BEHAVED_WORK;		/* TRUE if undocumented feature */
 					/* "well behaved worktodo file" */
 					/* is on.  This reduces the number */
@@ -367,8 +369,6 @@ int writeResults (char	*);
 unsigned long physical_memory (void);
 unsigned long GetSuggestedMemory (unsigned long nDesiredMemory);
 unsigned long num_cpus (void);
-void getWindowsSerialNumber (char *);
-void getWindowsSID (char *);
 int getDefaultTimeFormat (void);
 
 /******************************************************************************
