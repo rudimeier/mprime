@@ -1,18 +1,18 @@
-# Makefile for Mac OS X mprime
+# Makefile for Mac OS X 64-bit mprime
 #
 
 ENVP= MACOSX_DEPLOYMENT_TARGET=10.3
 
 CC = gcc
-CFLAGS = -I.. -I../gwnum -I../linux -O2 -march=i686 -malign-double
+CFLAGS = -I.. -I../gwnum -I../linux -O2 -DX86_64 -m64
 
 CPP = g++
-CPPFLAGS = -I.. -I../gwnum -I../linux -O2 -march=i686 -malign-double
+CPPFLAGS = -I.. -I../gwnum -I../linux -O2 -DX86_64 -m64
 
-LFLAGS = 
+LFLAGS = -m64
 LIBS   = ../gwnum/gwnum.a -lm -lpthread -lcurl -lIOKit -framework CoreFoundation -lstdc++
 
-FACTOROBJ = factor32.o
+FACTOROBJ = factor64.o
 LINUXOBJS = prime.o menu.o
 EXE      = mprime
 

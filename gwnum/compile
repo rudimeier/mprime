@@ -41,7 +41,7 @@ macosx\gwnum.a: mult.obj multutil.obj mult1.obj mult1aux.obj mult2.obj mult2p.ob
     del macosx\gwnum.a
     del macosx\gwnum.lib
     lib /OUT:macosx\gwnum.lib *.obj
-    $(objconv) -fmac -wd1050 macosx\gwnum.lib macosx\gwnum.a
+    $(objconv) -fmacho32 -wd1050 macosx\gwnum.lib macosx\gwnum.a
     attrib -r macosx\gwnum.a
     del macosx\gwnum.lib
 

@@ -18,7 +18,11 @@
 #define PORT	7
 #endif
 #ifdef __APPLE__
+#ifdef X86_64
+#define PORT	10
+#else
 #define PORT	9
+#endif
 #endif
 
 /* This controls whether we want to pause computation if the load average */
@@ -85,7 +89,7 @@ extern int MENUING;			/* TRUE when main menu active */
 /* Internal routines */
 
 void main_menu (void);
-void linuxContinue (char *, int);
+void linuxContinue (char *, int, int);
 void Sleep (long);
 void test_user(void);
 void test_welcome(void);

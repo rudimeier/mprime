@@ -401,7 +401,7 @@ int main (
 /* Continue testing, return when worker threads exit. */
 
 	else {
-		linuxContinue ("Another mprime is already running!\n", TRUE);
+		linuxContinue ("Another mprime is already running!\n", ALL_WORKERS, TRUE);
 	}
 
 /* All done */
@@ -581,9 +581,8 @@ int OnBattery (void)
 	ac_state = -1;
 	fd = fopen ("/proc/acpi/battery/BAT0/state", "r");
 	if (fd != NULL) {
-		for ( ; ; ) {
+		while (fgets (buf, sizeof (buf), fd) != NULL) {
 			char	*p;
-			if (fscanf (fd, "%s", buf) == EOF) break;
 			p = strstr (buf, "charging state:");
 			if (p == NULL) continue;
 			if (strstr (p+14, "discharging") != NULL) ac_state = 0;
@@ -642,14 +641,13 @@ unsigned long num_cpus (void)
 	return (ncpus);
 #else
 	FILE	*fd;
-	char	buf[80];
+	char	buf[200];
 	int	count;
 
 	count = 0;
 	fd = fopen ("/proc/cpuinfo", "r");
 	if (fd != NULL) {
-		for ( ; ; ) {
-			if (fscanf (fd, "%s", buf) == EOF) break;
+		while (fgets (buf, sizeof (buf), fd) != NULL) {
 			buf[9] = 0;
 			if (strcmp (buf, "processor") == 0) count++;
 		}
@@ -793,6 +791,8 @@ void ChangeIcon (int thread_num, int x)
 
 void linuxContinue (
 	char	*error_message,
+	int	thread_num,		/* Specific worker to launch or */
+					/* special value ALL_WORKERS */
 	int	wait_flag)
 {
 #ifdef __linux__
@@ -860,10 +860,9 @@ void linuxContinue (
 
 /* All is OK, save our pid, run, then delete our pid */
 
-ok:
-	IniWriteInt (LOCALINI_FILE, "Pid", my_pid);
-	LaunchWorkerThreads (ALL_WORKERS, wait_flag);
-	IniWriteInt (LOCALINI_FILE, "Pid", 0);
+ok:	IniWriteInt (LOCALINI_FILE, "Pid", my_pid);
+	LaunchWorkerThreads (thread_num, wait_flag);
+	if (wait_flag) IniWriteInt (LOCALINI_FILE, "Pid", 0);
 }
 
 /* Load the PrimeNet DLL, make sure an internet connection is active */

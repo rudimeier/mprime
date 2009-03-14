@@ -1,4 +1,4 @@
-; Copyright 2001-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2008 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -98,6 +98,12 @@ ttp	mov	norm_ptr2, rbx		;; Save column multipliers ptr
 	sub	rcx, rcx
 ttp	mov	al, [rdi+0]		;; Load big vs. little flags
 ttp	mov	cl, [rdi+1]		;; Load big vs. little flags
+IFDEF X86_64
+	sub	r8, r8
+	sub	r9, r9
+ttp	mov	r8b, [rdi+2]		;; Load big vs. little flags
+ttp	mov	r9b, [rdi+3]		;; Load big vs. little flags
+ENDIF
 ilp0:	mov	ebx, cache_line_multiplier ;; Load inner loop counter
 	mov	loopcount1, ebx		;; Save loop counter
 	lea	rbx, XMM_COL_MULTS	;; Load col mult scratch area

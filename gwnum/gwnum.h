@@ -59,9 +59,9 @@ typedef double *gwnum;
 /* gwsetup verifies that the version numbers match.  This prevents bugs */
 /* from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"25.7"
+#define GWNUM_VERSION		"25.9"
 #define GWNUM_MAJOR_VERSION	25
-#define GWNUM_MINOR_VERSION	7
+#define GWNUM_MINOR_VERSION	9
 
 /* Error codes returned by the three gwsetup routines */
 
@@ -631,7 +631,7 @@ struct gwasm_jmptab {
 	void	*proc_ptrs[4];
 	void	**add_sub_norm_procs;
 	uint32_t pass2_levels;
-	uint32_t counts[20];
+	int32_t counts[20];
 };
 
 /* The gwhandle structure containing all of gwnum's "global" data. */
@@ -680,7 +680,7 @@ struct gwhandle_struct {
 				/* this FFT size can support */
 	unsigned long BITS_PER_WORD; /* Bits in a little word */
 	unsigned long PASS2_LEVELS; /* FFT levels done in pass 2. */
-	unsigned long PASS2GAPSIZE; /* Gap between blocks in pass 2 */
+	long	PASS2GAPSIZE;	/* Gap between blocks in pass 2 */
 	unsigned long PASS1_CACHE_LINES; /* Cache lines grouped together in */
 				/* first pass of an FFT. */
 	unsigned long SCRATCH_SIZE; /* Size of the pass 1 scratch area */
@@ -702,7 +702,7 @@ struct gwhandle_struct {
 	unsigned long GW_ALIGNMENT; /* How to align allocated gwnums */
 	unsigned long GW_ALIGNMENT_MOD; /* How to align allocated gwnums */
 	char	*GW_BIGBUF;	/* Optional buffer to allocate gwnums in */
-	unsigned long GW_BIGBUF_SIZE; /* Size of the optional buffer */
+	size_t	GW_BIGBUF_SIZE; /* Size of the optional buffer */
 	gwnum	*gwnum_alloc;	/* Array of allocated gwnums */
 	unsigned int gwnum_alloc_count; /* Count of allocated gwnums */
 	unsigned int gwnum_alloc_array_size; /* Size of gwnum_alloc array */

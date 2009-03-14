@@ -23,7 +23,7 @@ public:
 	CEdit	c_network;
 	UINT	m_iter;
 	UINT	m_disk_write_time;
-	BOOL	m_backup;
+	UINT	m_backup;
 	BOOL	m_noise;
 	UINT	m_retry;
 	UINT	m_r_iter;

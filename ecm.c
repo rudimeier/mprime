@@ -1796,8 +1796,7 @@ void ecm_stage1_memory_usage (
 	int	thread_num,
 	ecmhandle *ecmdata)
 {
-	set_memory_usage (thread_num, 0,
-			  gwmemused (&ecmdata->gwdata) + 13 * gwnum_size (&ecmdata->gwdata));
+	set_memory_usage (thread_num, 0, cvt_gwnums_to_mem (&ecmdata->gwdata,  13));
 }
 
 /* Choose 4 FFT stage 2 of the 2 FFT stage 2.  Also choose a good */
@@ -1822,9 +1821,9 @@ int choose_stage2_plan (
 /* Get available memory.  We assume 120 gwnums will allow us to do a */
 /* reasonable efficient stage 2 implementation. */
 
-replan:	stop_reason = avail_mem (thread_num, 
-				 gwmemused (&ecmdata->gwdata) + 1500000 + 20 * gwnum_size (&ecmdata->gwdata),
-				 gwmemused (&ecmdata->gwdata) + 1500000 + 120 * gwnum_size (&ecmdata->gwdata),
+replan:	stop_reason = avail_mem (thread_num,
+				 cvt_gwnums_to_mem (&ecmdata->gwdata, 20),
+				 cvt_gwnums_to_mem (&ecmdata->gwdata, 120),
 				 &memory);
 	if (stop_reason) return (stop_reason);
 	if (memory < 8) memory = 8;
@@ -1838,13 +1837,9 @@ replan:	stop_reason = avail_mem (thread_num,
 	gcd_cost = 861.0 * log ((double) ecmdata->gwdata.n) - 7775.0;
 	if (gcd_cost < 100.0) gcd_cost = 100.0;
 
-/* Figure out how many gwnum values fit in our MB limit.  Allow 1MB for */
-/* code and data structures. */
+/* Figure out how many gwnum values fit in our memory limit. */
 
-	numvals = (unsigned long)
-			(((double) ((memory-1) << 20) -
-			  (double) gwmemused (&ecmdata->gwdata)) /
-			 (double) gwnum_size (&ecmdata->gwdata));
+	numvals = cvt_mem_to_gwnums (&ecmdata->gwdata, memory);
 	ASSERTG (numvals >= 20);
 
 /* If memory is really tight, then the 4 FFT - O(n^2) pooling is the */
@@ -2000,17 +1995,14 @@ replan:	stop_reason = avail_mem (thread_num,
 	}
 
 /* Record the amount of memory this thread will be using in stage 2. */
-/* If we are using more than 20 temporaries, then we can use fewer if the */
-/* memory settings change. */
 
-	memory = gwmemused (&ecmdata->gwdata) +
-		 bestnumvals * gwnum_size (&ecmdata->gwdata);
+	memory = cvt_gwnums_to_mem (&ecmdata->gwdata, bestnumvals);
 	if (set_memory_usage (thread_num, MEM_VARIABLE_USAGE, memory))
 		goto replan;
 
 /* Output a useful message regarding memory usage */
 
-	sprintf (buf, "Using %dMB of memory in stage 2.\n", (memory >> 20) + 1);
+	sprintf (buf, "Using %dMB of memory in stage 2.\n", memory);
 	OutputStr (thread_num, buf);
 	return (0);
 }
@@ -2035,19 +2027,12 @@ void ecm_save (
 	gwnum	x,
 	gwnum	gg)
 {
-	char	newfilename[16];
 	int	fd;
 	unsigned long sum = 0;
 
-/* If we are allowed to create multiple intermediate files, then */
-/* write to a file called yNNNNNNN. */
-
-	strcpy (newfilename, filename);
-	if (TWO_BACKUP_FILES) newfilename[0] = 'y';
-
 /* Create the intermediate file */
 
-	fd = _open (newfilename, _O_BINARY|_O_WRONLY|_O_TRUNC|_O_CREAT, CREATE_FILE_ACCESS);
+	fd = openWriteSaveFile (filename, NUM_BACKUP_FILES);
 	if (fd < 0) return;
 
 /* Write the file header. */
@@ -2068,25 +2053,17 @@ void ecm_save (
 	if (! write_gwnum (fd, &ecmdata->gwdata, x, &sum)) goto writeerr;
 	if (! write_gwnum (fd, &ecmdata->gwdata, gg, &sum)) goto writeerr;
 
-/* Write the checksum */
+/* Write the checksum, we're done */
 
 	if (! write_checksum (fd, sum)) goto writeerr;
-	_commit (fd);
-	_close (fd);
 
-/* Now rename the intermediate files */
-
-	if (TWO_BACKUP_FILES) {
-		_unlink (filename);
-		rename (newfilename, filename);
-	}
+	closeWriteSaveFile (filename, fd, NUM_BACKUP_FILES);
 	return;
 
 /* An error occured.  Close and delete the current file. */
 
 writeerr:
-	_close (fd);
-	_unlink (newfilename);
+	deleteWriteSaveFile (filename, fd, NUM_BACKUP_FILES);
 }
 
 /* Read a save file */
@@ -2427,6 +2404,7 @@ return 0;
 /* Init filename */
 
 	tempFileName (w, filename);
+	uniquifySaveFile (thread_num, filename);
 
 /* Init the random number generator */
 
@@ -2560,7 +2538,7 @@ OutputStr (thread_num, buf);
 
 /* Check for a continuation file */
 
-	if (fileExists (filename)) {
+	while (saveFileExists (thread_num, filename)) {
 		uint64_t save_B, save_B_processed, save_C_processed;
 
 /* Allocate memory */
@@ -2584,7 +2562,7 @@ OutputStr (thread_num, buf);
 		    B > save_B) {
 			gwfree (&ecmdata.gwdata, x);
 			gwfree (&ecmdata.gwdata, z);
-			goto restart0;
+			continue;
 		}
 
 /* Compute Ad4 from sigma */
@@ -3255,7 +3233,7 @@ more_curves:
 
 /* Delete the save file */
 
-	_unlink (filename);
+	unlinkSaveFiles (filename);
 
 /* Free memory and return */
 
@@ -3349,7 +3327,7 @@ bingo:	sprintf (buf, "ECM found a factor in curve #%ld, stage #%d\n",
 /* for this number from the worktodo file. */
 
 		if (continueECM) {
-			_unlink (filename);
+			unlinkSaveFiles (filename);
 			w->curves_to_do -= curve;
 			stop_reason = updateWorkToDoLine (thread_num, w);
 			if (stop_reason) return (stop_reason);
@@ -3373,7 +3351,7 @@ bad_factor_recovery:
 /* this inaccurate data. */
 
 	if (!continueECM) {
-		_unlink (filename);
+		unlinkSaveFiles (filename);
 		stop_reason = STOP_WORK_UNIT_COMPLETE;
 		invalidateNextRollingAverageUpdate ();
 		goto exit;
@@ -3730,19 +3708,12 @@ void pm1_save (
 	gwnum	x,
 	gwnum	gg)
 {
-	char	newfilename[16];
 	int	fd;
 	unsigned long sum = 0;
 
-/* If we are allowed to create multiple intermediate files, then */
-/* write to a file called xNNNNNNN. */
-
-	strcpy (newfilename, filename);
-	if (TWO_BACKUP_FILES) newfilename[0] = 'x';
-
 /* Create the intermediate file */
 
-	fd = _open (newfilename, _O_BINARY|_O_WRONLY|_O_TRUNC|_O_CREAT, CREATE_FILE_ACCESS);
+	fd = openWriteSaveFile (filename, NUM_BACKUP_FILES);
 	if (fd < 0) return;
 
 /* Write the file header */
@@ -3783,25 +3754,17 @@ void pm1_save (
 			goto writeerr;
 	}
 
-/* Write the checksum */
+/* Write the checksum, we're done */
 
 	if (! write_checksum (fd, sum)) goto writeerr;
-	_commit (fd);
-	_close (fd);
 
-/* Now rename the intermediate files */
-
-	if (TWO_BACKUP_FILES) {
-		_unlink (filename);
-		rename (newfilename, filename);
-	}
+	closeWriteSaveFile (filename, fd, NUM_BACKUP_FILES);
 	return;
 
 /* An error occured.  Close and delete the current file. */
 
 writeerr:
-	_close (fd);
-	_unlink (newfilename);
+	deleteWriteSaveFile (filename, fd, NUM_BACKUP_FILES);
 }
 
 /* Read a save file */
@@ -3977,7 +3940,6 @@ int choose_pminus1_numvals (
 					/* can allocate. */
 {
 	unsigned int memory;		/* Available memory in MB */
-	double	temp, size;
 	int	stop_reason;
 
 /* Override numvals when QAing */
@@ -3994,22 +3956,17 @@ int choose_pminus1_numvals (
 		memory =  max_mem ();
 	else {
 		unsigned int min_memory, desired_memory;
-
-		min_memory = desired_memory = gwmemused (&pm1data->gwdata) + 1500000;
-		min_memory += 5 * gwnum_size (&pm1data->gwdata);
-		desired_memory += 13 * gwnum_size (&pm1data->gwdata);
-		stop_reason = avail_mem (pm1data->thread_num, min_memory,
-					 desired_memory, &memory);
+		min_memory = cvt_gwnums_to_mem (&pm1data->gwdata, 5);
+		desired_memory = cvt_gwnums_to_mem (&pm1data->gwdata, 13);
+		stop_reason = avail_mem (pm1data->thread_num, min_memory, desired_memory, &memory);
 		if (stop_reason) return (stop_reason);
 
 /* Factor in the multiplier that we set to less than 1.0 when we get unexpected */
 /* memory allocation errors.  Make sure we can still allocate 5 temporaries. */
 
 		memory = (unsigned int) (pm1data->pct_mem_to_use * (double) memory);
-		min_memory = (min_memory >> 20) + 1;	/* Switch to MB */
 		if (memory < min_memory)
-			return (avail_mem_not_sufficient (pm1data->thread_num, min_memory,
-							  (desired_memory >> 20) + 1));
+			return (avail_mem_not_sufficient (pm1data->thread_num, min_memory, desired_memory));
 	}
 	if (memory < 8) memory = 8;
 
@@ -4021,13 +3978,10 @@ int choose_pminus1_numvals (
 		OutputStr (pm1data->thread_num, buf);
 	}
 
-/* Compute the number of gwnum temporaries available.  Allow 1MB for code */
-/* and data structures. */
+/* Compute the number of gwnum temporaries we can allocate. */
 
-	temp = (double) ((memory-1) << 20) - (double) gwmemused (&pm1data->gwdata);
-	size = (double) gwnum_size (&pm1data->gwdata);
-	if (temp <= size) return (1);
-	*numvals = (unsigned long) (temp / size);
+	*numvals = cvt_mem_to_gwnums (&pm1data->gwdata, memory);
+	if (*numvals < 1) *numvals = 1;
 	return (0);
 }
 
@@ -4481,9 +4435,9 @@ int pminus1 (
 	giant	factor;		/* Factor found, if any */
 	giant	exp;
 	uint64_t stage_0_limit, prime, m;
-	unsigned long SQRT_B;
+	unsigned long memused, SQRT_B;
 	unsigned long numrels, first_rel, last_rel;
-	unsigned long i, j, stage2incr, len, bit_number, memused;
+	unsigned long i, j, stage2incr, len, bit_number;
 	unsigned long error_recovery_mode = 0;
 	gwnum	x, gg, t3;
 	char	filename[32], buf[255], testnum[100];
@@ -4623,16 +4577,17 @@ restart:
 /* Check for a save file and read the save file.  If there is an error */
 /* reading the file then restart the P-1 factoring job from scratch. */
 
-	have_save_file = (fileExists (filename) &&
-			  pm1_restore (&pm1data, filename, w, &processed, &x, &gg));
+	have_save_file = FALSE;
+	while (saveFileExists (thread_num, filename)) {
+		have_save_file = pm1_restore (&pm1data, filename, w, &processed, &x, &gg);
+		if (have_save_file) break;
+	}
 
 /* Record the amount of memory being used by this thread.  Until we get to */
 /* stage 2, P-1 uses as much memory as an LL test. */
 
 	if (!have_save_file || pm1data.stage != PM1_STAGE2 || C <= pm1data.C_done)
-		set_memory_usage (thread_num, 0,
-				  gwmemused (&pm1data.gwdata) +
-					gwnum_size (&pm1data.gwdata));
+		set_memory_usage (thread_num, 0, cvt_gwnums_to_mem (&pm1data.gwdata, 1));
 
 /* Jump to the proper continuation point if processing a save file */
 
@@ -5173,15 +5128,12 @@ replan:	stop_reason = choose_pminus1_implementation (&pm1data, w, &using_t3);
 /* gwnums in the NQx array, E+1 gwnums to calculate eQx values, one gwnum */
 /* for gg, and an optional gwnum for t3. */
 
-	memused = gwmemused (&pm1data.gwdata) +
-		  (pm1data.rels_this_pass + pm1data.E + 2 + using_t3) *
-				gwnum_size (&pm1data.gwdata);
+	memused = cvt_gwnums_to_mem (&pm1data.gwdata, pm1data.rels_this_pass + pm1data.E + 2 + using_t3);
 	if (set_memory_usage (thread_num, MEM_VARIABLE_USAGE, memused))
 		goto replan;
 	sprintf (buf,
 		 "Using %dMB of memory.  Processing %d relative primes (%d of %d already processed).\n",
-		 (memused >> 20) + 1, pm1data.rels_this_pass,
-		 pm1data.rels_done, pm1data.numrels);
+		 memused, pm1data.rels_this_pass, pm1data.rels_done, pm1data.numrels);
 	OutputStr (thread_num, buf);
 
 /* Here is where we restart the next pass of a multi-pass stage 2 */
@@ -5369,7 +5321,7 @@ errchk:		if (gw_test_for_error (&pm1data.gwdata) ||
 				 PRECISION);
 			sprintf (buf, mask, pct,
 				 gwmodulo_as_string (&pm1data.gwdata),
-				 (memused >> 20) + 1);
+				 memused);
 			title (thread_num, buf);
 			sprintf (mask,
 				 "%%s stage 2 is %%.%df%%%% complete.",
@@ -5559,7 +5511,7 @@ msg_and_exit:
 	if (w->work_type == WORK_PMINUS1)
 		pm1_save (&pm1data, filename, w, 0, x, NULL);
 	else
-		_unlink (filename);
+		unlinkSaveFiles (filename);
 
 /* Return stop code indicating success or work unit complete */ 
 
@@ -5630,7 +5582,7 @@ bingo:	if (stage == 1)
 		sprintf (msg, "ERROR: Bad factor for %s found: %s\n",
 			 gwmodulo_as_string (&pm1data.gwdata), str);
 		OutputBoth (thread_num, msg);
-		_unlink (filename);
+		unlinkSaveFiles (filename);
 		OutputStr (thread_num, "Restarting P-1 from scratch.\n");
 		stop_reason = 0;	       // Bug - is this how we restart?
 		goto msg_and_exit;
@@ -5671,11 +5623,9 @@ bingo:	if (stage == 1)
 /* If LL testing, free all save files -- including possible LL save files */
 
 	if (w->work_type != WORK_PMINUS1) {
-		_unlink (filename);
+		unlinkSaveFiles (filename);
 		filename[0] = 'p';
-		_unlink (filename);
-		filename[0] = 'q';
-		_unlink (filename);
+		unlinkSaveFiles (filename);
 	}
 
 /* Otherwise create save file so that we can expand bound 1 or bound 2 */
@@ -5698,20 +5648,20 @@ bingo:	if (stage == 1)
 /* Output an error message saying we are restarting. */
 /* Sleep five minutes before restarting from last save file. */
 
-error:	pm1_cleanup (&pm1data);
-	free (N);
-	N = NULL;
-	free (exp);
-	exp = NULL;
-	if (near_fft_limit && gw_get_maxerr (&pm1data.gwdata) >= 0.40625) {
+error:	if (near_fft_limit && gw_get_maxerr (&pm1data.gwdata) >= 0.40625) {
 		sprintf (buf, "Possible roundoff error (%.8g), backtracking to last save file.\n", gw_get_maxerr (&pm1data.gwdata));
 		OutputStr (thread_num, buf);
 	} else {
 		OutputBoth (thread_num, "SUMOUT error occurred.\n");
 		stop_reason = SleepFive (thread_num);
-		if (stop_reason) return (stop_reason);
+		if (stop_reason) goto exit;
 	}
 	error_recovery_mode = bit_number ? bit_number : 1;
+	pm1_cleanup (&pm1data);
+	free (N);
+	N = NULL;
+	free (exp);
+	exp = NULL;
 	goto restart;
 }
 
@@ -5932,7 +5882,7 @@ void guess_pminus1_bounds (
 	unsigned long B1, B2, vals;
 	double	h, pass1_squarings, pass2_squarings;
 	double	logB1, logB2, kk, logkk, temp, logtemp, log2;
-	double	size, prob, gcd_cost, ll_tests, numprimes;
+	double	prob, gcd_cost, ll_tests, numprimes;
 	struct {
 		unsigned long B1;
 		unsigned long B2;
@@ -5964,11 +5914,8 @@ void guess_pminus1_bounds (
 /* Compute how many temporaries we can use given our memory constraints. */
 /* Allow 1MB for code and data structures. */
 
-	temp = (double) ((max_mem () - 1) << 20) -
-		(double) gwmap_to_memused (k, b, n, c);
-	size = (double) gwmap_to_estimated_size (k, b, n, c);
-	if (temp <= size) vals = 1;
-	else vals = (unsigned long) (temp / size);
+	vals = cvt_mem_to_estimated_gwnums (max_mem (), k, b, n, c);
+	if (vals < 1) vals = 1;
 
 /* Find the best B1 */
 
@@ -6019,7 +5966,7 @@ void guess_pminus1_bounds (
 /* These include: better L2 cache usage and no calls to the faster */
 /* gwsquare routine. */
 
-	pass2_squarings *= 1.2;
+	pass2_squarings *= 1.285;
 
 /* What is the "average" value that must be smooth for P-1 to succeed? */
 /* Ordinarily this is 1.5 * 2^how_far_factored.  However, for Mersenne */

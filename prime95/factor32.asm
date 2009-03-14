@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Just For Fun Software, Inc., all rights reserved
+; Copyright 1995-2009 Mersenne Research, Inc., all rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -104,11 +104,11 @@ primearray12		EQU	DWORD PTR [AD_BASE+348*4]
 	;; Pentium Pro globals
 ;facdistsflt	DQ	32 DUP(0.0)
 facdistsflt		EQU	QWORD PTR [AD_BASE+400*4]
-facdistsfltoffset	EQU				400*4
+facdistsfltoffset	EQU	400*4
 ;facdist_flt	DQ	0	; Distance between trial factors (32 * 120 * p)
 facdist_flt		EQU	QWORD PTR [AD_BASE+464*4]
-;facdata	DQ	0.0, 0.0, 0.0
-facdata			EQU	QWORD PTR [AD_BASE+466*4]
+;unused		DQ	0.0, 0.0, 0.0	; Saved queued up reciprocals
+;unused			EQU	QWORD PTR [AD_BASE+466*4]
 ;quotient2	DD	0	; The result of a 486 or PPro division
 quotient2		EQU	DWORD PTR [AD_BASE+472*4]
 ;quotient1	DD	0
@@ -2472,7 +2472,6 @@ smaybe:	fadd	st, st			; dbl rem, trash, trash, trash
 	pop	ecx			; Restore sieve testing register
 	pop	eax			; Restore sieve testing register
 	retn				; UV - Test next factor from sieve
-	push_amt = 0
 
 winner:	mov	eax, savefac1		; Load MSW
 	mov	FACMSW, eax
@@ -2491,6 +2490,7 @@ winner:	mov	eax, savefac1		; Load MSW
 ; Check all the bits in the sieve looking for a factor to test
 ;
 
+	push_amt = 0
 tlp62:	mov	esi, sieve
 	mov	ebx, savefac1
 	mov	ebp, savefac2
@@ -4358,7 +4358,9 @@ plp:	mov	esi, sieve		; Sieve address
 	sub	edi, edi		; Count of queued factors to be tested
 resdata:cmp	edi, queuedpro		; Restore queued factor data
 	je	short resdone
-	fld	facdata[edi*4]
+	fild	QWORD PTR pfac2[edi*8]	; Load the factor to test
+	fld1
+	fdivrp	st(1), st		; Compute 1 / factor
 	inc	edi
 	jmp	short resdata
 resdone:
@@ -4378,7 +4380,7 @@ px1:	bsf	edx, eax		; Look for a set bit
 svdata:	and	edi, edi
 	jz	short svdone
 	dec	edi
-	fstp	facdata[edi*4]
+	fcomp	st			; Toss precomputed reciprocal
 	jmp	short svdata
 svdone:
 

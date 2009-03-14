@@ -5,7 +5,7 @@
 | in the multi-precision arithmetic routines.  That is, all routines
 | that deal with the gwnum data type.
 | 
-|  Copyright 2002-2008 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2002-2009 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 /* Include files */
@@ -140,12 +140,12 @@ struct gwasm_data {
 	double	XMM_P951[2];
 	double	XMM_P588[2];
 	double	XMM_M162[2];
-	double	XMM_P577[2];
+	double	XMM_UNUSED1[2];
 	double	XMM_P866[2];
-	double	XMM_P75[2];
-	double	XMM_P25[2];
-	double	XMM_P3[2];
-	double	XMM_P433[2];
+	double	XMM_UNUSED2[2];
+	double	XMM_UNUSED3[2];
+	double	XMM_UNUSED4[2];
+	double	XMM_UNUSED5[2];
 	double	XMM_P623[2];
 	double	XMM_M358[2];
 	double	XMM_P404[2];
@@ -1377,7 +1377,7 @@ int gwinfo (			/* Return zero-padded fft flag or error code */
 	double	log2k, log2c, log2maxmulbyconst;
 	double	max_bits_per_word, bits_per_word;
 	unsigned long l2_cache_size, max_exp;
-	uint32_t *longp;
+	int32_t *longp;
 	char	buf[20];
 	int	qa_nth_fft;
 	unsigned long qa_fftlen;
@@ -1696,7 +1696,7 @@ use_zpad:	gwdata->ZERO_PADDED_FFT = TRUE;
 
 	gwdata->FFTLEN = jmptab->fftlen;
 	gwdata->PASS2_LEVELS = jmptab->pass2_levels; /* FFT levels in pass2 */
-	gwdata->PASS2GAPSIZE = jmptab->counts[1] & ~1;
+	gwdata->PASS2GAPSIZE = jmptab->counts[1] - 1;
 
 /* Remember the FFT returned so that we can return a different FFT to */
 /* the QA code next time. */
@@ -2408,11 +2408,8 @@ int internal_gwsetup (
 	asm_data->SQRTHALF =
 	asm_data->XMM_SQRTHALF[0] = asm_data->XMM_SQRTHALF[1] = sqrt (0.5);
 	asm_data->P25 = 0.25;
-	asm_data->XMM_P25[0] = asm_data->XMM_P25[1] = 0.25;
 	asm_data->P75 = 0.75;
-	asm_data->XMM_P75[0] = asm_data->XMM_P75[1] = 0.75;
 	asm_data->P3 = 3.0;
-	asm_data->XMM_P3[0] = asm_data->XMM_P3[1] = 3.0;
 	asm_data->XMM_ABSVAL[0] = asm_data->XMM_ABSVAL[2] = 0x7FFFFFFF;
 	asm_data->XMM_ABSVAL[1] = asm_data->XMM_ABSVAL[3] = 0xFFFFFFFF;
 
@@ -2579,10 +2576,8 @@ int internal_gwsetup (
 	asm_data->XMM_M382[0] = asm_data->XMM_M382[1] = asm_values[7];
 	asm_data->P866 =
 	asm_data->XMM_P866[0] = asm_data->XMM_P866[1] = asm_values[8];
-	asm_data->P433 =
-	asm_data->XMM_P433[0] = asm_data->XMM_P433[1] = asm_values[9];
-	asm_data->P577 =
-	asm_data->XMM_P577[0] = asm_data->XMM_P577[1] = asm_values[10];
+	asm_data->P433 = asm_values[9];
+	asm_data->P577 = asm_values[10];
 	asm_data->P975 =
 	asm_data->XMM_P975[0] = asm_data->XMM_P975[1] = asm_values[11];
 	asm_data->P445 =
@@ -5852,9 +5847,9 @@ void gw_random_number (
 	len = (((unsigned long) gwdata->bit_length) >> 5) + 1;
 	g = popg (&gwdata->gdata, len);
 	for (i = 0; i < len; i++) {
-		g->n[i] = ((unsigned long) rand() << 20) +
-			  ((unsigned long) rand() << 10) +
-			  (unsigned long) rand();
+		g->n[i] = ((uint32_t) rand() << 20) +
+			  ((uint32_t) rand() << 10) +
+			  (uint32_t) rand();
 	}
 	g->sign = len;
 	specialmodg (gwdata, g);

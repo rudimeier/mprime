@@ -1,4 +1,4 @@
-; Copyright 2001-2007 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2008 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -43,7 +43,7 @@ handle_np1 MACRO p1mac, p2mac, p2cl, clmarg, suf
 ;; does 8 levels, pass 2 uses common code to perform the last 11 levels.
 
 xpass1sclevels8pfa5 MACRO pass2_macro, p2cl, clmarg
-	LOCAL	b0b, b1a, b1b, b2b, b3b, b4b, b5b, b6b, b7b
+	LOCAL	b0b, b1a, b1aa, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b, c6b, c7b
 	LOCAL	pass2, endlp, yes_fft
 
@@ -195,7 +195,6 @@ c7b:	g2cl_four_complex_unfft rsi, 64, blkdst, rcx, 64, clmblkdst
 	mov	rdi, sincos2		;; Load sin/cos pointer
 	mov	rbx, sincos3		;; Load sin/cos pointer
 	mov	eax, 2			;; 2 iterations
-	xfive_reals_unfft_preload	;; Preload consts for five real macros
 
 c2a:	xtouchlines 10			;; Preload TLBs
 
@@ -237,6 +236,7 @@ c3b:	x4cl_four_complex_unfft_screg rsi, 64, 4*clmblkdst, clmblkdst8, rbx
 	lea	rbx, [rbx-2*XMM_SCD]	;; Restore sine/cosine pointer
 
 	lea	rsi, [rsi-2*2*clmblkdst8-clmblkdst8];; Restore source pointer
+	xfive_reals_unfft_preload	;; Preload consts for five real macros
 c1b:	x5cl_five_reals_last_unfft rsi, 64, clmblkdst8
 	xloop1sp c1b, 2*clmblkdst
 	add	ah, 256/4
@@ -361,10 +361,10 @@ pfing	lea	rcx, [rcx+20*blkdst]	;; Create prefetching pointer
 	mov	rbx, sincos2		;; Load sin/cos pointer
 	mov	eax, 4			;; 4 iterations
 	sub	rdx, rdx
-	xfive_reals_fft_preload		;; Preload consts for five real macros
 
 b1a:	xtouchlines 5			;; Preload TLBs
 
+b1aa:	xfive_reals_fft_preload		;; Preload consts for five real macros
 b1b:	x5cl_five_reals_fft rsi, 64, clmblkdst8
 	xloop1sp b1b, 4*clmblkdst
 	add	ah, 256/2
@@ -406,7 +406,7 @@ pfing	lea	rcx, [rcx+blkdst]	;; Next prefetch pointer
 	lea	rsi, [rsi-5*clmblkdst8+2*64];; Next source pointer
 	lea	rcx, [rcx-5*blkdst+128]	;; Next prefetch pointer
 	add	dl, 256/clm		;; clm iterations
-	jnc	b1b
+	jnc	b1aa
 	bump	rsi, -clm*2*64+clmblkdst;; Next source pointer
 	lea	rcx, [rcx-clm*128+5*blkdst];; Next prefetch pointer
 	ELSE
@@ -2562,7 +2562,7 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 ;; does 9 levels, pass 2 uses common code to perform the last 11 levels.
 
 xpass1sclevels9pfa5 MACRO pass2_macro, p2cl, clmarg
-	LOCAL	b0b, b1a, b1b, b2b, b3b, b4b, b5b, b6b, b7b
+	LOCAL	b0b, b1a, b1aa, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5a, c5b, c6b, c7b
 	LOCAL	pass2, endlp, yes_fft
 
@@ -2739,7 +2739,6 @@ c5b:	x4cl_four_complex_unfft rsi, 64, 2*clmblkdst, 4*clmblkdst
 	start_timer 18
 	mov	rdi, sincos3		;; Load sin/cos pointer
 	mov	al, 8			;; 8 iterations
-	xfive_reals_unfft_preload	;; Preload consts for five real macros
 
 c2a:	xtouchlines 3			;; Preload TLBs
 
@@ -2760,6 +2759,7 @@ pfing	lea	rcx, [rcx+blkdst]	;; Next prefetch pointer
 	lea	rdi, [rdi-2*XMM_SCD]	;; Restore sine/cosine pointer
 
 	lea	rsi, [rsi-2*4*clmblkdst8-2*clmblkdst8];; Restore source pointer
+	xfive_reals_unfft_preload	;; Preload consts for five real macros
 c1b:	x5cl_five_reals_last_unfft rsi, 64, 2*clmblkdst8
 	xloop1sp c1b, clmblkdst8
 	add	ah, 256/2
@@ -2884,10 +2884,10 @@ pfing	lea	rcx, [rcx+40*blkdst]	;; Create prefetching pointer
 	mov	rbx, sincos2		;; Load sin/cos pointer
 	mov	eax, 4			;; 4 iterations
 	sub	rdx, rdx
-	xfive_reals_fft_preload		;; Preload consts for five real macros
 
 b1a:	xtouchlines 10			;; Preload TLBs
 
+b1aa:	xfive_reals_fft_preload		;; Preload consts for five real macros
 b1b:	x5cl_five_reals_fft rsi, 64, 2*clmblkdst8
 	xloop1sp b1b, 4*clmblkdst
 	add	ah, 256/2		;; Test inner loop counter
@@ -2938,7 +2938,7 @@ b5b:	x4cl_four_complex_fft_screg rsi, 64, 4*clmblkdst, clmblkdst8, rbx
 	lea	rsi, [rsi-5*2*clmblkdst8+2*64];; Next source pointer
 	lea	rcx, [rcx-10*blkdst+128];; Next prefetch pointer
 	add	dl, 256/clm		;; clm iterations
-	jnc	b1b
+	jnc	b1aa
 	bump	rsi, -clm*2*64+clmblkdst;; Next source pointer
 	lea	rcx, [rcx-clm*128+10*blkdst];; Next prefetch pointer
 	ELSE
@@ -5108,7 +5108,7 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 ;; does 10 levels, pass 2 uses common code to perform the last 11 levels.
 
 xpass1sclevels10pfa5 MACRO pass2_macro, p2cl, clmarg
-	LOCAL	b0b, b1a, b1b, b2b, b3b
+	LOCAL	b0b, b1a, b1aa, b1b, b2b, b3b
 	LOCAL	b4b, b5b, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b, c6b, c7a, c7b, c8b, c9b
 	LOCAL	pass2, endlp, yes_fft
@@ -5311,7 +5311,6 @@ c7b:	x4cl_four_complex_unfft rsi, 64, 2*clmblkdst, 4*clmblkdst
 	mov	rdi, sincos3		;; Load sin/cos pointer
 	mov	rbx, sincos4		;; Load sin/cos pointer
 	mov	eax, 8			;; 8 iterations 
-	xfive_reals_unfft_preload	;; Preload consts for five real macros
 
 c2a:	xtouchlines 8			;; Preload TLBs
 
@@ -5350,6 +5349,7 @@ c3b:	x4cl_four_complex_unfft_screg rsi, 64, 2*clmblkdst8, 4*clmblkdst8, rbx
 	lea	rbx, [rbx-2*XMM_SCD]	;; Restore sine/cosine pointer
 
 	lea	rsi, [rsi-2*8*clmblkdst8-4*clmblkdst8];; Restore source pointer
+	xfive_reals_unfft_preload	;; Preload consts for five real macros
 c1b:	x5cl_five_reals_last_unfft rsi, 64, 4*clmblkdst8
 	xloop1sp c1b, clmblkdst8
 	add	ah, 256/4
@@ -5474,10 +5474,10 @@ pfing	lea	rcx, [rcx+60*blkdst]	;; Create prefetching pointer
 	mov	rbx, sincos3		;; Load sin/cos pointer
 	mov	eax, 2			;; 16 iterations
 	sub	rdx, rdx
-	xfive_reals_fft_preload		;; Preload consts for five real macros
 
 b1a:	xtouchlines 4			;; Preload TLBs
 
+b1aa:	xfive_reals_fft_preload		;; Preload consts for five real macros
 b1b:	x5cl_five_reals_fft rsi, 64, 4*clmblkdst8
 	xloop1sp b1b, 2*clmblkdst8
 	add	ah, 256/2
@@ -5517,7 +5517,7 @@ b5b:	x2cl_two_complex_fft_screg rsi, 64, 2*clmblkdst8, rbx
 	lea	rsi, [rsi-5*4*clmblkdst8+2*64];; Next source pointer
 	lea	rcx, [rcx-4*blkdst+128];; Next prefetch pointer
 	add	dl, 256/clm		;; clm iterations
-	jnc	b1b
+	jnc	b1aa
 	bump	rsi, -clm*2*64+clmblkdst;; Next source pointer
 	lea	rcx, [rcx-clm*128+4*blkdst];; Next prefetch pointer
 	ELSE
@@ -8178,7 +8178,7 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 ;; does 11 levels, pass 2 uses common code to perform the last 11 levels.
 
 xpass1sclevels11pfa5 MACRO pass2_macro, p2cl, clmarg
-	LOCAL	b0b, b1a, b1b, b2b, b3b, b4b, b5b, b6b, b7a, b7b, b8b, b9b
+	LOCAL	b0b, b1a, b1aa, b1b, b2b, b3b, b4b, b5b, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b
 	LOCAL	c5a, c5b, c6b, c7a, c7b, c8b, c9b
 	LOCAL	pass2, endlp, yes_fft
@@ -8403,7 +8403,6 @@ c5b:	x4cl_four_complex_unfft rsi, 64, clmblkdst8, 2*clmblkdst8
 	start_timer 19
 	mov	rdi, sincos4		;; Load sin/cos pointer
 	mov	al, 4			;; 32 iterations
-	xfive_reals_unfft_preload	;; Preload consts for five real macros
 
 c2a:	xtouchlines 3			;; Preload TLBs
 
@@ -8424,6 +8423,7 @@ pfing	lea	rcx, [rcx+blkdst]	;; Next prefetch pointer
 	lea	rdi, [rdi-2*XMM_SCD]	;; Restore sine/cosine pointer
 
 	lea	rsi, [rsi-2*16*clmblkdst8-8*clmblkdst8];; Restore src pointer
+	xfive_reals_unfft_preload	;; Preload consts for five real macros
 c1b:	x5cl_five_reals_last_unfft rsi, 64, 8*clmblkdst8
 	xloop1sp c1b, 4*clmblkdst8
 	add	ah, 256/2
@@ -8551,10 +8551,10 @@ pfing	lea	rcx, [rcx+170*blkdst]	;; Create prefetching pointer
 	mov	rbx, sincos3		;; Load sin/cos pointer
 	mov	eax, 2			;; 16 iterations
 	sub	rdx, rdx
-	xfive_reals_fft_preload		;; Preload consts for five real macros
 
 b1a:	xtouchlines 7			;; Preload TLBs
 
+b1aa:	xfive_reals_fft_preload		;; Preload consts for five real macros
 b1b:	x5cl_five_reals_fft rsi, 64, 8*clmblkdst8
 	xloop1sp b1b, 2*clmblkdst8
 	add	ah, 256/4		;; Test inner loop counter
@@ -8602,7 +8602,7 @@ b5b:	x4cl_four_complex_fft_screg rsi, 64, 2*clmblkdst8, 4*clmblkdst8, rbx
 	lea	rsi, [rsi-5*8*clmblkdst8+2*64];; Next source pointer
 	lea	rcx, [rcx-7*blkdst+128];; Next prefetch pointer
 	add	dl, 256/clm		;; clm iterations
-	jnc	b1b
+	jnc	b1aa
 	bump	rsi, -clm*2*64+clmblkdst;; Next source pointer
 	lea	rcx, [rcx-clm*128+7*blkdst];; Next prefetch pointer
 	ELSE
@@ -11328,7 +11328,7 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 ;; does 12 levels, pass 2 uses common code to perform the last 11 levels.
 
 xpass1sclevels12pfa5 MACRO pass2_macro, p2cl, clmarg
-	LOCAL	b0b, b1a, b1b, b2b, b3b
+	LOCAL	b0b, b1a, b1aa, b1b, b2b, b3b
 	LOCAL	b4b, b4c, b5b, b5c, b5d, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b
 	LOCAL	c4b, c4c, c5b, c5c, c5d, c6b, c7a, c7b, c8b, c9b
@@ -11579,7 +11579,6 @@ c5d:	x4cl_four_complex_unfft rsi, 64, clmblkdst8, 2*clmblkdst8
 	mov	rdi, sincos4		;; Load sin/cos pointer
 	mov	rbx, sincos5		;; Load sin/cos pointer
 	mov	eax, 4			;; 4 iterations 
-	xfive_reals_unfft_preload	;; Preload consts for five real macros
 
 c2a:	xtouchlines 6			;; Preload TLBs
 
@@ -11616,6 +11615,7 @@ c3b:	x4cl_four_complex_unfft_screg rsi, 64, 8*clmblkdst8, 16*clmblkdst8, rbx
 	lea	rbx, [rbx-2*XMM_SCD]	;; Restore sine/cosine pointer
 
 	lea	rsi, [rsi-2*32*clmblkdst8-16*clmblkdst8];; Restore src pointer
+	xfive_reals_unfft_preload	;; Preload consts for five real macros
 c1b:	x5cl_five_reals_last_unfft rsi, 64, 16*clmblkdst8
 	xloop1sp c1b, 4*clmblkdst8
 	add	ah, 256/4
@@ -11743,10 +11743,10 @@ pfing	lea	rcx, [rcx+337*blkdst]	;; Create prefetching pointer
 	mov	rbx, sincos4		;; Load sin/cos pointer
 	mov	eax, 8			;; 8 iterations
 	sub	rdx, rdx
-	xfive_reals_fft_preload		;; Preload consts for five real macros
 
 b1a:	xtouchlines 3			;; Preload TLBs
 
+b1aa:	xfive_reals_fft_preload		;; Preload consts for five real macros
 b1b:	x5cl_five_reals_fft rsi, 64, 16*clmblkdst8
 	xloop1sp b1b, 8*clmblkdst8
 	add	ah, 256/2
@@ -11784,7 +11784,7 @@ b5b:	x2cl_two_complex_fft_screg rsi, 64, 8*clmblkdst8, rbx
 	lea	rsi, [rsi-5*16*clmblkdst8+2*64];; Next source pointer
 	lea	rcx, [rcx-3*blkdst+128];; Next prefetch pointer
 	add	dl, 256/clm		;; clm iterations
-	jnc	b1b
+	jnc	b1aa
 	bump	rsi, -clm*2*64+clmblkdst;; Next source pointer
 	lea	rcx, [rcx-clm*128+3*blkdst];; Next prefetch pointer
 	ELSE

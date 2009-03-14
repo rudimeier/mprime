@@ -255,6 +255,7 @@ xprefetcht1 MACRO addr
 	prefetchw addr[64]
 	ELSE
 	prefetcht1 addr
+	prefetcht1 addr[64]		;;; good for Core 2
 	ENDIF
 	ENDIF
 	ENDM

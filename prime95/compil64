@@ -11,7 +11,7 @@ masm64lx=ml64 /c /DX86_64 /DLINUX64 /I..\gwnum
 
 cl64=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /c
 cl64d=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Zi /c
-objconv=c:/objconv/objconv
+objconv=c:\objconv\objconv
 
 # List of all buildables in this makefile
 
@@ -28,6 +28,8 @@ linux64\factor64.o: factor64.asm
     $(masm64lx) /Folinux64\factor64.obj factor64.asm
     $(objconv) -felf64 linux64\factor64.obj linux64\factor64.o
     attrib -r linux64\factor64.o
+    $(objconv) -fmacho64 -nu+ linux64\factor64.obj macosx64\factor64.o
+    attrib -r macosx64\factor64.o
     del linux64\factor64.obj
 
 # Compile special services code

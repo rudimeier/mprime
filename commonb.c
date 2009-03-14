@@ -853,8 +853,7 @@ int are_threads_using_lots_of_memory (
 
 /* Each worker thread tells us how much memory it will be using.  This may */
 /* cause other worker threads to restart if they are using more than their */
-/* fair share. NOTE: This mem routine takes its argument in bytes */
-/* rather than megabytes. */
+/* fair share. */
 /* Variable usage callers must examine the return code!  During startup */
 /* all threads may not have determined their memory needs.  This routine */
 /* returns TRUE if caller should recalculate the amount of memory available */
@@ -865,7 +864,7 @@ int set_memory_usage (
 	int	thread_num,
 	int	flags,		/* Valid values are MEM_VARIABLE_USAGE */
 				/* and MEM_USAGE_NOT_SET */
-	unsigned long memory)	/* Memory in use (in bytes!!) */
+	unsigned long memory)	/* Memory in use (in MB) */
 {
 	int	i, best_thread, worst_thread, all_threads_set;
 	unsigned long mem_usage;
@@ -894,7 +893,7 @@ int set_memory_usage (
 
 /* Record the amount of memory being used */
 
-	MEM_IN_USE[thread_num] = (memory >> 20) + 1;
+	MEM_IN_USE[thread_num] = memory;
 
 /* Sum up the amount of memory used by all threads.  In case we've allocated */
 /* too much memory, select a variable thread to restart.  We do this to make */
@@ -1060,10 +1059,10 @@ unsigned int max_mem (void)
 
 int avail_mem (
 	int	thread_num,
-	unsigned long minimum_memory,	/* If this much memory (in bytes!) */
+	unsigned long minimum_memory,	/* If this much memory (in MB) */
 					/* can be returned without restarting other */
 					/* workers, then do so */
-	unsigned long desired_memory,	/* If this much memory (in bytes!) */
+	unsigned long desired_memory,	/* If this much memory (in MB) */
 					/* can be returned without restarting other */
 					/* workers, then do so */
 	unsigned int *memory)		/* Returned available memory, in MB */
@@ -1107,7 +1106,6 @@ int avail_mem (
 /* value this routine should return (for this thread and other threads) */
 
 	MEM_FLAGS[thread_num] |= MEM_WILL_BE_VARIABLE_USAGE;
-	desired_memory = (desired_memory >> 20) + 1;
 	MEM_IN_USE[thread_num] = desired_memory;
 
 /* If any workers have not yet set their memory usage, then wait for them */
@@ -1195,7 +1193,6 @@ int avail_mem (
 
 /* If there weren't enough memory available, try again later */
 
-	minimum_memory = (minimum_memory >> 20) + 1;
 	if (avail < minimum_memory)
 		return (avail_mem_not_sufficient (thread_num, minimum_memory, desired_memory));
 
@@ -1412,14 +1409,18 @@ void implement_stop_battery (
 	OutputStr (thread_num, "Worker stopped while on battery power.\n");
 	ChangeIcon (thread_num, IDLE_ICON);
 
-/* Wait for AC power */
+/* Wait for AC power.  In case AC power was restored before we got here */
+/* (LL save files can take some time to generate), do not wait.  The timer */
+/* that would trigger the wait event has already fired.  */
 
-	OFF_BATTERY_OR_STOP_INITIALIZED[thread_num] = 1;
-	gwevent_init (&OFF_BATTERY_OR_STOP[thread_num]);
-	gwevent_reset (&OFF_BATTERY_OR_STOP[thread_num]);
-	gwevent_wait (&OFF_BATTERY_OR_STOP[thread_num], 0);
-	gwevent_destroy (&OFF_BATTERY_OR_STOP[thread_num]);
-	OFF_BATTERY_OR_STOP_INITIALIZED[thread_num] = 0;
+	if (OnBattery ()) {
+		OFF_BATTERY_OR_STOP_INITIALIZED[thread_num] = 1;
+		gwevent_init (&OFF_BATTERY_OR_STOP[thread_num]);
+		gwevent_reset (&OFF_BATTERY_OR_STOP[thread_num]);
+		gwevent_wait (&OFF_BATTERY_OR_STOP[thread_num], 0);
+		gwevent_destroy (&OFF_BATTERY_OR_STOP[thread_num]);
+		OFF_BATTERY_OR_STOP_INITIALIZED[thread_num] = 0;
+	}
 
 /* Output message, change title and icon */
 
@@ -2855,6 +2856,268 @@ check_stop_code:
 	}
 }
 
+/*************************/
+/* Common save file code */
+/*************************/
+
+/* Internal routine to atomicly test for a unique file name.  If it is */
+/* unique it is added to the list of save file names in use. */
+
+int testUniqueFileName (
+	int	thread_num,
+	char	*filename)
+{
+static	int	SAVEFILE_MUTEX_INITIALIZED = FALSE;
+static	gwmutex	SAVEFILE_MUTEX;
+static	char	USED_FILENAMES[MAX_NUM_WORKER_THREADS][32];
+	int	i;
+
+/* Initialize the lock and used file array */
+
+	if (!SAVEFILE_MUTEX_INITIALIZED) {
+		SAVEFILE_MUTEX_INITIALIZED = 1;
+		gwmutex_init (&SAVEFILE_MUTEX);
+		for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) USED_FILENAMES[i][0] = 0;
+	}
+
+/* Scan array to see if the save file names is in use by another thread. */
+
+	gwmutex_lock (&SAVEFILE_MUTEX);
+	for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
+		if (i != thread_num &&
+		    strcmp (filename, USED_FILENAMES[i]) == 0) {
+			gwmutex_unlock (&SAVEFILE_MUTEX);
+			return (FALSE);
+		}
+	}
+
+/* File name not in use, add the name to the array. */
+
+	strcpy (USED_FILENAMES[thread_num], filename);
+	gwmutex_unlock (&SAVEFILE_MUTEX);
+	return (TRUE);
+}
+
+/* Multiple workers can do ECM on the same number.  This causes problems */
+/* because the two threads try to use the same save file.  We work around */
+/* the problem here, by making sure each worker has a unique save file name. */
+
+void uniquifySaveFile (
+	int	thread_num,
+	char	*filename)
+{
+	char	original_filename[32];
+	int	i;
+
+/* Our first preference is to use the save file name without any extensions */
+
+	if (testUniqueFileName (thread_num, filename)) return;
+
+/* Nuts, it is in use.  We must generate a filename with an extension */
+
+	strcpy (original_filename, filename);
+
+/* Our second preference is to use an existing save file with an extension */
+/* consisting of this thread number */
+
+	sprintf (filename, "%s_%d", original_filename, thread_num+1);
+	if (fileExists (filename) && testUniqueFileName (thread_num, filename)) return;
+
+/* Our third preference is to use any existing save file */
+
+	for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
+		sprintf (filename, "%s_%d", original_filename, i+1);
+		if (fileExists (filename) && testUniqueFileName (thread_num, filename)) return;
+	}
+
+/* Our fourth preference is to use an extension consisting of this thread number */
+
+	sprintf (filename, "%s_%d", original_filename, thread_num+1);
+	if (testUniqueFileName (thread_num, filename)) return;
+
+/* Our final preference is to use any thread number as an extension */
+
+	for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
+		sprintf (filename, "%s_%d", original_filename, i+1);
+		if (testUniqueFileName (thread_num, filename)) return;
+	}
+}
+
+/* Prepare for reading save files.  Return TRUE if the save file or one */
+/* of its backups exists.  If using one of the backups, rename it properly. */
+
+int saveFileExists (
+	int	thread_num,
+	char	*filename)
+{
+	char	backupname[32];
+	char	buf[120];
+
+/* If the save file exists, use it */
+
+	if (fileExists (filename)) return (TRUE);
+
+/* If the second save file exists, use it */
+
+	sprintf (backupname, "%s.bu", filename);
+	if (fileExists (backupname)) goto winner;
+
+/* If the third save file exists, use it */
+
+	sprintf (backupname, "%s.bu2", filename);
+	if (fileExists (backupname)) goto winner;
+
+/* If the save file created during writing and before renaming exists, use it */
+
+	sprintf (backupname, "%s.write", filename);
+	if (fileExists (backupname)) goto winner;
+
+/* In v24 we changed the first letter of the save file name.  We no longer do */
+/* this but we'll use them if we find them. */
+
+	if (filename[0] == 'p') {
+		sprintf (backupname, "q%s", filename+1);
+		if (fileExists (backupname)) goto winner;
+		sprintf (backupname, "r%s", filename+1);
+		if (fileExists (backupname)) goto winner;
+	}
+
+/* No useable save file found */
+
+	return (FALSE);
+
+/* We found a useable backup file.  Rename it and output a message. */
+
+winner:	sprintf (buf, RENAME_MSG, backupname, filename);
+	OutputBoth (thread_num, buf);
+	rename (backupname, filename);
+	return (TRUE);
+}
+
+/* Open the save file for writing.  Either overwrite or generate a temporary */
+/* file name to write to, where we will rename the file after the file is */
+/* successully written. */
+
+int openWriteSaveFile (
+	char	*filename,
+	int	num_backup_files)	     /* Between 1 and 3, 99 = overwrite */
+{
+	char	output_filename[32];
+	int	fd;
+
+/* If we are allowed to create multiple intermediate files, then use a .write extension */
+/* The value 99, not accessible via the GUI, is a special value meaning overwrite the */
+/* existing save file -- a very dangerous choice.  You might use this for a floppy or */
+/* small USB stick installation where there is no room for two save files. */
+/* NOTE: This behavior is different than v24 where when the user selected one save */
+/* file, then he got the dangerous overwrite option. */
+	
+	if (num_backup_files == 99)
+		strcpy (output_filename, filename);
+	else
+		sprintf (output_filename, "%s.write", filename);
+
+/* Now save to the intermediate file */
+
+	fd = _open (output_filename, _O_BINARY | _O_WRONLY | _O_TRUNC | _O_CREAT, CREATE_FILE_ACCESS);
+	return (fd);
+}
+
+/* Close the save file we finished writing.  If necessary, delete old */
+/* save file, and rename just written save file. */
+
+void closeWriteSaveFile (
+	char	*filename,
+	int	fd,
+	int	num_backup_files)	     /* Between 1 and 3, 99 = overwrite */
+{
+	char	output_filename[32];
+
+/* Flush data to disk and close the save file. */
+
+	_commit (fd);
+	_close (fd);
+
+/* If no renaming is needed, we're done */
+
+	if (num_backup_files == 99) return;
+
+/* Handle the one save file case (delete the existing save file) */
+
+	if (num_backup_files == 1)
+		_unlink (filename);
+
+/* Handle the two save files case (delete the second save file and */
+/* rename the first save file so that it is now the second save file) */
+
+	else if (num_backup_files == 2) {
+		char	second_filename[32];
+		sprintf (second_filename, "%s.bu", filename);
+		_unlink (second_filename);
+		rename (filename, second_filename);
+	}
+
+/* Handle the three save files case (delete the third save file and */
+/* rename the second save file so that it is now the third save file */
+/* and rename the first save file so that it is now the second save file) */
+
+	else {
+		char	second_filename[32], third_filename[32];
+		sprintf (second_filename, "%s.bu", filename);
+		sprintf (third_filename, "%s.bu2", filename);
+		_unlink (third_filename);
+		rename (second_filename, third_filename);
+		rename (filename, second_filename);
+	}
+
+/* Recreate the output filename and rename it as the first save file */
+
+	sprintf (output_filename, "%s.write", filename);
+	rename (output_filename, filename);
+}
+
+/* Close and delete the save file we were writing.  This is done */
+/* when an error occurs while writing the save file. */
+
+void deleteWriteSaveFile (
+	char	*filename,
+	int	fd,
+	int	num_backup_files)	     /* Between 1 and 3, 99 = overwrite */
+{
+	char	output_filename[32];
+
+/* Close and delete the save file */
+
+	_close (fd);
+	if (num_backup_files == 99)
+		strcpy (output_filename, filename);
+	else
+		sprintf (output_filename, "%s.write", filename);
+	_unlink (output_filename);
+}
+
+/* Delete save files when work unit completes. */
+
+void unlinkSaveFiles (
+	char	*filename)
+{
+	char	unlink_filename[32];
+
+	sprintf (unlink_filename, "%s.write", filename);
+	_unlink (unlink_filename);
+	sprintf (unlink_filename, "%s.bu2", filename);
+	_unlink (unlink_filename);
+	sprintf (unlink_filename, "%s.bu", filename);
+	_unlink (unlink_filename);
+	if (filename[0] == 'p') {
+		sprintf (unlink_filename, "q%s", filename+1);
+		_unlink (unlink_filename);
+		sprintf (unlink_filename, "r%s", filename+1);
+		_unlink (unlink_filename);
+	}
+	_unlink (filename);
+}
+
 /************************/
 /* Trial Factoring code */
 /************************/
@@ -3030,16 +3293,16 @@ int factorAndVerify (
 	fachandle *facdata,
 	int	*res)
 {
-	unsigned long hsw, msw;
+	uint32_t hsw, msw, pass;
 	int	stop_reason;
 
 /* Remember starting point in case of an error */
 
+	pass = facdata->asm_data->FACPASS;
 	hsw = facdata->asm_data->FACHSW;
 	msw = facdata->asm_data->FACMSW;
 
 /* Call assembly code */
-
 
 loop:	*res = factorChunk (facdata);
 
@@ -3072,7 +3335,12 @@ loop:	*res = factorChunk (facdata);
 		if (*res) return (0);
 	}
 
-/* If factor is no good, print an error message, sleep, and */
+/* Set *res to the factor-not-found code in case the user hits ESC */
+/* while doing the SleepFive */
+
+	*res = 2;
+
+/* If factor is no good, print an error message, sleep, re-initialize and */
 /* restart the factoring code. */
 
 	OutputBoth (thread_num, "ERROR: Incorrect factor found.\n");
@@ -3080,9 +3348,10 @@ loop:	*res = factorChunk (facdata);
 	facdata->asm_data->FACMSW = msw;
 	stop_reason = SleepFive (thread_num);
 	if (stop_reason) return (stop_reason);
+	factorDone (facdata);
 	stop_reason = factorSetup (thread_num, p, facdata);
 	if (stop_reason) return (stop_reason);
-	stop_reason = factorPassSetup (thread_num, p, facdata);
+	stop_reason = factorPassSetup (thread_num, pass, facdata);
 	if (stop_reason) return (stop_reason);
 	goto loop;
 }
@@ -3155,7 +3424,7 @@ int primeFactor (
 
 /* Record the amount of memory being used by this thread (1MB). */
 
-	set_memory_usage (thread_num, 0, 1 << 20);
+	set_memory_usage (thread_num, 0, 1);
 
 /* Check for a v24 continuation file.  These were named pXXXXXXX.  The */
 /* first 16 bits contained a 2 to distinguish it from a LL save file. */
@@ -3201,11 +3470,12 @@ int primeFactor (
 /* Read v25+ continuation file */
 
 	filename[0] = 'f';
-	if (!continuation &&
-	    (fd = _open (filename, _O_BINARY | _O_RDONLY)) > 0) {
+	while (!continuation && saveFileExists (thread_num, filename)) {
 		unsigned long version, sum, fachsw, facmsw;
 
-		if (read_magicnum (fd, FACTOR_MAGICNUM) &&
+		fd = _open (filename, _O_BINARY | _O_RDONLY);
+		if (fd > 0 &&
+		    read_magicnum (fd, FACTOR_MAGICNUM) &&
 		    read_header (fd, &version, w, &sum) &&
 		    version == FACTOR_VERSION &&
 		    read_long (fd, (unsigned long *) &factor_found, NULL) &&
@@ -3244,11 +3514,11 @@ int primeFactor (
 /* If we did, the client would spend more CPU time sending messages to the */
 /* server than actually factoring numbers.  Here we calculate the threshold */
 /* where we'll start reporting results one bit at time.  We've arbitrarily */
-/* chosen the difficulty in trial factoring M80000000 to 2^60 as the */
+/* chosen the difficulty in trial factoring M100000000 to 2^62 as the */
 /* point where it is worthwhile to report results one bit at a time. */
 
 	report_bits = (unsigned long)
-		(60.0 + log ((double) p / 80000000.0) / log (2.0));
+		(62.0 + log ((double) p / 100000000.0) / log (2.0));
 	if (report_bits >= test_bits) report_bits = test_bits;
 
 /* Loop testing larger and larger factors until we've tested to the */
@@ -3416,17 +3686,22 @@ int primeFactor (
 /* If an escape key was hit, write out the results and return */
 
 			if (stop_reason || testSaveFilesFlag (thread_num)) {
-				fd = _open (filename, _O_BINARY | _O_WRONLY | _O_CREAT, CREATE_FILE_ACCESS);
-				write_header (fd, FACTOR_MAGICNUM, FACTOR_VERSION, w);
-				write_long (fd, factor_found, NULL);
-				write_long (fd, bits, NULL);
-				write_long (fd, pass, NULL);
-				write_long (fd, facdata.asm_data->FACHSW, NULL);
-				write_long (fd, facdata.asm_data->FACMSW, NULL);
-				write_long (fd, endpthi, NULL);
-				write_long (fd, endptlo, NULL);
-				_commit (fd);
-				_close (fd);
+				fd = openWriteSaveFile (filename, NUM_BACKUP_FILES);
+				if (fd > 0 &&
+				    write_header (fd, FACTOR_MAGICNUM, FACTOR_VERSION, w) &&
+				    write_long (fd, factor_found, NULL) &&
+				    write_long (fd, bits, NULL) &&
+				    write_long (fd, pass, NULL) &&
+				    write_long (fd, facdata.asm_data->FACHSW, NULL) &&
+				    write_long (fd, facdata.asm_data->FACMSW, NULL) &&
+				    write_long (fd, endpthi, NULL) &&
+				    write_long (fd, endptlo, NULL))
+					closeWriteSaveFile (filename, fd, NUM_BACKUP_FILES);
+				else {
+					sprintf (buf, WRITEFILEERR, filename);
+					OutputBoth (thread_num, buf);
+					if (fd > 0) deleteWriteSaveFile (filename, fd, NUM_BACKUP_FILES);
+				}
 				if (stop_reason) {
 					factorDone (&facdata);
 					return (stop_reason);
@@ -3567,9 +3842,9 @@ nextpass:	;
 
 	factorDone (&facdata);
 
-/* Delete the continuation file */
+/* Delete the continuation file(s) */
 
-	_unlink (filename);
+	unlinkSaveFiles (filename);
 
 /* If we found a factor, then we likely performed much less work than */
 /* we estimated.  Make sure we do not update the rolling average with */
@@ -3694,35 +3969,6 @@ int generateResidue64 (
 	return (1);
 }
 
-/* Return TRUE if a continuation file exists.  If one does exist, */
-/* make sure it is named pXXXXXXX. */
-
-int continuationFileExists (
-	int	thread_num,
-	char	*filename)
-{
-	char	backupname[32];
-	char	buf[80];
-
-	if (fileExists (filename)) return (TRUE);
-	strcpy (backupname, filename);
-	backupname[0] = 'q';
-	if (fileExists (backupname)) {
-		sprintf (buf, RENAME_MSG, backupname, filename);
-		OutputBoth (thread_num, buf);
-		rename (backupname, filename);
-		return (TRUE);
-	}
-	backupname[0] = 'r';
-	if (fileExists (backupname)) {
-		sprintf (buf, RENAME_MSG, backupname, filename);
-		OutputBoth (thread_num, buf);
-		rename (backupname, filename);
-		return (TRUE);
-	}
-	return (FALSE);
-}
-
 /* Read the data portion of an intermediate Lucas-Lehmer results file */
 
 int convertOldStyleLLSaveFile (
@@ -3815,6 +4061,7 @@ err:	_close (fd);
 int writeLLSaveFile (
 	llhandle *lldata,
 	char	*filename,
+	int	num_backup_files,	     /* Between 1 and 3, 99 = overwrite */
 	struct work_unit *w,
 	unsigned long counter,
 	unsigned long error_count)
@@ -3822,15 +4069,9 @@ int writeLLSaveFile (
 	int	fd;
 	unsigned long sum = 0;
 
-/* If we are allowed to create multiple intermediate files, then */
-/* write to a file called rXXXXXXX. */
+/* Open the save file */
 
-	if (TWO_BACKUP_FILES && strlen (filename) == 8)
-		filename[0] = 'r';
-
-/* Now save to the intermediate file */
-
-	fd = _open (filename, _O_BINARY | _O_WRONLY | _O_TRUNC | _O_CREAT, CREATE_FILE_ACCESS);
+	fd = openWriteSaveFile (filename, num_backup_files);
 	if (fd < 0) return (FALSE);
 
 	if (!write_header (fd, LL_MAGICNUM, LL_VERSION, w)) goto err;
@@ -3842,27 +4083,12 @@ int writeLLSaveFile (
 
 	if (!write_checksum (fd, sum)) goto err;
 
-	_commit (fd);
-	_close (fd);
-
-/* Now rename the intermediate files */
-
-	if (TWO_BACKUP_FILES && strlen (filename) == 8) {
-		char	backupname[16];
-		strcpy (backupname, filename);
-		backupname[0] = 'q'; filename[0] = 'p';
-		_unlink (backupname);
-		 rename (filename, backupname);
-		backupname[0] = 'r';
-		rename (backupname, filename);
-	}
-
+	closeWriteSaveFile (filename, fd, num_backup_files);
 	return (TRUE);
 
 /* An error occured.  Delete the current file. */
 
-err:	_close (fd);
-	_unlink (filename);
+err:	deleteWriteSaveFile (filename, fd, num_backup_files);
 	return (FALSE);
 }
 
@@ -4302,14 +4528,9 @@ int prime (
 	}
 #endif
 
-/* Loop reading from save files (and backup save files) */
-
-readloop:
-	tempFileName (w, filename);
-
 /* Setup the LL test */
 
-	gwinit (&lldata.gwdata);
+begin:	gwinit (&lldata.gwdata);
 	gwset_num_threads (&lldata.gwdata, THREADS_PER_TEST[thread_num]);
 	gwset_thread_callback (&lldata.gwdata, SetAuxThreadPriority);
 	gwset_thread_callback_data (&lldata.gwdata, sp_info);
@@ -4318,27 +4539,35 @@ readloop:
 
 /* Record the amount of memory being used by this thread. */
 
-	set_memory_usage (thread_num, 0,
-			  gwmemused (&lldata.gwdata) + gwnum_size (&lldata.gwdata));
+	set_memory_usage (thread_num, 0, cvt_gwnums_to_mem (&lldata.gwdata, 1));
 
-/* Read an LL save file.  On error try the backup intermediate file. */
+/* Loop reading from save files (and backup save files) */
 
-	if (continuationFileExists (thread_num, filename)) {
-		if (! readLLSaveFile (&lldata, filename, w, &counter, &error_count) ||
-		    counter > w->n) {
-			lucasDone (&lldata);
-			sprintf (buf, READFILEERR, filename);
-			OutputBoth (thread_num, buf);
-			_unlink (filename);
-			goto readloop;
+	tempFileName (w, filename);
+	for ( ; ; ) {
+
+/* If there are no more save files, start off with the 1st Lucas number. */
+
+		if (! saveFileExists (thread_num, filename)) {
+			counter = 2;
+			error_count = 0;
+			first_iter_msg = FALSE;
+			break;
 		}
-	}
 
-/* Start off with the 1st Lucas number */
+/* Read an LL save file.  If successful, break out of loop. */
 
-	else {
-		counter = 2;
-		error_count = 0;
+		if (readLLSaveFile (&lldata, filename, w, &counter, &error_count) &&
+		    counter <= w->n) {
+			first_iter_msg = TRUE;
+			break;
+		}
+
+/* On read error, output message and loop to try the next backup save file. */
+
+		sprintf (buf, READFILEERR, filename);
+		OutputBoth (thread_num, buf);
+		_unlink (filename);
 	}
 
 /* Hyperthreading backoff is an option to pause the program when iterations */
@@ -4382,9 +4611,7 @@ readloop:
 		for (i = 0; i < gwfftlen (&lldata.gwdata); i++) {
 			set_fft_value (&lldata.gwdata, lldata.lldata, i, (i == word) ? (1L << bit_in_word) : 0);
 		}
-		first_iter_msg = FALSE;
-	} else
-		first_iter_msg = TRUE;
+	}
 
 /* Output a message indicating we are starting/resuming an LL test. */
 /* Also tell user the FFT length. */
@@ -4555,7 +4782,7 @@ readloop:
 #ifndef SERVER_TESTING
 		if (*addr1 == 0.0 && p > 1000 &&
 		    counter > 50 && counter < p-2 && counter != last_counter) {
-			unsigned long i;		
+			unsigned long i;
 			for (i = 2; ; i++) {
 				if (*addr (&lldata.gwdata, lldata.lldata, i) != 0.0) break;
 				if (i == 50) {
@@ -4627,8 +4854,8 @@ readloop:
 /* disk-full situation) */
 
 		if (saving) {
-			if (! writeLLSaveFile (&lldata, filename, w, counter,
-					       error_count)) {
+			if (! writeLLSaveFile (&lldata, filename, NUM_BACKUP_FILES,
+					       w, counter, error_count)) {
 				sprintf (buf, WRITEFILEERR, filename);
 				OutputBoth (thread_num, buf);
 			}
@@ -4663,11 +4890,11 @@ readloop:
 /* Write a save file every INTERIM_FILES iterations. */
 
 		if (INTERIM_FILES && counter % INTERIM_FILES == 0) {
-			char	interimfile[20];
-			sprintf (interimfile, "%.8s.%03d",
+			char	interimfile[32];
+			sprintf (interimfile, "%s.%03ld",
 				 filename, counter / INTERIM_FILES);
-			writeLLSaveFile (&lldata, interimfile, w, counter,
-				         error_count);
+			writeLLSaveFile (&lldata, interimfile, 99, w,
+					 counter, error_count);
 		}
 
 /* If ten iterations take 40% longer than a typical iteration, then */
@@ -4744,9 +4971,7 @@ readloop:
 /* was successful. */
 
 	if (!isPrime || isKnownMersennePrime (p)) {
-		if (rc) _unlink (filename);
-		filename[0] = 'q';
-		_unlink (filename);
+		if (rc) unlinkSaveFiles (filename);
 	}
 
 /* Clean up */
@@ -4784,7 +5009,7 @@ restart:if (sleep5) OutputBoth (thread_num, ERRMSG2);
 /* Return so that last continuation file is read in */
 
 	lucasDone (&lldata);
-	goto readloop;
+	goto begin;
 }
 
 /*********************/
@@ -5225,7 +5450,7 @@ int selfTest (
 {
 	unsigned long fftlen;
 	char	iniName[32];
-	int	self_test_errors, self_test_warnings;
+	int	tests_completed, self_test_errors, self_test_warnings;
 
 /* What fft length are we running? */
 
@@ -5255,10 +5480,11 @@ int selfTest (
 
 /* Do the self test */
 
+	tests_completed = 0;
 	self_test_errors = 0;
 	self_test_warnings = 0;
 	return (selfTestInternal (thread_num, sp_info, fftlen, 60, NULL, 0, NULL,
-				  &self_test_errors, &self_test_warnings));
+				  &tests_completed, &self_test_errors, &self_test_warnings));
 }
 #endif
 
@@ -5271,7 +5497,7 @@ int tortureTest (
 	int	lengths[SELF_FFT_LENGTHS] = {1024,8,10,896,768,12,14,640,512,16,20,448,384,24,28,320,256,32,40,224,192,48,56,160,128,64,80,112,96,1280,1536,1792,2048,2560,3072,3584,4096,5120,6144,7168,8192,10240,12288,14336,16384,20480,24576,28672,32768};
 	int	data_index[SELF_FFT_LENGTHS] = {0};
 	int	min_fft, max_fft, test_time;
-	int	self_test_errors, self_test_warnings;
+	int	tests_completed, self_test_errors, self_test_warnings;
 	int	i, run_indefinitely, stop_reason;
 	time_t	start_time, current_time;
 	unsigned int memory;	/* Memory to use during torture test */
@@ -5285,9 +5511,15 @@ int tortureTest (
 	sp_info.num_threads = num_threads;
 	SetPriority (&sp_info);
 
+/* Init counters */
+
+	tests_completed = 0;
+	self_test_errors = 0;
+	self_test_warnings = 0;
+
 /* We used to support a menu option to run the self-test for an hour on */
 /* each FFT length.  If we ever decide to resupport this option, change */
-/* the run_indefiitely argument to an argument and change the output */
+/* the run_indefiitely variable to an argument and change the output */
 /* message below. */
 
 loop:	run_indefinitely = TRUE;
@@ -5307,15 +5539,13 @@ loop:	run_indefinitely = TRUE;
 	max_fft = IniGetInt (INI_FILE, "MaxTortureFFT", 4096);
 	memory = IniGetInt (INI_FILE, "TortureMem", 8);
 	while (memory > 8 && bigbuf == NULL) {
-		bigbuf = aligned_malloc (memory * 1000000, 128);
+		bigbuf = aligned_malloc ((size_t) memory * (size_t) 1048576, 128);
 		if (bigbuf == NULL) memory--;
 	}
 
 /* Now self-test each fft length */
 
 	stop_reason = 0;
-	self_test_errors = 0;
-	self_test_warnings = 0;
 	time (&start_time);
 	for ( ; ; ) {
 	    for (i = 0; i < SELF_FFT_LENGTHS; i++) {
@@ -5324,9 +5554,8 @@ loop:	run_indefinitely = TRUE;
 		stop_reason =
 			selfTestInternal (thread_num, &sp_info, lengths[i]*1024,
 					  test_time, &data_index[i],
-					  memory, bigbuf,
-					  &self_test_errors,
-					  &self_test_warnings);
+					  memory, bigbuf, &tests_completed,
+					  &self_test_errors, &self_test_warnings);
 		if (stop_reason) {
 			char	buf[120];
 			int	hours, minutes;
@@ -5334,7 +5563,7 @@ loop:	run_indefinitely = TRUE;
 			minutes = (int) (current_time - start_time) / 60;
 			hours = minutes / 60;
 			minutes = minutes % 60;
-			strcpy (buf, "Torture Test ran ");
+			sprintf (buf, "Torture Test completed %d tests in ", tests_completed);
 			if (hours)
 				sprintf (buf+strlen(buf), "%d hours, ", hours);
 			sprintf (buf+strlen(buf),
@@ -5373,6 +5602,7 @@ int selfTestInternal (
 	int	*torture_index,	/* Index into self test data array */
 	unsigned int memory,	/* MB of memory the torture test can use */
 	void	*bigbuf,	/* Memory block for the torture test */
+	int	*completed,	/* Returned count of tests completed */
 	int	*errors,	/* Returned count of self test errors */
 	int	*warnings)	/* Returned count of self test warnings */
 {
@@ -5470,7 +5700,7 @@ int selfTestInternal (
 		gwinit (&lldata.gwdata);
 		gwset_num_threads (&lldata.gwdata, num_threads);
 		lldata.gwdata.GW_BIGBUF = (char *) bigbuf;
-		lldata.gwdata.GW_BIGBUF_SIZE = (bigbuf != NULL) ? memory * 1000000 : 0;
+		lldata.gwdata.GW_BIGBUF_SIZE = (bigbuf != NULL) ? (size_t) memory * (size_t) 1048576 : 0;
 		if (cpu_supports_3dnow && p > 5000000 &&
 		    torture_index != NULL &&
 		    (test_data[i].reshi & 1) &&
@@ -5494,10 +5724,7 @@ int selfTestInternal (
 		if (memory <= 8 || (iter & 1) == 0)
 			num_gwnums = 1;
 		else {
-			num_gwnums = (unsigned int)
-				(((double) memory * 1000000.0 -
-				  (double) gwmemused (&lldata.gwdata)) /
-				 (double) (gwnum_size (&lldata.gwdata)));
+			num_gwnums = cvt_mem_to_gwnums (&lldata.gwdata, memory);
 			if (num_gwnums < 1) num_gwnums = 1;
 			if (num_gwnums > ll_iters) num_gwnums = ll_iters;
 		}
@@ -5613,6 +5840,7 @@ restart_test:	dbltogw (&lldata.gwdata, 4.0, lldata.lldata);
 		generateResidue64 (&lldata, &reshi, &reslo);
 		lucasDone (&lldata);
 		free (gwarray);
+		(*completed)++;
 		if (reshi != test_data[i].reshi) {
 			sprintf (buf, SELFFAIL, reshi, test_data[i].reshi);
 			OutputBoth (thread_num, buf);
@@ -6508,6 +6736,7 @@ int writePRPSaveFile (
 	gwhandle *gwdata,
 	gwnum	x,
 	char	*filename,
+	int	num_backup_files,	     /* Between 1 and 3, 99 = overwrite */
 	struct work_unit *w,
 	unsigned long counter,
 	unsigned long error_count)
@@ -6515,15 +6744,9 @@ int writePRPSaveFile (
 	int	fd;
 	unsigned long sum = 0;
 
-/* If we are allowed to create multiple intermediate files, then */
-/* write to a file called rXXXXXXX. */
-
-	if (TWO_BACKUP_FILES && strlen (filename) == 8)
-		filename[0] = 'r';
-
 /* Now save to the intermediate file */
 
-	fd = _open (filename, _O_BINARY | _O_WRONLY | _O_TRUNC | _O_CREAT, CREATE_FILE_ACCESS);
+	fd = openWriteSaveFile (filename, num_backup_files);
 	if (fd < 0) return (FALSE);
 
 	if (!write_header (fd, PRP_MAGICNUM, PRP_VERSION, w)) goto err;
@@ -6534,27 +6757,12 @@ int writePRPSaveFile (
 
 	if (!write_checksum (fd, sum)) goto err;
 
-	_commit (fd);
-	_close (fd);
-
-/* Now rename the intermediate files */
-
-	if (TWO_BACKUP_FILES && strlen (filename) == 8) {
-		char	backupname[16];
-		strcpy (backupname, filename);
-		backupname[0] = 'q'; filename[0] = 'p';
-		_unlink (backupname);
-		 rename (filename, backupname);
-		backupname[0] = 'r';
-		rename (backupname, filename);
-	}
-
+	closeWriteSaveFile (filename, fd, num_backup_files);
 	return (TRUE);
 
 /* An error occured.  Delete the current file. */
 
-err:	_close (fd);
-	_unlink (filename);
+err:	deleteWriteSaveFile (filename, fd, num_backup_files);
 	return (FALSE);
 }
 
@@ -6626,11 +6834,10 @@ int prp (
 /* regular work done in pass 2 if WellBehavedWork or SequentialWorkTodo */
 /* is set.  The only way we can get to pass 3 and P-1 still needs to be */
 /* done is if pfactor returned STOP_NOT_ENOUGH_MEM on an earlier pass. */
-/* In that case, skip onto doing the LL test until more memory becomes */
+/* In that case, skip onto doing the PRP test until more memory becomes */
 /* available. */
 
-	if ((w->work_type == WORK_TEST || w->work_type == WORK_DBLCHK) &&
-	    ! w->pminus1ed && pass != 3) {
+	if (w->work_type == WORK_PRP && ! w->pminus1ed && pass != 3) {
 		int	pass_to_pfactor;
 
 		pass_to_pfactor = (WELL_BEHAVED_WORK || SEQUENTIAL_WORK) ? 2 : 1;
@@ -6679,8 +6886,7 @@ begin:	gwinit (&gwdata);
 
 /* Record the amount of memory being used by this thread. */
 
-	set_memory_usage (thread_num, 0,
-			  gwmemused (&gwdata) + gwnum_size (&gwdata));
+	set_memory_usage (thread_num, 0, cvt_gwnums_to_mem (&gwdata, 1));
 
 /* Allocate memory for the PRP test */
 
@@ -6714,28 +6920,31 @@ begin:	gwinit (&gwdata);
 
 /* Loop reading from save files (and backup save files) */
 
-readloop:
 	tempFileName (w, filename);
+	for ( ; ; ) {
 
-/* Read a PRP save file.  On error try the backup save file. */
+/* If there are no more save files, start off with the 1st PRP squaring. */
 
-	if (continuationFileExists (thread_num, filename)) {
-		if (! readPRPSaveFile (&gwdata, x, filename, w, &counter, &error_count)) {
-			sprintf (buf, READFILEERR, filename);
-			OutputBoth (thread_num, buf);
-			_unlink (filename);
-			goto readloop;
+		if (! saveFileExists (thread_num, filename)) {
+			dbltogw (&gwdata, 3.0, x);
+			counter = 0;
+			error_count = 0;
+			first_iter_msg = FALSE;
+			break;
 		}
-		first_iter_msg = TRUE;
-	}
 
-/* Start off with the 1st PRP squaring */
+/* Read a PRP save file.  If successful, break out of loop. */
 
-	else {
-		dbltogw (&gwdata, 3.0, x);
-		counter = 0;
-		error_count = 0;
-		first_iter_msg = FALSE;
+		if (readPRPSaveFile (&gwdata, x, filename, w, &counter, &error_count)) {
+			first_iter_msg = TRUE;
+			break;
+		}
+
+/* On read error, output message and loop to try the next backup save file. */
+
+		sprintf (buf, READFILEERR, filename);
+		OutputBoth (thread_num, buf);
+		_unlink (filename);
 	}
 
 /* Output a message saying we are starting/resuming the PRP test. */
@@ -6993,8 +7202,8 @@ OutputStr (thread_num, "Iteration failed.\n");
 /* disk-full situation) */
 
 		if (saving) {
-			if (! writePRPSaveFile (&gwdata, x, filename, w,
-						counter, error_count)) {
+			if (! writePRPSaveFile (&gwdata, x, filename, NUM_BACKUP_FILES,
+						w, counter, error_count)) {
 				sprintf (buf, WRITEFILEERR, filename);
 				OutputBoth (thread_num, buf);
 			}
@@ -7031,11 +7240,11 @@ OutputStr (thread_num, "Iteration failed.\n");
 /* Write a save file every INTERIM_FILES iterations. */
 
 		if (INTERIM_FILES && counter % INTERIM_FILES == 0) {
-			char	interimfile[20];
-			sprintf (interimfile, "%.8s.%03d",
+			char	interimfile[32];
+			sprintf (interimfile, "%s.%03ld",
 				 filename, counter / INTERIM_FILES);
-			writePRPSaveFile (&gwdata, x, interimfile, w, counter,
-					  error_count);
+			writePRPSaveFile (&gwdata, x, interimfile, 99, w,
+					  counter, error_count);
 		}
 
 /* If ten iterations take 40% longer than a typical iteration, then */
@@ -7134,9 +7343,7 @@ pushg(&gwdata.gdata, 2);}
 
 /* Delete the continuation files. */
 
-	_unlink (filename);
-	filename[0] = 'q';
-	_unlink (filename);
+	unlinkSaveFiles (filename);
 
 /* Return work unit completed stop reason */
 

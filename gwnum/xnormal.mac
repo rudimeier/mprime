@@ -1,4 +1,4 @@
-; Copyright 2000-2007 - Mersenne Research, Inc.  All rights reserved.
+; Copyright 2000-2009 - Mersenne Research, Inc.  All rights reserved.
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -1412,15 +1412,17 @@ ttp	movapd	[rdi+256+192+48], xmm1	;; Save ttp * 0.5,0.5
 xnorm_2d MACRO ttp, zero, echk, const
 	movapd	xmm0, [rsi+0*16]	;; Load values1
 	addpd	xmm7, xmm0		;; sumout += values1
-	movapd	xmm2, [rbx][rax]	;; col two-to-minus-phi
-ttp	mulpd	xmm2, [rdx+0*32]	;; Mul by grp two-to-minus-phi
+ttp	movapd	xmm2, [rdx+0*32]	;; grp two-to-minus-phi
+ttp	mulpd	xmm2, [rbx][rax]	;; Mul by col two-to-minus-phi
+no ttp	movapd	xmm2, [rbx][rax]	;; two-to-minus-phi
 	mulpd	xmm0, xmm2		;; Mul by fudged col two-to-minus-phi
 echk	brute_force_error_check xmm0, xmm4, xmm6
 const	brute_force_mul_by_const xmm0, xmm4
 	movapd	xmm1, [rsi+1*16]	;; Load values2
 	addpd	xmm7, xmm1		;; sumout += values2
-	movapd	xmm3, [rbx][rcx]	;; col two-to-minus-phi
-ttp	mulpd	xmm3, [rdx+1*32]	;; Mul by grp two-to-minus-phi
+ttp	movapd	xmm3, [rdx+1*32]	;; grp two-to-minus-phi
+ttp	mulpd	xmm3, [rbx][rcx]	;; Mul by col two-to-minus-phi
+no ttp	movapd	xmm3, [rbx][rcx]	;; two-to-minus-phi
 	mulpd	xmm1, xmm3		;; Mul by fudged col two-to-minus-phi
 echk	brute_force_error_check xmm1, xmm5, xmm6
 const	brute_force_mul_by_const xmm1, xmm5
@@ -1434,38 +1436,40 @@ const	addpd	xmm4, xmm2		;; Add in upper mul-by-const bits
 const	mulpd	xmm4, XMM_LIMIT_INVERSE[rax];; next carry = shifted y1
 no const movapd	xmm4, XMM_LIMIT_INVERSE[rax];; next carry = shifted y1
 no const mulpd	xmm4, xmm2		;; next carry = shifted y1
+	movapd	[rbp+0*16], xmm4	;; Save carry1
 	subpd	xmm2, XMM_LIMIT_BIGMAX[rax];; z1 = y1 - (maximum*BIGVAL-BIGVAL)
+ttp	movapd	xmm4, [rbx+256][rax]	;; col two-to-phi
+ttp	mulpd	xmm4, [rdx+0*32+16]	;; two-to-phi = col * grp
+ttp	mov	al, [rdi+2]		;; Load next big vs. little flags
 const	addpd	xmm5, xmm3		;; Add in upper mul-by-const bits
 const	mulpd	xmm5, XMM_LIMIT_INVERSE[rcx];; next carry = shifted y2
 no const movapd	xmm5, XMM_LIMIT_INVERSE[rcx];; next carry = shifted y2
 no const mulpd	xmm5, xmm3		;; next carry = shifted y2
+	movapd	[rbp+1*16], xmm5	;; Save carry2
 	subpd	xmm3, XMM_LIMIT_BIGMAX[rcx];; z2 = y2 - (maximum*BIGVAL-BIGVAL)
+ttp	movapd	xmm5, [rbx+256][rcx]	;; col two-to-phi
+ttp	mulpd	xmm5, [rdx+1*32+16]	;; two-to-phi = col * grp
+ttp	mov	cl, [rdi+3]		;; Load next big vs. little flags
 	subpd	xmm0, xmm2		;; rounded value = x1 - z1
 	subpd	xmm1, xmm3		;; rounded value = x2 - z2
-ttp	movapd	xmm2, [rbx+256][rax]	;; col two-to-phi
-ttp	mulpd	xmm2, [rdx+0*32+16]	;; new value1 = val * grp two-to-phi
-ttp	mov	al, [rdi+2]		;; Load next big vs. little flags
-ttp	mulpd	xmm0, xmm2		;; new value1 *= fudged col two-to-phi
+ttp	mulpd	xmm0, xmm4		;; value1 = rounded value * two-to-phi
 	movapd	[rsi+0*16], xmm0	;; Save new value1
-	movapd	[rbp+0*16], xmm4	;; Save carry
-ttp	movapd	xmm3, [rbx+256][rcx]	;; col two-to-phi
-ttp	mulpd	xmm3, [rdx+1*32+16]	;; new value2 = val * grp two-to-phi
-ttp	mov	cl, [rdi+3]		;; Load next big vs. little flags
-ttp	mulpd	xmm1, xmm3		;; new value2 *= fudged col two-to-phi
+ttp	mulpd	xmm1, xmm5		;; value2 = rounded value * two-to-phi
 	movapd	[rsi+1*16], xmm1	;; Save new value2
-	movapd	[rbp+1*16], xmm5	;; Save carry
 
 	movapd	xmm0, [rsi+2*16]	;; Load values1
 	addpd	xmm7, xmm0		;; sumout += values1
-	movapd	xmm2, [rbx][rax]	;; col two-to-minus-phi
-ttp	mulpd	xmm2, [rdx+2*32]	;; Mul by grp two-to-minus-phi
+ttp	movapd	xmm2, [rdx+2*32]	;; grp two-to-minus-phi
+ttp	mulpd	xmm2, [rbx][rax]	;; Mul by col two-to-minus-phi
+no ttp	movapd	xmm2, [rbx][rax]	;; two-to-minus-phi
 	mulpd	xmm0, xmm2		;; Mul by fudged col two-to-minus-phi
 echk	brute_force_error_check xmm0, xmm4, xmm6
 const	brute_force_mul_by_const xmm0, xmm4
 	movapd	xmm1, [rsi+3*16]	;; Load values2
 	addpd	xmm7, xmm1		;; sumout += values2
-	movapd	xmm3, [rbx][rcx]	;; col two-to-minus-phi
-ttp	mulpd	xmm3, [rdx+3*32]	;; Mul by grp two-to-minus-phi
+ttp	movapd	xmm3, [rdx+3*32]	;; grp two-to-minus-phi
+ttp	mulpd	xmm3, [rbx][rcx]	;; Mul by col two-to-minus-phi
+no ttp	movapd	xmm3, [rbx][rcx]	;; two-to-minus-phi
 	mulpd	xmm1, xmm3		;; Mul by fudged col two-to-minus-phi
 echk	brute_force_error_check xmm1, xmm5, xmm6
 const	brute_force_mul_by_const xmm1, xmm5
@@ -1479,29 +1483,128 @@ const	addpd	xmm4, xmm2		;; Add in upper mul-by-const bits
 const	mulpd	xmm4, XMM_LIMIT_INVERSE[rax];; next carry = shifted y1
 no const movapd	xmm4, XMM_LIMIT_INVERSE[rax];; next carry = shifted y1
 no const mulpd	xmm4, xmm2		;; next carry = shifted y1
+	movapd	[rbp+2*16], xmm4	;; Save carry1
 	subpd	xmm2, XMM_LIMIT_BIGMAX[rax];; z1 = y1 - (maximum*BIGVAL-BIGVAL)
+ttp	movapd	xmm4, [rbx+256][rax]	;; col two-to-phi
+ttp	mulpd	xmm4, [rdx+2*32+16]	;; two-to-phi = col * grp
+ttp	mov	al, [rdi+4]		;; Load next big vs. little flags
 const	addpd	xmm5, xmm3		;; Add in upper mul-by-const bits
 const	mulpd	xmm5, XMM_LIMIT_INVERSE[rcx];; next carry = shifted y2
 no const movapd	xmm5, XMM_LIMIT_INVERSE[rcx];; next carry = shifted y2
 no const mulpd	xmm5, xmm3		;; next carry = shifted y2
+	movapd	[rbp+3*16], xmm5	;; Save carry2
 	subpd	xmm3, XMM_LIMIT_BIGMAX[rcx];; z2 = y2 - (maximum*BIGVAL-BIGVAL)
+ttp	movapd	xmm5, [rbx+256][rcx]	;; col two-to-phi
+ttp	mulpd	xmm5, [rdx+3*32+16]	;; two-to-phi = col * grp
+ttp	mov	cl, [rdi+5]		;; Load next big vs. little flags
 	subpd	xmm0, xmm2		;; rounded value = x1 - z1
 	subpd	xmm1, xmm3		;; rounded value = x2 - z2
-ttp	movapd	xmm2, [rbx+256][rax]	;; col two-to-phi
-ttp	mulpd	xmm2, [rdx+2*32+16]	;; new value1 = val * grp two-to-phi
-ttp	mov	al, [rdi+4]		;; Load next big vs. little flags
-ttp	mulpd	xmm0, xmm2		;; new value1 *= fudged col two-to-phi
+ttp	mulpd	xmm0, xmm4		;; value1 *= rounded value * two-to-phi
 zero	xorpd	xmm0, xmm0
 	movapd	[rsi+2*16], xmm0	;; Save new value1
-	movapd	[rbp+2*16], xmm4	;; Save carry
-ttp	movapd	xmm3, [rbx+256][rcx]	;; col two-to-phi
-ttp	mulpd	xmm3, [rdx+3*32+16]	;; new value2 = val * grp two-to-phi
-ttp	mov	cl, [rdi+5]		;; Load next big vs. little flags
-ttp	mulpd	xmm1, xmm3		;; new value2 *= fudged col two-to-phi
+ttp	mulpd	xmm1, xmm5		;; value2 = rounded value * two-to-phi
 zero	xorpd	xmm1, xmm1
 	movapd	[rsi+3*16], xmm1	;; Save new value2
-	movapd	[rbp+3*16], xmm5	;; Save carry
 	ENDM
+
+IFDEF X86_64
+xnorm_2d MACRO ttp, zero, echk, const
+ttp	movapd	xmm10, [rdx+0*32]	;; grp two-to-minus-phi			;P4	;Core2
+ttp	mulpd	xmm10, [rbx][rax]	;; Mul by col two-to-minus-phi		;1-6	;1-5
+no ttp	movapd	xmm10, [rbx][rax]	;; two-to-minus-phi
+	movapd	xmm8, [rsi+0*16]	;; Load values1
+	addpd	xmm7, xmm8		;; sumout += values1			;2-5	;1-3
+ttp	movapd	xmm11, [rdx+1*32]	;; grp two-to-minus-phi
+ttp	mulpd	xmm11, [rbx][rcx]	;; Mul by col two-to-minus-phi		;3-8	;2-6
+no ttp	movapd	xmm11, [rbx][rcx]	;; two-to-minus-phi
+ttp	movapd	xmm2, [rdx+2*32]	;; grp two-to-minus-phi
+ttp	mulpd	xmm2, [rbx][r8]		;; Mul by col two-to-minus-phi		;5-10	;3-7
+no ttp	movapd	xmm2, [rbx][r8]		;; two-to-minus-phi
+	movapd	xmm9, [rsi+1*16]	;; Load values2
+	addpd	xmm7, xmm9		;; sumout += values2			;6-9	;4-6
+ttp	movapd	xmm3, [rdx+3*32]	;; grp two-to-minus-phi
+ttp	mulpd	xmm3, [rbx][r9]		;; Mul by col two-to-minus-phi		;7-12	;4-8
+no ttp	movapd	xmm3, [rbx][r9]		;; two-to-minus-phi
+	mulpd	xmm8, xmm10		;; Mul by fudged col two-to-minus-phi	;9-14	;6-10
+echk	brute_force_error_check xmm8, xmm12, xmm6
+const	brute_force_mul_by_const xmm8, xmm12
+	movapd	xmm1, [rsi+3*16]	;; Load values4
+	addpd	xmm7, xmm1		;; sumout += values4			;10-13	;7-9
+	mulpd	xmm9, xmm11		;; Mul by fudged col two-to-minus-phi	;11-16	;7-11
+echk	brute_force_error_check xmm9, xmm13, xmm6
+const	brute_force_mul_by_const xmm9, xmm13
+	movapd	xmm0, [rsi+2*16]	;; Load values3
+	mulpd	xmm0, xmm2		;; Mul by fudged col two-to-minus-phi	;13-18	;8-12
+echk	brute_force_error_check xmm0, xmm4, xmm6
+const	brute_force_mul_by_const xmm0, xmm4
+	addpd	xmm7, [rsi+2*16]	;; sumout += values3			;14-17	;10-12
+	mulpd	xmm1, xmm3		;; Mul by fudged col two-to-minus-phi	;15-20	;9-13
+echk	brute_force_error_check xmm1, xmm5, xmm6
+const	brute_force_mul_by_const xmm1, xmm5
+	addpd	xmm8, [rbp+0*16]	;; x1 = values + carry			;16-19	;11-13
+	addpd	xmm9, [rbp+1*16]	;; x2 = values + carry			;18-21	;12-14
+ttp	movapd	xmm14, [rbx+256][rax]	;; col two-to-phi
+ttp	mulpd	xmm14, [rdx+0*32+16]	;; two-to-phi = col * grp		;19-24	;12-16
+	addpd	xmm0, [rbp+2*16]	;; x3 = values + carry			;20-23	;13-15
+ttp	movapd	xmm15, [rbx+256][rcx]	;; col two-to-phi
+ttp	mulpd	xmm15, [rdx+1*32+16]	;; two-to-phi = col * grp		;21-26	;13-17
+	movapd	xmm10, XMM_LIMIT_BIGMAX[rax];; Load maximum * BIGVAL - BIGVAL
+	addpd	xmm10, xmm8		;; y1 = top bits of x			;22-25	;14-16
+	addpd	xmm1, [rbp+3*16]	;; x4 = values + carry			;24-27	;15-17
+	movapd	xmm11, XMM_LIMIT_BIGMAX[rcx];; Load maximum * BIGVAL - BIGVAL
+	addpd	xmm11, xmm9		;; y2 = top bits of x			;26-29	;16-18
+const	addpd	xmm12, xmm10		;; Add in upper mul-by-const bits
+const	mulpd	xmm12, XMM_LIMIT_INVERSE[rax];; next carry = shifted y1
+no const movapd	xmm12, XMM_LIMIT_INVERSE[rax];; next carry = shifted y1
+no const mulpd	xmm12, xmm10		;; next carry = shifted y1		;27-32	;17-21
+	movapd	xmm2, XMM_LIMIT_BIGMAX[r8];; Load maximum * BIGVAL - BIGVAL
+	addpd	xmm2, xmm0		;; y3 = top bits of x			;28-31	;17-19
+	movapd	xmm3, XMM_LIMIT_BIGMAX[r9];; Load maximum * BIGVAL - BIGVAL
+	addpd	xmm3, xmm1		;; y4 = top bits of x			;30-33	;18-20
+const	addpd	xmm13, xmm11		;; Add in upper mul-by-const bits
+const	mulpd	xmm13, XMM_LIMIT_INVERSE[rcx];; next carry = shifted y2
+no const movapd	xmm13, XMM_LIMIT_INVERSE[rcx];; next carry = shifted y2
+no const mulpd	xmm13, xmm11		;; next carry = shifted y2		;31-36	;19-23
+	subpd	xmm10, XMM_LIMIT_BIGMAX[rax];; z1 = y1 - (maximum*BIGVAL-BIGVAL) ;32-35	;19-22
+ttp	mov	al, [rdi+4]		;; Load next big vs. little flags
+const	addpd	xmm4, xmm2		;; Add in upper mul-by-const bits
+const	mulpd	xmm4, XMM_LIMIT_INVERSE[r8];; next carry = shifted y3
+no const movapd	xmm4, XMM_LIMIT_INVERSE[r8];; next carry = shifted y3
+no const mulpd	xmm4, xmm2		;; next carry = shifted y3		;33-38	;20-24
+	subpd	xmm11, XMM_LIMIT_BIGMAX[rcx];; z2 = y2 - (maximum*BIGVAL-BIGVAL) ;34-37	;20-22
+ttp	mov	cl, [rdi+5]		;; Load next big vs. little flags
+const	addpd	xmm5, xmm3		;; Add in upper mul-by-const bits
+const	mulpd	xmm5, XMM_LIMIT_INVERSE[r9];; next carry = shifted y4
+no const movapd	xmm5, XMM_LIMIT_INVERSE[r9];; next carry = shifted y4
+no const mulpd	xmm5, xmm3		;; next carry = shifted y4		;35-40	;21-25
+	movapd	[rbp+0*16], xmm12	;; Save carry1
+	subpd	xmm2, XMM_LIMIT_BIGMAX[r8];; z3 = y3 - (maximum*BIGVAL-BIGVAL)	;36-39	;21-23
+ttp	movapd	xmm12, [rbx+256][r8]	;; col two-to-phi
+ttp	mulpd	xmm12, [rdx+2*32+16]	;; two-to-phi = col * grp		;37-42	;22-26
+ttp	mov	r8b, [rdi+6]		;; Load next big vs. little flags
+	movapd	[rbp+1*16], xmm13	;; Save carry2
+	subpd	xmm3, XMM_LIMIT_BIGMAX[r9];; z4 = y4 - (maximum*BIGVAL-BIGVAL)	;38-41	;22-24
+ttp	movapd	xmm13, [rbx+256][r9]	;; col two-to-phi
+ttp	mulpd	xmm13, [rdx+3*32+16]	;; two-to-phi = col * grp		;39-43	;23-27
+ttp	mov	r9b, [rdi+7]		;; Load next big vs. little flags
+	subpd	xmm8, xmm10		;; rounded value = x1 - z1		;40-43	;23-25
+	movapd	[rbp+2*16], xmm4	;; Save carry3
+	subpd	xmm9, xmm11		;; rounded value = x2 - z2		;42-45	;24-26
+	movapd	[rbp+3*16], xmm5	;; Save carry4
+	subpd	xmm0, xmm2		;; rounded value = x3 - z3		;44-47	;25-27
+ttp	mulpd	xmm8, xmm14		;; value1 = rounded value * two-to-phi	;45-50	;26-30
+	subpd	xmm1, xmm3		;; rounded value = x4 - z4		;46-49	;26-28
+ttp	mulpd	xmm9, xmm15		;; value2 = rounded value * two-to-phi	;47-52	;27-31
+ttp	mulpd	xmm0, xmm12		;; value3 = rounded value * two-to-phi	;49-54	;28-32
+zero	xorpd	xmm0, xmm0
+ttp	mulpd	xmm1, xmm13		;; value4 = rounded value * two-to-phi	;51-56	;29-33
+zero	xorpd	xmm1, xmm1
+	movapd	[rsi+0*16], xmm8	;; Save new value1
+	movapd	[rsi+1*16], xmm9	;; Save new value2
+	movapd	[rsi+2*16], xmm0	;; Save new value3
+	movapd	[rsi+3*16], xmm1	;; Save new value4
+	ENDM
+ENDIF
 
 ;; NOTE: We'd rather store the high FFT carry without the XMM_BIGVAL added in,
 ;; but there is too much code that expects this (like add and subtract).

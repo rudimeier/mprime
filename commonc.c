@@ -9,7 +9,7 @@
 | Commonc contains information used during setup and execution
 +---------------------------------------------------------------------*/
 
-char JUNK[]="Copyright 1996-2008 Mersenne Research, Inc. All rights reserved";
+char JUNK[]="Copyright 1996-2009 Mersenne Research, Inc. All rights reserved";
 
 char	INI_FILE[80] = {0};
 char	LOCALINI_FILE[80] = {0};
@@ -17,7 +17,6 @@ char	WORKTODO_FILE[80] = {0};
 char	RESFILE[80] = {0};
 char	SPOOL_FILE[80] = {0};
 char	LOGFILE[80] = {0};
-char	EXTENSION[8] = {0};
 
 char	USERID[21] = {0};
 char	COMPID[21] = {0};
@@ -45,7 +44,7 @@ unsigned long volatile DISK_WRITE_TIME = 30;
 unsigned int MODEM_RETRY_TIME = 2;
 unsigned int NETWORK_RETRY_TIME = 70;
 unsigned int DAYS_BETWEEN_CHECKINS = 1;
-int	TWO_BACKUP_FILES = 1;
+int	NUM_BACKUP_FILES = 3;
 int	SILENT_VICTORY = 0;
 int	RUN_ON_BATTERY = 1;
 int	BATTERY_PERCENT = 0;
@@ -108,7 +107,8 @@ void generate_application_string (
 		 PORT == 6 ? "FreeBSD" :
 		 PORT == 7 ? "OS/2" :
 		 PORT == 8 ? "Linux64" :
-		 PORT == 9 ? "Mac OS X" : "Unknown",
+		 PORT == 9 ? "Mac OS X" :
+		 PORT == 10 ? "Mac OS X 64-bit" : "Unknown",
 		 VERSION, BUILD_NUM);
 }
 
@@ -593,7 +593,6 @@ void nameAndReadIniFiles (
 		strcpy (WORKTODO_FILE, "worktodo.ini");
 		strcpy (RESFILE, "results.txt");
 		strcpy (LOGFILE, "prime.log");
-		strcpy (EXTENSION, "");
 	} else {
 		sprintf (INI_FILE, "prim%04d.ini", named_ini_files);
 		sprintf (LOCALINI_FILE, "loca%04d.ini", named_ini_files);
@@ -601,7 +600,6 @@ void nameAndReadIniFiles (
 		sprintf (WORKTODO_FILE, "work%04d.ini", named_ini_files);
 		sprintf (RESFILE, "resu%04d.txt", named_ini_files);
 		sprintf (LOGFILE, "prim%04d.log", named_ini_files);
-		sprintf (EXTENSION, ".%03d", named_ini_files);
 	}
 
 /* Let the user rename these files and pick a different working directory */
@@ -774,7 +772,6 @@ int readIniFiles (void)
 	DAYS_BETWEEN_CHECKINS = (unsigned int) IniGetInt (INI_FILE, "DaysBetweenCheckins", 1);
 	if (DAYS_BETWEEN_CHECKINS > 7) DAYS_BETWEEN_CHECKINS = 7;
 	if (DAYS_BETWEEN_CHECKINS < 1) DAYS_BETWEEN_CHECKINS = 1;
-	TWO_BACKUP_FILES = (int) IniGetInt (INI_FILE, "TwoBackupFiles", 1);
 	SILENT_VICTORY = (int) IniGetInt (INI_FILE, "SilentVictory", 0);
 	RUN_ON_BATTERY = (int) IniGetInt (LOCALINI_FILE, "RunOnBattery", 1);
 	BATTERY_PERCENT = (int) IniGetInt (INI_FILE, "BatteryPercent", 0);
@@ -793,6 +790,12 @@ int readIniFiles (void)
 	HIDE_ICON = (int) IniGetInt (INI_FILE, "HideIcon", 0);
 	TRAY_ICON = (int) IniGetInt (INI_FILE, "TrayIcon", 1);
 	MERGE_WINDOWS = (int) IniGetInt (INI_FILE, "MergeWindows", MERGE_MAINCOMM_WINDOWS);
+
+/* Convert old TwoBackupFiles boolean to new NumBackupFiles integer.  Old default */
+/* was 2 save files, new default is 3 save files. */	
+
+	temp = (int) IniGetInt (INI_FILE, "TwoBackupFiles", 2);
+	NUM_BACKUP_FILES = (int) IniGetInt (INI_FILE, "NumBackupFiles", temp+1);
 
 /* Convert the old DAY_MEMORY, NIGHT_MEMORY settings into the simpler, all-inclusive */
 /* and more powerful MEMORY setting. */
@@ -2566,10 +2569,8 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 			w->forced_fftlen = fftlen;
 	    }
 
-/* Parse the optional file extension to use on ECM save files.  This lets */
-/* us run ECM on the same number in different threads yet avoid conflicting */
-/* save file names.  I could also use this technique to allow trial */
-/* factoring the same number in two different threads. */
+/* Parse the optional file extension to use on save files (no good use */
+/* right now, was formerly used for multiple workers ECMing the same number) */
 
 	    if ((value[0] == 'E' || value[0] == 'e') &&
 	        (value[1] == 'X' || value[1] == 'x') &&
@@ -3008,7 +3009,8 @@ int writeWorkToDoFile (
 				sprintf (idbuf+strlen(idbuf), "=%lu,", w->forced_fftlen);
 		}
 
-/* Output the optional file name extension (primarily for ECM) */
+/* Output the optional file name extension (no good use right now, */
+/* was formerly used for multiple workers ECMing the same number) */
 
 		if (w->extension[0]) {
 			sprintf (idbuf+strlen(idbuf), "EXT=%s,", w->extension);
@@ -3229,46 +3231,6 @@ int addWorkToDoLine (
 	if (malloc_w == NULL) return (OutOfMemory (MAIN_THREAD_NUM));
 	memcpy (malloc_w, w, sizeof (struct work_unit));
 
-/* If this is an ECM assignment, check to see if any other work unit is */
-/* ECMing the same number.  If so, generate a unique file extension so */
-/* that there are no save file conflicts. */
-
-	if (malloc_w->work_type == WORK_ECM) {
-		unsigned int tnum, ext;
-
-		ext = 0;
-		for (tnum = 0; tnum < NUM_WORKER_THREADS; tnum++) {
-			w = NULL;
-			for ( ; ; ) {
-				w = getNextWorkToDoLine (tnum, w, SHORT_TERM_USE);
-				if (w == NULL) break;
-				if (w->work_type == WORK_NONE) continue;
-
-/* Skip the line if this is not an ECM of the same number */
-
-				if (w->work_type != WORK_ECM ||
-				    w->k != malloc_w->k ||
-				    w->b != malloc_w->b ||
-				    w->n != malloc_w->n ||
-				    w->c != malloc_w->c) continue;
-
-/* Make sure we generate a file extension larger than this other work unit's */
-/* This will insure that a unique file extension is generated */
-
-				if (w->extension[0] == 0)
-					ext = 1;
-				else if (w->extension[0] == 'x' &&
-					 (unsigned int) atoi (w->extension+1) >= ext)
-					ext = atoi (w->extension+1) + 1;
-			}
-		}
-
-/* Now generate a file extension if we ran into 2 or more ECM assignments */
-/* of this number */
-
-		if (ext) sprintf (malloc_w->extension, "x%d", ext % 10000000);
-	}
-
 /* Grab the lock so that comm thread and/or worker threads do not */
 /* access structure while the other is adding/deleting lines. */
 
@@ -3381,8 +3343,7 @@ double work_estimate (
 	int	thread_num,		/* Thread number doing the work */
 	struct work_unit *w)
 {
-	double	timing;
-	double	est;
+	double	timing, est, pct_complete;
 	int	can_use_multiple_threads;
 	unsigned int i, total_threads;
 
@@ -3390,6 +3351,13 @@ double work_estimate (
 /* get here.  Return an estimate of 0.0. */
 
 	est = 0.0;
+
+/* Make sure the pct_complete is between 0.0 and 1.0.  There is presently */
+/* a bug in P-1 code that is setting this value to more than 1.0 */
+
+	pct_complete = w->pct_complete;
+	if (pct_complete < 0.0) pct_complete = 0.0;
+	if (pct_complete > 1.0) pct_complete = 1.0;
 
 /* Only large SSE2 FFTs can use multiple threads. */
 
@@ -3418,15 +3386,16 @@ double work_estimate (
 
 		est = (double) full_curves_to_do * (stage1_time + stage2_time);
 		if (stage == 1)
-			est += stage1_time * (1.0 - w->pct_complete) + stage2_time;
+			est += stage1_time * (1.0 - pct_complete) + stage2_time;
 		if (stage == 2)
-			est += stage2_time * (1.0 - w->pct_complete);
+			est += stage2_time * (1.0 - pct_complete);
 	}
 
-/* For P-1, estimate about 1.5 * B1 squarings in stage 1 and 0.05 * B2 */
+/* For P-1, estimate about 1.4545 * B1 squarings in stage 1 and 0.06154 * B2 */
 /* squarings in stage 2.  Note that the stage 2 estimate is quite */
 /* optimistic for large numbers as fewer temporaries will result in nearly */
-/* double the number of squarings */
+/* double the number of squarings.  Also, pass 2 squarings are 28.5% slower */
+/* (due to all the adds). */ 
 
 	if (w->work_type == WORK_PMINUS1 || w->work_type == WORK_PFACTOR) {
 		int	stage;
@@ -3452,18 +3421,18 @@ double work_estimate (
 		else stage = 0;
 
 		timing = gwmap_to_timing (w->k, w->b, w->n, w->c);
-		stage1_time = timing * (1.5 * B1);
+		stage1_time = timing * (1.4545 * B1);
 		if (B2)
-			stage2_time = timing * (0.05 * B2);
+			stage2_time = timing * (0.06154 * (B2 - B1)) * 1.285;
 		else
-			stage2_time = timing * (0.05 * 100.0 * B1);
+			stage2_time = timing * (0.06154 * 99.0 * B1) * 1.285;
 
 		if (stage == 0)
 			est = stage1_time + stage2_time;
 		if (stage == 1)
-			est = stage1_time * (1.0 - w->pct_complete) + stage2_time;
+			est = stage1_time * (1.0 - pct_complete) + stage2_time;
 		if (stage == 2)
-			est = stage2_time * (1.0 - w->pct_complete);
+			est = stage2_time * (1.0 - pct_complete);
 	}
 
 /* If factoring, guess how long that will take.  Timings are based on */
@@ -3499,7 +3468,7 @@ double work_estimate (
 			timing = (i > 64) ? 20.2 : (i > 62) ? 16.1 : 15.1;
 			timing *= 145000.0 * (1L << (i - 48)) / w->n;
 			if (i == tf_level)
-				est += timing * (1.0 - w->pct_complete);
+				est += timing * (1.0 - pct_complete);
 			else
 				est += timing;
 		}
@@ -3512,14 +3481,14 @@ double work_estimate (
 	    w->work_type == WORK_ADVANCEDTEST ||
 	    w->work_type == WORK_DBLCHK) {
 		est = w->n * gwmap_to_timing (w->k, w->b, w->n, w->c);
-		if (w->stage[0] == 'L') est *= (1.0 - w->pct_complete);
+		if (w->stage[0] == 'L') est *= (1.0 - pct_complete);
 	}
 
 /* If PRPing add in the PRP testing time */
 
 	if (w->work_type == WORK_PRP) {
 		est = w->n * gwmap_to_timing (w->k, w->b, w->n, w->c);
-		if (w->stage[0] == 'P') est *= (1.0 - w->pct_complete);
+		if (w->stage[0] == 'P') est *= (1.0 - pct_complete);
 	}
 
 /* Factor in the hours per day the computer is running and the */
@@ -3860,26 +3829,55 @@ void tempFileName (
 	} else
 		sprintf (buf, "p%ld", p);
 
-/* Append extension to allow different worker threads to ECM the same number */
-/* without getting conflicting save file names */
+/* Use different first letters for different work types.  This isn't */
+/* completely compatible with v24 (the -An extension and P-1 and ECM when c=1 */
+
+	if (w->work_type == WORK_FACTOR) buf[0] = 'f';
+	if (w->work_type == WORK_ECM) buf[0] = 'e';
+	if (w->work_type == WORK_PMINUS1) buf[0] = 'm';
+
+/* Prior to version 25.9 build 4, if c was 1 then P-1 and ECM used */
+/* a different first letter in the filename.  From now on, we will no */
+/* longer do this.  To reduce upgrading problems, old save file names */
+/* are renamed. */
+
+	if (w->c == 1 && buf[0] == 'm') {
+		char	v258_filename[32];
+		sprintf (v258_filename, "l%s", buf+1);
+		rename (v258_filename, buf);
+	}
+	if (w->c == 1 && buf[0] == 'e') {
+		char	v258_filename[32];
+		sprintf (v258_filename, "d%s", buf+1);
+		rename (v258_filename, buf);
+	}
+
+/* Prior to version 25.9 build 4, we did not use k or c in generating the */
+/* filename.  Thus, 10223*2^11111111+1 and 67607*2^11111111+1 would both */
+/* use the save save file -- a definite problem for Seventeen or Bust. */
+/* From now on, we will use k and c to generate the filename.  To reduce */
+/* upgrading problems, old save file names are renamed. */
+
+	if (w->k != 1.0 || abs(w->c) != 1) {
+		char	v258_filename[32];
+		strcpy (v258_filename, buf);
+		buf[1] = 0;
+		if (w->k != 1.0) sprintf (buf+strlen(buf), "%g", fmod (w->k, 1000000.0));
+		sprintf (buf+strlen(buf), "_%ld", p);
+		if (abs(w->c) != 1) sprintf (buf+strlen(buf), "_%ld", abs(w->c) % 1000);
+		rename (v258_filename, buf);
+		if (buf[0] == 'p') {
+			v258_filename[0] = buf[0] = 'q';
+			rename (v258_filename, buf);
+			buf[0] = 'p';
+		}
+	}
+
+/* Append extension */
 
 	if (w->extension[0]) {
 		strcat (buf, ".");
 		strcat (buf, w->extension);
-	}
-
-/* For compatibility with v24, append extension for -An command line */
-/* argument.  Also, change the first letter for c = +1 (this does not */
-/* completely eliminate save file conflicts, but does handle the most */
-/* common case of simultaneous ECM on 2^n-1 and 2^n+1). */
-
-	if (w->work_type == WORK_ECM) {
-		strcat (buf, EXTENSION);
-		buf[0] = (w->c == 1) ? 'd' : 'e';
-	}
-	if (w->work_type == WORK_PMINUS1) {
-		strcat (buf, EXTENSION);
-		buf[0] = (w->c == 1) ? 'l' : 'm';
 	}
 }
 

@@ -24,6 +24,7 @@
 #include "commonc.c"
 #include "ecm.c"
 #include "comm95b.c"
+#define _WIN32_WINNT 0x0502	// (Windows 2003 Server - same as afx_v32.h for sddl.h)
 #include "comm95c.c"
 #include "primenet.c"
 #include "gwtest.c"

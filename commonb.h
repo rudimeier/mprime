@@ -57,7 +57,7 @@ int primeContinue (int);
 int tortureTest (int, int);
 int selfTest (int, struct PriorityInfo *, struct work_unit *);
 int selfTestInternal (int, struct PriorityInfo *, unsigned long, unsigned int,
-		      int *, unsigned int, void *, int *, int *);
+		      int *, unsigned int, void *, int *, int *, int *);
 int primeTime (int, unsigned long, unsigned long);
 int primeBench (int);
 int primeFactor (int, struct PriorityInfo *, struct work_unit *, unsigned int);
@@ -116,6 +116,16 @@ void mem_settings_have_changed (void);
 unsigned int max_mem (void);
 int avail_mem (int, unsigned long, unsigned long, unsigned int *);
 int set_memory_usage (int, int, unsigned long);
+
+/* Handy macros to help in calling memory routines.  Macros tell */
+/* us how many gwnums fit in given megabytes AND how many megabytes */
+/* are used by a given number of gwnums.  We have to be real careful */
+/* as machines with more than 4GB are becoming commonplace.  We assume */
+/* code and other data will add 1MB or 2MB to our working set. */
+
+#define cvt_mem_to_gwnums(g,m) ((unsigned long)(((double)(m)*1048576.0-1000000.0-(double)gwmemused(g))/(double)gwnum_size(g)))
+#define cvt_gwnums_to_mem(g,n) ((unsigned long)(((double)gwmemused(g)+2000000.0+(double)(n)*(double)gwnum_size(g))/1048576.0))
+#define cvt_mem_to_estimated_gwnums(m,k,b,n,c) ((unsigned long)(((double)(m)*1048576.0-1000000.0-(double)gwmap_to_memused(k,b,n,c))/(double)gwmap_to_estimated_size(k,b,n,c)))
 
 /* battery routines */
 

@@ -1,4 +1,4 @@
-; Copyright 2001-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -292,7 +292,7 @@ PROCF	gwxcopyzero1
 	mov	eax, addcount1		; Load loop counter
 cz1:	xcopyzero			; Copy/zero 8 values
 	lea	rsi, [rsi+64]		; Next source
-	lea	rdi, [edi+64]		; Next dest
+	lea	rdi, [rdi+64]		; Next dest
 	lea	rcx, [rcx+64]		; Next compare offset
 	sub	eax, 1			; Test loop counter
 	jnz	cz1			; Loop if necessary

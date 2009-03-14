@@ -15,7 +15,7 @@ cl64d=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Zi /c
 
 # List of all buildables in this makefile
 
-all:	gwnum64.lib gwnum64d.lib linux64\gwnum.a amd64\release\ecmstag1.obj amd64\debug\ecmstag1.obj
+all:	gwnum64.lib gwnum64d.lib linux64\gwnum.a macosx64\gwnum.a amd64\release\ecmstag1.obj amd64\debug\ecmstag1.obj
 
 # Make libraries out of the object files
 
@@ -27,13 +27,21 @@ gwnum64d.lib: amd64\debug\cpuid.obj amd64\debug\gwnum.obj amd64\debug\gwthread.o
     del gwnum64d.lib
     lib /OUT:gwnum64d.lib amd64\debug\*.obj amd64\*.obj
 
-linux64\gwnum.a: linux64\xmult1.obj linux64\xmult1ax.obj linux64\xmult2.obj linux64\xmult2p.obj linux64\xmult2a.obj linux64\xmult2ap.obj linux64\xmult2ax.obj linux64\xmult3.obj linux64\xmult3p.obj linux64\xmult3a.obj linux64\xmult3ap.obj  linux64\xmult4.obj linux64\xmult4p.obj linux64\xmult5.obj linux64\xmult5p.obj linux64\xmult6.obj linux64\xmult6p.obj linux64\cpuidhlp.obj linux64\mult.obj linux64\multutil.obj linux64\gianthlp.obj linux64\timeit.obj linux64\timeitp.obj
+linux64\gwnum.a: linux64\xmult1.obj linux64\xmult1ax.obj linux64\xmult2.obj linux64\xmult2p.obj linux64\xmult2a.obj linux64\xmult2ap.obj linux64\xmult2ax.obj linux64\xmult3.obj linux64\xmult3p.obj linux64\xmult3a.obj linux64\xmult3ap.obj linux64\xmult4.obj linux64\xmult4p.obj linux64\xmult5.obj linux64\xmult5p.obj linux64\xmult6.obj linux64\xmult6p.obj linux64\cpuidhlp.obj linux64\mult.obj linux64\multutil.obj linux64\gianthlp.obj linux64\timeit.obj linux64\timeitp.obj
     attrib -r linux64\gwnum.a
     del linux64\gwnum.a
     lib /OUT:linux64\gwnum.lib linux64\*.obj
     $(objconv) -felf64 linux64\gwnum.lib linux64\gwnum.a
     attrib -r linux64\gwnum.a
     del linux64\gwnum.lib
+
+macosx64\gwnum.a: linux64\xmult1.obj linux64\xmult1ax.obj linux64\xmult2.obj linux64\xmult2p.obj linux64\xmult2a.obj linux64\xmult2ap.obj linux64\xmult2ax.obj linux64\xmult3.obj linux64\xmult3p.obj linux64\xmult3a.obj linux64\xmult3ap.obj linux64\xmult4.obj linux64\xmult4p.obj linux64\xmult5.obj linux64\xmult5p.obj linux64\xmult6.obj linux64\xmult6p.obj linux64\cpuidhlp.obj linux64\mult.obj linux64\multutil.obj linux64\gianthlp.obj linux64\timeit.obj linux64\timeitp.obj
+    attrib -r macosx64\gwnum.a
+    del macosx64\gwnum.a
+    lib /OUT:macosx64\gwnum.lib linux64\*.obj
+    $(objconv) -fmacho64 -wd1050 -nu+ macosx64\gwnum.lib macosx64\gwnum.a
+    attrib -r macosx64\gwnum.a
+    del macosx64\gwnum.lib
 
 # Compile C code for 64-bit
 

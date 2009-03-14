@@ -1,4 +1,4 @@
-/* Copyright 1995-2008 Mersenne Research, Inc. */
+/* Copyright 1995-2009 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -528,6 +528,41 @@ void test_status (void)
 	outputLongLine (buf);
 }
 
+/* Start one or all workers */
+
+void test_continue (void)
+{
+	unsigned long worker;
+	int	thread_num;
+
+	worker = 0;
+	askNum ("Worker to start, 0=all", &worker, 0, NUM_WORKER_THREADS);
+	if (worker == 0) thread_num = ALL_WORKERS;
+	else thread_num = worker - 1;
+	linuxContinue ("Another mprime is running.\n", thread_num, FALSE);
+}
+
+/* Stop one or all workers */
+
+void test_stop (void)
+{
+	unsigned long worker;
+
+	worker = 0;
+	askNum ("Worker to stop, 0=all", &worker, 0, NUM_WORKER_THREADS);
+	if (worker == 0) stop_workers_for_escape ();
+	else stop_one_worker (worker - 1);
+}
+
+/* Start or stop one or all workers */
+
+void test_continue_or_stop (void)
+{
+	outputLongLine ("Do you want to start some workers? ");
+	if (askYesNo ('Y')) test_continue ();
+	else test_stop ();
+}
+
 /* Advanced/Test dialog */
 
 void advanced_test (void)
@@ -560,7 +595,7 @@ loop:	m_p = 0;
 		if (WORKER_THREADS_ACTIVE)
 			stop_worker_for_advanced_test (m_thread - 1);
 		else
-			linuxContinue ("\nWork added to worktodo.ini file.  Another mprime is running.\n", FALSE);
+			linuxContinue ("\nWork added to worktodo.ini file.  Another mprime is running.\n", ALL_WORKERS, FALSE);
 	}
 }
 
@@ -620,7 +655,7 @@ void advanced_pminus1 (void)
 		w.B2 = m_bound2;
 		addWorkToDoLine (m_thread - 1, &w);
 		if (!WORKER_THREADS_ACTIVE)
-			linuxContinue ("\nWork added to worktodo.ini file.  Another mprime is running.\n", FALSE);
+			linuxContinue ("\nWork added to worktodo.ini file.  Another mprime is running.\n", ALL_WORKERS, FALSE);
 		askOK ();
 	}
 }
@@ -668,7 +703,7 @@ void advanced_ecm (void)
 		w.curve = 0.0;
 		addWorkToDoLine (m_thread - 1, &w);
 		if (!WORKER_THREADS_ACTIVE)
-			linuxContinue ("\nWork added to worktodo.ini file.  Another mprime is running.\n", FALSE);
+			linuxContinue ("\nWork added to worktodo.ini file.  Another mprime is running.\n", ALL_WORKERS, FALSE);
 		askOK ();
 	}
 }
@@ -825,8 +860,8 @@ again:	m_hours = CPU_HOURS;
 void options_preferences (void)
 {
 	unsigned long m_iter, m_r_iter, m_disk_write_time;
-	unsigned long m_modem, m_retry, m_work, m_end_dates;
-	int	m_backup, m_noise, m_battery;
+	unsigned long m_modem, m_retry, m_work, m_end_dates, m_backup;
+	int	m_noise, m_battery;
 
 	m_iter = ITER_OUTPUT;
 	m_r_iter = ITER_OUTPUT_RES;
@@ -835,7 +870,7 @@ void options_preferences (void)
 	m_retry = NETWORK_RETRY_TIME;
 	m_work = DAYS_OF_WORK;
 	m_end_dates = DAYS_BETWEEN_CHECKINS;
-	m_backup = TWO_BACKUP_FILES;
+	m_backup = NUM_BACKUP_FILES;
 	m_noise = !SILENT_VICTORY;
 	m_battery = RUN_ON_BATTERY;
 
@@ -851,7 +886,7 @@ void options_preferences (void)
 		askNum ("Days of work to queue up", &m_work, 1, 90);
 	if (USE_PRIMENET)
 		askNum ("Days between sending end dates", &m_end_dates, 1, 7);
-	askYN ("Create Two Backup Files", &m_backup);
+	askNum ("Number of Backup Files", &m_backup, 1, 3);
 	askYN ("Make noise if new Mersenne prime is found", &m_noise);
 	askYN ("Run program even when using laptop battery power", &m_battery);
 
@@ -863,7 +898,7 @@ void options_preferences (void)
 		NETWORK_RETRY_TIME = m_retry;
 		DAYS_OF_WORK = m_work;
 		DAYS_BETWEEN_CHECKINS = m_end_dates;
-		TWO_BACKUP_FILES = m_backup;
+		NUM_BACKUP_FILES = m_backup;
 		SILENT_VICTORY = !m_noise;
 		if (RUN_ON_BATTERY != m_battery) {
 			RUN_ON_BATTERY = m_battery;
@@ -877,7 +912,7 @@ void options_preferences (void)
 		IniWriteInt (INI_FILE, "NetworkRetryTime2", NETWORK_RETRY_TIME);
 		IniWriteInt (INI_FILE, "DaysOfWork", DAYS_OF_WORK);
 		IniWriteInt (INI_FILE, "DaysBetweenCheckins", DAYS_BETWEEN_CHECKINS);
-		IniWriteInt (INI_FILE, "TwoBackupFiles", TWO_BACKUP_FILES);
+		IniWriteInt (INI_FILE, "NumBackupFiles", NUM_BACKUP_FILES);
 		IniWriteInt (INI_FILE, "SilentVictory", SILENT_VICTORY);
 		spoolMessage (PRIMENET_PROGRAM_OPTIONS, NULL);
 	}
@@ -933,18 +968,14 @@ void torture (void)
 		askNum ("Max FFT size (in K)", &m_maxfft, 8,
 			(CPU_FLAGS & CPU_SSE2 ? MAX_FFTLEN_SSE2 : MAX_FFTLEN) / 1024);
 		if (blendmemory > 8)
-			askNum ("Memory to use (in MB, 0 = in-place FFTs)",
-				&m_memory, 0, blendmemory);
-		askNum ("Time to run each FFT size (in minutes)", &m_timefft,
-			1, 60);
+			askNum ("Memory to use (in MB, 0 = in-place FFTs)", &m_memory, 0, mem);
+		askNum ("Time to run each FFT size (in minutes)", &m_timefft, 1, 60);
 	}
 
 	if (askOkCancel ()) {
 		IniWriteInt (INI_FILE, "MinTortureFFT", m_minfft);
 		IniWriteInt (INI_FILE, "MaxTortureFFT", m_maxfft);
-		mem = m_memory;
-		if (mem > blendmemory) mem = blendmemory;
-		mem = mem / m_thread;
+		mem = m_memory / m_thread;
 		IniWriteInt (INI_FILE, "TortureMem", mem);
 		IniWriteInt (INI_FILE, "TortureTime", m_timefft);
 		LaunchTortureTest (m_thread, TRUE);
@@ -961,7 +992,7 @@ void help_about (void)
 	printf ("GIMPS: Mersenne Prime Search\n");
 	printf ("Web site: http://mersenne.org\n");
 	printf ("%s\n", app_string);
-	printf ("Copyright 1996-2008 Mersenne Research, Inc.\n");
+	printf ("Copyright 1996-2009 Mersenne Research, Inc.\n");
 	printf ("Author: George Woltman\n");
 	printf ("Email:  woltman@alum.mit.edu\n");
 	askOK ();
@@ -1005,7 +1036,7 @@ void test_welcome (void)
 		if (USE_PRIMENET && STARTUP_IN_PROGRESS) {
 			STARTUP_IN_PROGRESS = 0;
 			set_comm_timers ();
-			linuxContinue (NULL, FALSE);
+			linuxContinue (NULL, ALL_WORKERS, FALSE);
 		} else
 			STARTUP_IN_PROGRESS = 0;
 	} else {
@@ -1031,7 +1062,9 @@ loop:	printf ("\n");
 	printf ("\t 1.  Test/Primenet\n");
 	printf ("\t 2.  Test/Worker threads\n");
 	printf ("\t 3.  Test/Status\n");
-	if (!WORKER_THREADS_ACTIVE || WORKER_THREADS_STOPPING)
+	if (WORKER_THREADS_ACTIVE && active_workers_count () < WORKER_THREADS_ACTIVE)
+		printf ("\t 4.  Test/Continue or Stop\n");
+	else if (!WORKER_THREADS_ACTIVE || WORKER_THREADS_STOPPING)
 		printf ("\t 4.  Test/Continue\n");
 	else
 		printf ("\t 4.  Test/Stop\n");
@@ -1080,15 +1113,20 @@ loop:	printf ("\n");
 		askOK ();
 		break;
 
-/* Test/Continue or Test/Stop */
+/* Test/Continue or Stop or Test/Continue or Test/Stop */
 
 	case 4:
-		if (!WORKER_THREADS_ACTIVE || WORKER_THREADS_STOPPING) {
-			while (WORKER_THREADS_STOPPING) sleep (50);
-			linuxContinue ("Another mprime is running.\n", FALSE);
-		} else {
+		if (WORKER_THREADS_ACTIVE && active_workers_count () < WORKER_THREADS_ACTIVE)
+			test_continue_or_stop ();
+		else if (NUM_WORKER_THREADS > 1 && active_workers_count () < WORKER_THREADS_ACTIVE - 1)
+			test_continue ();
+		else if (!WORKER_THREADS_ACTIVE || WORKER_THREADS_STOPPING) {
+			while (WORKER_THREADS_STOPPING) Sleep (50);
+			linuxContinue ("Another mprime is running.\n", ALL_WORKERS, FALSE);
+		} else if (active_workers_count () > 1)
+			test_stop ();
+		else
 			stop_workers_for_escape ();
-		}
 		break;
 
 /* Test/Exit */
@@ -1100,7 +1138,7 @@ loop:	printf ("\n");
 			stop_workers_for_escape ();
 		while (WORKER_THREADS_STOPPING) {
 			if (counter++ % 100 == 0) printf ("Waiting for worker threads to stop.\n");
-			sleep (50);
+			Sleep (50);
 		}
 		}
 		return;

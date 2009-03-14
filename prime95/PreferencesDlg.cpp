@@ -49,7 +49,8 @@ void CPreferencesDlg::DoDataExchange(CDataExchange* pDX)
 	DDV_MinMaxUInt(pDX, m_iter, 1, 999999999);
 	DDX_Text(pDX, IDC_DISK, m_disk_write_time);
 	DDV_MinMaxUInt(pDX, m_disk_write_time, 10, 999999);
-	DDX_Check(pDX, IDC_BACKUP, m_backup);
+	DDX_Text(pDX, IDC_BACKUP, m_backup);
+	DDV_MinMaxUInt(pDX, m_backup, 1, 3);
 	DDX_Check(pDX, IDC_NOISE, m_noise);
 	DDX_Text(pDX, IDC_NETWORK, m_retry);
 	DDV_MinMaxUInt(pDX, m_retry, 1, 300);

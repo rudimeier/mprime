@@ -1,6 +1,6 @@
 /* Constants */
 
-#define VERSION		"25.8"
+#define VERSION		"25.9"
 #define BUILD_NUM	"4"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
@@ -12,6 +12,7 @@
 /* OS/2		   #7 */
 /* Linux x86-64	   #8 */
 /* Mac OS X	   #9 */
+/* Mac OS X 64-bit #10 */
 
 #define MIN_PRIME	5L		/* Smallest testable prime */
 #define MAX_FACTOR	2000000000	/* Largest factorable Mersenne number*/
@@ -102,7 +103,6 @@ extern char WORKTODO_FILE[80];		/* Name of the work-to-do INI file */
 extern char RESFILE[80];		/* Name of the results file */
 extern char SPOOL_FILE[80];		/* Name of the spool file */
 extern char LOGFILE[80];		/* Name of the server log file */
-extern char EXTENSION[8];		/* Extension for several filenames */
 
 extern char USERID[21];			/* User's ID */
 extern char COMPID[21];			/* Computer name */
@@ -139,7 +139,8 @@ extern unsigned int NETWORK_RETRY_TIME;	/* How often to try sending msgs */
 					/* to primenet server */
 extern unsigned int DAYS_BETWEEN_CHECKINS; /* Days between sending updated */
 					/* completion dates to the server */
-extern int TWO_BACKUP_FILES;		/* TRUE for 2 backup files(qXXXXXXX) */
+extern int NUM_BACKUP_FILES;		/* Between 1 and 3 backup files (or 99 */
+					/* for overwrite) */
 extern int SILENT_VICTORY;		/* Quiet find of new Mersenne prime */
 extern int RUN_ON_BATTERY;		/* Run program even on battery power */
 extern int BATTERY_PERCENT;		/* Pause if battery below this */

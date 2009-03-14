@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -26,7 +26,7 @@ X87_CASES	EQU	0
 ELSE
 X87_CASES	EQU	13
 ENDIF
-SSE2_CASES	EQU	134
+SSE2_CASES	EQU	126
 
 loopent	MACRO	y,z		; Create a entry in the loop entry table
 	DP	&y&z
@@ -179,7 +179,27 @@ sse2mac MACRO	lab, memused, memarea, ops:vararg
 	LOCAL	ss0a, ss0b
 	inner_iters = memarea / memused
 	outer_iters = 10000 / inner_iters
-lab:	mov	rbx, 262144+128		;; Offset for some sse2 macros
+lab:	mov	rbx, 0			;; Offset for some sse2 macros (s.b. non-zero for with_mult macros)
+	mov	rbp, 524288+256		;; Offset for mulf sse2 macros
+	mov	eax, outer_iters
+	mov	SRCARG, rdi		;; Save work buf addr
+ss0a:	mov	rdi, SRCARG		;; Reload work buf addr (sincos data)
+	lea	rsi, [rdi+4096]		;; Source & dest ptr
+	lea	rdx, [rsi+524288+256]	;; Destination for "g" macros
+	mov	ecx, inner_iters
+ss0b:	&ops
+	lea	rdi, [rdi+2*XMM_SCD]	;; Next sine/cosine pointer
+	dec	ecx
+	jnz	ss0b
+	dec	eax
+	jnz	ss0a
+	jmp	exit
+	ENDM
+sse2macbx MACRO	lab, memused, memarea, ops:vararg
+	LOCAL	ss0a, ss0b
+	inner_iters = memarea / memused
+	outer_iters = 10000 / inner_iters
+lab:	mov	rbx, 262144+128		;; Offset for some sse2 macros (s.b. non-zero for with_mult macros)
 	mov	rbp, 524288+256		;; Offset for mulf sse2 macros
 	mov	eax, outer_iters
 	mov	SRCARG, rdi		;; Save work buf addr
@@ -255,9 +275,11 @@ ENDIF
 ; Jump to desired test case
 
 	sub	rdx, 1000
-	mov	rax, sse2table[rdx*SZPTR]; Get address of test to execute
+	mov	rax, OFFSET sse2table
+	mov	rax, [rax+rdx*SZPTR]; Get address of test to execute
 	jmp	rax
-x87:	mov	rax, x87table[rdx*SZPTR]; Get address of test to execute
+x87:	mov	rax, OFFSET x87table
+	mov	rax, [rax+rdx*SZPTR]; Get address of test to execute
 	jmp	rax
 
 ; Time the "do-nothing" case.
@@ -401,10 +423,10 @@ sscase11:
 	sse2mac sscase27, 128, 100000, s2cl_eight_reals_fft_2_final rsi, 2*64, 64
 	sse2mac sscase28, 128, 4096, s2cl_eight_reals_with_square_2 rsi, 2*64, 64
 	sse2mac sscase29, 128, 100000, s2cl_eight_reals_with_square_2 rsi, 2*64, 64
-	sse2mac sscase30, 128, 4096, s2cl_eight_reals_with_mult_2 rsi, 2*64, 64
-	sse2mac sscase31, 128, 100000, s2cl_eight_reals_with_mult_2 rsi, 2*64, 64
-	sse2mac sscase32, 128, 4096, s2cl_eight_reals_with_mulf_2 rsi, 2*64, 64
-	sse2mac sscase33, 128, 100000, s2cl_eight_reals_with_mulf_2 rsi, 2*64, 64
+	sse2macbx sscase30, 128, 4096, s2cl_eight_reals_with_mult_2 rsi, 2*64, 64
+	sse2macbx sscase31, 128, 100000, s2cl_eight_reals_with_mult_2 rsi, 2*64, 64
+	sse2macbx sscase32, 128, 4096, s2cl_eight_reals_with_mulf_2 rsi, 2*64, 64
+	sse2macbx sscase33, 128, 100000, s2cl_eight_reals_with_mulf_2 rsi, 2*64, 64
 	sse2mac sscase34, 256, 4096, x4cl_eight_reals_fft_2 rsi, 4*64, 64, 2*64
 	sse2mac sscase35, 256, 100000, x4cl_eight_reals_fft_2 rsi, 4*64, 64, 2*64
 	sse2mac sscase36, 256, 4096, g4cl_eight_reals_fft_2 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64
@@ -443,77 +465,69 @@ sscase11:
 	sse2mac sscase65, 128, 100000, s2cl_four_complex_fft_final rsi, 2*64, 64
 	sse2mac sscase66, 128, 4096, s2cl_four_complex_with_square rsi, 2*64, 64
 	sse2mac sscase67, 128, 100000, s2cl_four_complex_with_square rsi, 2*64, 64
-	sse2mac sscase68, 128, 4096, s2cl_four_complex_with_mult rsi, 2*64, 64
-	sse2mac sscase69, 128, 100000, s2cl_four_complex_with_mult rsi, 2*64, 64
-	sse2mac sscase70, 128, 4096, s2cl_four_complex_with_mulf rsi, 2*64, 64
-	sse2mac sscase71, 128, 100000, s2cl_four_complex_with_mulf rsi, 2*64, 64
+	sse2macbx sscase68, 128, 4096, s2cl_four_complex_with_mult rsi, 2*64, 64
+	sse2macbx sscase69, 128, 100000, s2cl_four_complex_with_mult rsi, 2*64, 64
+	sse2macbx sscase70, 128, 4096, s2cl_four_complex_with_mulf rsi, 2*64, 64
+	sse2macbx sscase71, 128, 100000, s2cl_four_complex_with_mulf rsi, 2*64, 64
 	sse2mac sscase72, 256, 4096, x4cl_four_complex_fft rsi, 4*64, 64, 2*64
 	sse2mac sscase73, 256, 100000, x4cl_four_complex_fft rsi, 4*64, 64, 2*64
-	sse2mac sscase74, 256, 4096, x4cl_four_complex_cpm01_fft rsi, 4*64, 64, 2*64
-	sse2mac sscase75, 256, 100000, x4cl_four_complex_cpm01_fft rsi, 4*64, 64, 2*64
-	sse2mac sscase76, 256, 4096, x4cl_four_complex_cpm23_fft rsi, 4*64, 64, 2*64
-	sse2mac sscase77, 256, 100000, x4cl_four_complex_cpm23_fft rsi, 4*64, 64, 2*64
-	sse2mac sscase78, 256, 4096, g4cl_four_complex_fft rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64
-	sse2mac sscase79, 256, 100000, g4cl_four_complex_fft rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64
-	sse2mac sscase80, 256, 4096, x4cl_four_complex_with_square rsi, 4*64, 64, 2*64
-	sse2mac sscase81, 256, 100000, x4cl_four_complex_with_square rsi, 4*64, 64, 2*64
-	sse2mac sscase82, 256, 4096, x4cl_four_complex_with_mult rsi, 4*64, 64, 2*64
-	sse2mac sscase83, 256, 100000, x4cl_four_complex_with_mult rsi, 4*64, 64, 2*64
-	sse2mac sscase84, 256, 4096, x4cl_four_complex_with_mulf rsi, 4*64, 64, 2*64
-	sse2mac sscase85, 256, 100000, x4cl_four_complex_with_mulf rsi, 4*64, 64, 2*64
+	sse2mac sscase74, 256, 4096, x4cl_four_complex_cpm_fft rsi, 4*64, 64, 2*64, 0
+	sse2mac sscase75, 256, 100000, x4cl_four_complex_cpm_fft rsi, 4*64, 64, 2*64, 0
+	sse2mac sscase76, 256, 4096, g4cl_four_complex_fft rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64
+	sse2mac sscase77, 256, 100000, g4cl_four_complex_fft rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64
+	sse2mac sscase78, 256, 4096, x4cl_four_complex_with_square rsi, 4*64, 64, 2*64
+	sse2mac sscase79, 256, 100000, x4cl_four_complex_with_square rsi, 4*64, 64, 2*64
+	sse2macbx sscase80, 256, 4096, x4cl_four_complex_with_mult rsi, 4*64, 64, 2*64
+	sse2macbx sscase81, 256, 100000, x4cl_four_complex_with_mult rsi, 4*64, 64, 2*64
+	sse2macbx sscase82, 256, 4096, x4cl_four_complex_with_mulf rsi, 4*64, 64, 2*64
+	sse2macbx sscase83, 256, 100000, x4cl_four_complex_with_mulf rsi, 4*64, 64, 2*64
 
-	sse2mac sscase86, 128, 4096, x2cl_four_complex_unfft rsi, 2*64, 64
-	sse2mac sscase87, 128, 100000, x2cl_four_complex_unfft rsi, 2*64, 64
-	sse2mac sscase88, 128, 4096, g2cl_four_complex_unfft rsi, 2*64, 64, rdx, 2*64, 64
-	sse2mac sscase89, 128, 100000, g2cl_four_complex_unfft rsi, 2*64, 64, rdx, 2*64, 64
-	sse2mac sscase90, 256, 4096, x4cl_four_complex_unfft rsi, 4*64, 64, 2*64
-	sse2mac sscase91, 256, 100000, x4cl_four_complex_unfft rsi, 4*64, 64, 2*64
-	sse2mac sscase92, 256, 4096, x4cl_four_complex_last_unfft rsi, 4*64, 64, 2*64, 0
-	sse2mac sscase93, 256, 100000, x4cl_four_complex_last_unfft rsi, 4*64, 64, 2*64, 0
-	sse2mac sscase94, 256, 4096, s4cl_four_complex_gpm_unfft rsi, 4*64, 64, 2*64, 0
-	sse2mac sscase95, 256, 100000, s4cl_four_complex_gpm_unfft rsi, 4*64, 64, 2*64, 0
-	sse2mac sscase96, 256, 4096, x4cl_four_complex_cpm0_unfft rsi, 4*64, 64, 2*64
-	sse2mac sscase97, 256, 100000, x4cl_four_complex_cpm0_unfft rsi, 4*64, 64, 2*64
-	sse2mac sscase98, 256, 4096, x4cl_four_complex_cpm1_unfft rsi, 4*64, 64, 2*64
-	sse2mac sscase99, 256, 100000, x4cl_four_complex_cpm1_unfft rsi, 4*64, 64, 2*64
-	sse2mac sscase100, 256, 4096, x4cl_four_complex_cpm2_unfft rsi, 4*64, 64, 2*64
-	sse2mac sscase101, 256, 100000, x4cl_four_complex_cpm2_unfft rsi, 4*64, 64, 2*64
-	sse2mac sscase102, 256, 4096, x4cl_four_complex_cpm3_unfft rsi, 4*64, 64, 2*64
-	sse2mac sscase103, 256, 100000, x4cl_four_complex_cpm3_unfft rsi, 4*64, 64, 2*64
+	sse2mac sscase84, 128, 4096, x2cl_four_complex_unfft rsi, 2*64, 64
+	sse2mac sscase85, 128, 100000, x2cl_four_complex_unfft rsi, 2*64, 64
+	sse2mac sscase86, 128, 4096, g2cl_four_complex_unfft rsi, 2*64, 64, rdx, 2*64, 64
+	sse2mac sscase87, 128, 100000, g2cl_four_complex_unfft rsi, 2*64, 64, rdx, 2*64, 64
+	sse2mac sscase88, 256, 4096, x4cl_four_complex_unfft rsi, 4*64, 64, 2*64
+	sse2mac sscase89, 256, 100000, x4cl_four_complex_unfft rsi, 4*64, 64, 2*64
+	sse2mac sscase90, 256, 4096, x4cl_four_complex_last_unfft rsi, 4*64, 64, 2*64, 0
+	sse2mac sscase91, 256, 100000, x4cl_four_complex_last_unfft rsi, 4*64, 64, 2*64, 0
+	sse2mac sscase92, 256, 4096, s4cl_four_complex_gpm_unfft rsi, 4*64, 64, 2*64, 0
+	sse2mac sscase93, 256, 100000, s4cl_four_complex_gpm_unfft rsi, 4*64, 64, 2*64, 0
+	sse2mac sscase94, 256, 4096, x4cl_four_complex_cpm_unfft rsi, 4*64, 64, 2*64
+	sse2mac sscase95, 256, 100000, x4cl_four_complex_cpm_unfft rsi, 4*64, 64, 2*64
 
-	sse2mac sscase104, 192, 4096, x3cl_six_reals_first_fft rsi, 3*64, 64
-	sse2mac sscase105, 192, 100000, x3cl_six_reals_first_fft rsi, 3*64, 64
-	sse2mac sscase106, 192, 4096, g3cl_six_reals_first_fft rsi, 3*64, 64, rdx, 3*64, 64
-	sse2mac sscase107, 192, 100000, g3cl_six_reals_first_fft rsi, 3*64, 64, rdx, 3*64, 64
-	sse2mac sscase108, 192, 4096, s3cl_six_reals_first_fft rsi, 3*64, 64
-	sse2mac sscase109, 192, 100000, s3cl_six_reals_first_fft rsi, 3*64, 64
-	sse2mac sscase110, 192, 4096, x3cl_six_reals_last_unfft rsi, 3*64, 64
-	sse2mac sscase111, 192, 100000, x3cl_six_reals_last_unfft rsi, 3*64, 64
+	sse2mac sscase96, 192, 4096, x3cl_six_reals_first_fft rsi, 3*64, 64
+	sse2mac sscase97, 192, 100000, x3cl_six_reals_first_fft rsi, 3*64, 64
+	sse2mac sscase98, 192, 4096, g3cl_six_reals_first_fft rsi, 3*64, 64, rdx, 3*64, 64
+	sse2mac sscase99, 192, 100000, g3cl_six_reals_first_fft rsi, 3*64, 64, rdx, 3*64, 64
+	sse2mac sscase100, 192, 4096, s3cl_six_reals_first_fft rsi, 3*64, 64
+	sse2mac sscase101, 192, 100000, s3cl_six_reals_first_fft rsi, 3*64, 64
+	sse2mac sscase102, 192, 4096, x3cl_six_reals_last_unfft rsi, 3*64, 64
+	sse2mac sscase103, 192, 100000, x3cl_six_reals_last_unfft rsi, 3*64, 64
 
-	sse2mac sscase112, 192, 4096, x3cl_three_complex_first_fft rsi, 3*64, 64
-	sse2mac sscase113, 192, 100000, x3cl_three_complex_first_fft rsi, 3*64, 64
-	sse2mac sscase114, 192, 4096, s3cl_three_complex_first_fft rsi, 3*64, 64
-	sse2mac sscase115, 192, 100000, s3cl_three_complex_first_fft rsi, 3*64, 64
-	sse2mac sscase116, 192, 4096, x3cl_three_complex_last_unfft rsi, 3*64, 64
-	sse2mac sscase117, 192, 100000, x3cl_three_complex_last_unfft rsi, 3*64, 64
+	sse2mac sscase104, 192, 4096, x3cl_three_complex_first_fft rsi, 3*64, 64
+	sse2mac sscase105, 192, 100000, x3cl_three_complex_first_fft rsi, 3*64, 64
+	sse2mac sscase106, 192, 4096, s3cl_three_complex_first_fft rsi, 3*64, 64
+	sse2mac sscase107, 192, 100000, s3cl_three_complex_first_fft rsi, 3*64, 64
+	sse2mac sscase108, 192, 4096, x3cl_three_complex_last_unfft rsi, 3*64, 64
+	sse2mac sscase109, 192, 100000, x3cl_three_complex_last_unfft rsi, 3*64, 64
 
-	sse2mac sscase118, 320, 4096, x5cl_five_reals_first_fft rsi, 5*64, 64
-	sse2mac sscase119, 320, 100000, x5cl_five_reals_first_fft rsi, 5*64, 64
-	sse2mac sscase120, 320, 4096, g5cl_five_reals_first_fft rsi, 5*64, 64, rdx, 5*64, 64
-	sse2mac sscase121, 320, 100000, g5cl_five_reals_first_fft rsi, 5*64, 64, rdx, 5*64, 64
-	sse2mac sscase122, 320, 4096, s5cl_five_reals_first_fft rsi, 5*64, 64
-	sse2mac sscase123, 320, 100000, s5cl_five_reals_first_fft rsi, 5*64, 64
-	sse2mac sscase124, 320, 4096, x5cl_five_reals_last_unfft rsi, 5*64, 64
-	sse2mac sscase125, 320, 100000, x5cl_five_reals_last_unfft rsi, 5*64, 64
+	sse2mac sscase110, 320, 4096, x5cl_five_reals_first_fft rsi, 5*64, 64
+	sse2mac sscase111, 320, 100000, x5cl_five_reals_first_fft rsi, 5*64, 64
+	sse2mac sscase112, 320, 4096, g5cl_five_reals_first_fft rsi, 5*64, 64, rdx, 5*64, 64
+	sse2mac sscase113, 320, 100000, g5cl_five_reals_first_fft rsi, 5*64, 64, rdx, 5*64, 64
+	sse2mac sscase114, 320, 4096, s5cl_five_reals_first_fft rsi, 5*64, 64
+	sse2mac sscase115, 320, 100000, s5cl_five_reals_first_fft rsi, 5*64, 64
+	sse2mac sscase116, 320, 4096, x5cl_five_reals_last_unfft rsi, 5*64, 64
+	sse2mac sscase117, 320, 100000, x5cl_five_reals_last_unfft rsi, 5*64, 64
 
-	sse2mac sscase126, 448, 4096, x7cl_seven_reals_first_fft rsi, 7*64, 64
-	sse2mac sscase127, 448, 100000, x7cl_seven_reals_first_fft rsi, 7*64, 64
-	sse2mac sscase128, 448, 4096, g7cl_seven_reals_first_fft rsi, 7*64, 64, rdx, 7*64, 64
-	sse2mac sscase129, 448, 100000, g7cl_seven_reals_first_fft rsi, 7*64, 64, rdx, 7*64, 64
-	sse2mac sscase130, 448, 4096, s7cl_seven_reals_first_fft rsi, 7*64, 64
-	sse2mac sscase131, 448, 100000, s7cl_seven_reals_first_fft rsi, 7*64, 64
-	sse2mac sscase132, 448, 4096, x7cl_seven_reals_last_unfft rsi, 7*64, 64
-	sse2mac sscase133, 448, 100000, x7cl_seven_reals_last_unfft rsi, 7*64, 64
+	sse2mac sscase118, 448, 4096, x7cl_seven_reals_first_fft rsi, 7*64, 64
+	sse2mac sscase119, 448, 100000, x7cl_seven_reals_first_fft rsi, 7*64, 64
+	sse2mac sscase120, 448, 4096, g7cl_seven_reals_first_fft rsi, 7*64, 64, rdx, 7*64, 64
+	sse2mac sscase121, 448, 100000, g7cl_seven_reals_first_fft rsi, 7*64, 64, rdx, 7*64, 64
+	sse2mac sscase122, 448, 4096, s7cl_seven_reals_first_fft rsi, 7*64, 64
+	sse2mac sscase123, 448, 100000, s7cl_seven_reals_first_fft rsi, 7*64, 64
+	sse2mac sscase124, 448, 4096, x7cl_seven_reals_last_unfft rsi, 7*64, 64
+	sse2mac sscase125, 448, 100000, x7cl_seven_reals_last_unfft rsi, 7*64, 64
 
 ; Exit the timing code
 

@@ -719,7 +719,7 @@ void CPrime95Doc::OnPreferences()
 	dlg.m_retry = NETWORK_RETRY_TIME;
 	dlg.m_work = DAYS_OF_WORK;
 	dlg.m_end_dates = DAYS_BETWEEN_CHECKINS;
-	dlg.m_backup = TWO_BACKUP_FILES;
+	dlg.m_backup = NUM_BACKUP_FILES;
 	dlg.m_noise = !SILENT_VICTORY;
 	dlg.m_battery = RUN_ON_BATTERY;
 	if (dlg.DoModal () == IDOK) {
@@ -730,7 +730,7 @@ void CPrime95Doc::OnPreferences()
 		NETWORK_RETRY_TIME = dlg.m_retry;
 		DAYS_OF_WORK = dlg.m_work;
 		DAYS_BETWEEN_CHECKINS = dlg.m_end_dates;
-		TWO_BACKUP_FILES = dlg.m_backup;
+		NUM_BACKUP_FILES = dlg.m_backup;
 		SILENT_VICTORY = !dlg.m_noise;
 		if (RUN_ON_BATTERY != dlg.m_battery) {
 			RUN_ON_BATTERY = dlg.m_battery;
@@ -744,7 +744,7 @@ void CPrime95Doc::OnPreferences()
 		IniWriteInt (INI_FILE, "NetworkRetryTime2", NETWORK_RETRY_TIME);
 		IniWriteInt (INI_FILE, "DaysOfWork", DAYS_OF_WORK);
 		IniWriteInt (INI_FILE, "DaysBetweenCheckins", DAYS_BETWEEN_CHECKINS);
-		IniWriteInt (INI_FILE, "TwoBackupFiles", TWO_BACKUP_FILES);
+		IniWriteInt (INI_FILE, "NumBackupFiles", NUM_BACKUP_FILES);
 		IniWriteInt (INI_FILE, "SilentVictory", SILENT_VICTORY);
 		spoolMessage (PRIMENET_PROGRAM_OPTIONS, NULL);
 	}
@@ -792,9 +792,7 @@ void CPrime95Doc::OnTorture()
 	if (dlg.DoModal () == IDOK) {
 		IniWriteInt (INI_FILE, "MinTortureFFT", dlg.m_minfft);
 		IniWriteInt (INI_FILE, "MaxTortureFFT", dlg.m_maxfft);
-		mem = dlg.m_memory;
-		if (mem > dlg.m_blendmemory) mem = dlg.m_blendmemory;
-		mem = mem / dlg.m_thread;
+		mem = dlg.m_memory / dlg.m_thread;
 		if (dlg.m_in_place_fft) mem = 8;
 		IniWriteInt (INI_FILE, "TortureMem", mem);
 		IniWriteInt (INI_FILE, "TortureTime", dlg.m_timefft);
