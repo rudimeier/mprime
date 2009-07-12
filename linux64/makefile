@@ -1,4 +1,4 @@
-# Makefile for Linux x86-64 mprime
+# Makefile for Linux 64-bit mprime
 #
 
 CC = gcc
@@ -8,21 +8,16 @@ CPP = g++
 CPPFLAGS = -I.. -I../gwnum -DX86_64 -O2
 
 LFLAGS = -Wl,-M
-LIBS   = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lm -lpthread -lcurl -lstdc++
-LIBS2  = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lm -lpthread -lcurl -lstdc++ -static
+LIBS = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lm -lpthread -Wl,-Bstatic -lcurl -lstdc++ -Wl,-Bdynamic -ldl
 
 FACTOROBJ = factor64.o
 LINUXOBJS = prime.o menu.o
 EXE      = mprime
-EXE2	 = sprime
 
 #########################################################################
 
 $(EXE): security $(LINUXOBJS) $(FACTOROBJ)
 	$(CC) $(LFLAGS) -o $(EXE) $(LINUXOBJS) $(FACTOROBJ) $(LIBS)
-
-$(EXE2): security $(LINUXOBJS) $(FACTOROBJ)
-	$(CC) $(LFLAGS) -o $(EXE2) $(LINUXOBJS) $(FACTOROBJ) $(LIBS2)
 
 security:
 	[ ! -e ../security.h ] && touch ../security.h || true

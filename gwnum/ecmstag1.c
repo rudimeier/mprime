@@ -1,6 +1,6 @@
 /* GWNUM -- IBDWT FFT package for large numbers.
 
-  Copyright 1996-2007 Mersenne Research, Inc.
+  Copyright 1996-2009 Mersenne Research, Inc.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of the GNU General Public License as published by the
@@ -742,7 +742,7 @@ int modinv (
 
 	if (v->sign < 0) {
 		negg (v);
-		FAC = newgiant ((bitlen (v) >> 4) + 1);
+		FAC = allocgiant (v->sign);
 		gtog (v, FAC);
 	}
 
@@ -869,7 +869,7 @@ int gwnum_ecmStage1 (
 /* Turn the input number we are factoring into a giant.  Either use the */
 /* number we were passed in or calculate k*b^n+c */
 
-	N = newgiant ((bits >> 4) + 1);
+	N = allocgiant ((bits >> 5) + 1);
 	if (N == NULL) goto no_mem;
 	if (num_being_factored_array != NULL && num_being_factored_array_len) {
 		giantstruct tmp;

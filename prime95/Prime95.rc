@@ -79,7 +79,7 @@ BEGIN
     POPUP "&Test"
     BEGIN
         MENUITEM "&PrimeNet...",                IDM_PRIMENET
-        MENUITEM "&Worker windows...",          IDM_WORKER_THREADS
+        MENUITEM "&Worker Windows...",          IDM_WORKER_THREADS
         MENUITEM SEPARATOR
         MENUITEM "&Status...",                  IDM_STATUS
         MENUITEM SEPARATOR
@@ -143,7 +143,7 @@ BEGIN
     POPUP "&Test"
     BEGIN
         MENUITEM "&PrimeNet...",                IDM_PRIMENET
-        MENUITEM "&Worker windows...",          IDM_WORKER_THREADS
+        MENUITEM "&Worker Windows...",          IDM_WORKER_THREADS
         MENUITEM SEPARATOR
         MENUITEM "&Status...",                  IDM_STATUS
         MENUITEM SEPARATOR
@@ -274,26 +274,26 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,117,24,50,14
 END
 
-IDD_CPU DIALOGEX 0, 0, 245, 153
+IDD_CPU DIALOGEX 0, 0, 255, 153
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "CPU Settings and Information"
 FONT 8, "MS Sans Serif", 0, 0, 0x0
 BEGIN
-    LTEXT           "&Hours per day this program will run:",IDC_STATIC,7,8,116,10
-    EDITTEXT        IDC_HOURS,129,7,36,12
-    LTEXT           "&Daytime available memory  (in MB):",IDC_DAY_MEMORY_TEXT,7,43,116,10
-    EDITTEXT        IDC_DAY_MEMORY,129,41,36,12
-    LTEXT           "&Nighttime available memory  (in MB):",IDC_NIGHT_MEMORY_TEXT,7,56,117,10
-    EDITTEXT        IDC_NIGHT_MEMORY,129,54,36,12
+    LTEXT           "&Hours per day this program will run:",IDC_STATIC,7,8,143,10
+    EDITTEXT        IDC_HOURS,152,7,36,12
+    LTEXT           "Please see the readme.txt file for very important information on the P-1/ECM stage 2 memory settings.",IDC_STATIC,7,21,181,16
+    LTEXT           "&Daytime P-1/ECM stage 2 memory (in MB):",IDC_DAY_MEMORY_TEXT,7,43,143,10
+    EDITTEXT        IDC_DAY_MEMORY,152,41,36,12
+    LTEXT           "&Nighttime P-1/ECM stage 2 memory (in MB):",IDC_NIGHT_MEMORY_TEXT,7,56,143,10
+    EDITTEXT        IDC_NIGHT_MEMORY,152,54,36,12
     LTEXT           "Daytime &begins:",IDC_START_TIME_TEXT,7,69,51,10
     EDITTEXT        IDC_START_TIME,61,67,37,12,ES_AUTOHSCROLL
     LTEXT           "end&s:",IDC_END_TIME_TEXT,106,69,20,10
     EDITTEXT        IDC_END_TIME,129,67,36,12,ES_AUTOHSCROLL
-    DEFPUSHBUTTON   "OK",IDOK,188,7,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,188,24,50,14
-    LTEXT           "Please see the readme.txt file for very important information on the available memory settings.",IDC_STATIC,7,21,177,16
-    GROUPBOX        "CPU Information",IDC_STATIC,7,88,231,58
-    LTEXT           "",IDC_CPU_INFO,13,99,218,42
+    GROUPBOX        "CPU Information",IDC_STATIC,7,88,241,58
+    LTEXT           "",IDC_CPU_INFO,13,99,228,42
+    DEFPUSHBUTTON   "OK",IDOK,198,7,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,198,24,50,14
 END
 
 IDD_TIME DIALOGEX 0, 0, 190, 46
@@ -303,7 +303,7 @@ FONT 8, "MS Sans Serif", 0, 0, 0x0
 BEGIN
     LTEXT           "&Exponent to time:",IDC_STATIC,7,9,59,10
     EDITTEXT        IDC_P,81,7,42,12,ES_NUMBER
-    LTEXT           "&Number of Iterations:",IDC_STATIC,7,23,72,8
+    LTEXT           "&Number of iterations:",IDC_STATIC,7,23,72,8
     EDITTEXT        IDC_EDIT1,81,21,42,12,ES_NUMBER
     DEFPUSHBUTTON   "OK",IDOK,133,7,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,133,24,50,14
@@ -398,7 +398,7 @@ FONT 8, "MS Sans Serif", 0, 0, 0x0
 BEGIN
     LTEXT           "&Worker number:",IDC_THREAD_TEXT,7,9,54,10
     EDITTEXT        IDC_THREAD,64,7,22,12
-    LTEXT           "&Number to test:",-1,7,25,51,10
+    LTEXT           "&Number to factor:",-1,7,25,51,10
     EDITTEXT        IDC_P4,59,23,33,12,ES_RIGHT
     LTEXT           "*",-1,96,26,8,8
     EDITTEXT        IDC_P1,102,23,12,12,ES_CENTER
@@ -406,9 +406,9 @@ BEGIN
     LTEXT           "+",-1,158,26,8,8
     EDITTEXT        IDC_P6,167,23,27,12
     LTEXT           "Bound #&1:",-1,7,41,34,8
-    EDITTEXT        IDC_P2,52,39,47,12
+    EDITTEXT        IDC_P2,52,39,47,12,ES_AUTOHSCROLL
     LTEXT           "Bound #&2:",-1,109,41,34,8
-    EDITTEXT        IDC_P3,150,39,45,12
+    EDITTEXT        IDC_P3,150,39,45,12,ES_AUTOHSCROLL
     LTEXT           "&Number of curves:",-1,7,58,62,8
     EDITTEXT        IDC_NUM_CURVES,71,55,28,12
     DEFPUSHBUTTON   "OK",IDOK,197,7,50,14
@@ -422,7 +422,7 @@ FONT 8, "MS Sans Serif", 0, 0, 0x0
 BEGIN
     LTEXT           "&Worker number:",IDC_THREAD_TEXT,7,10,64,10
     EDITTEXT        IDC_THREAD,64,7,22,12
-    LTEXT           "&Number to test:",-1,7,29,51,10
+    LTEXT           "&Number to factor:",-1,7,29,51,10
     EDITTEXT        IDC_P4,59,27,33,12,ES_RIGHT
     LTEXT           "*",-1,96,30,8,8
     EDITTEXT        IDC_P1,102,27,12,12,ES_CENTER
@@ -430,9 +430,9 @@ BEGIN
     LTEXT           "+",-1,158,30,8,8
     EDITTEXT        IDC_P6,167,27,24,12
     LTEXT           "Bound #&1:",-1,7,46,34,8
-    EDITTEXT        IDC_P2,49,44,45,12
+    EDITTEXT        IDC_P2,49,44,45,12,ES_AUTOHSCROLL
     LTEXT           "Bound #&2:",-1,120,46,34,8
-    EDITTEXT        IDC_P3,162,44,45,12
+    EDITTEXT        IDC_P3,162,44,45,12,ES_AUTOHSCROLL
     DEFPUSHBUTTON   "OK",IDOK,196,7,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,196,22,50,14
 END
@@ -459,7 +459,7 @@ BEGIN
     EDITTEXT        IDC_P,107,45,42,12
     DEFPUSHBUTTON   "OK",IDOK,181,7,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,181,24,50,14
-    LTEXT           "Use this only if you are sure you will not be finishing this exponent.  The exponent will be assigned to someone else.  It is not fair to them if you test an exponent assigned to someone else.",IDC_STATIC,7,7,165,37
+    LTEXT           "Use this only if you are sure you will not be finishing this exponent.  The exponent will be assigned to someone else.  It is not fair to them if you subsequently finish testing the exponent.",IDC_STATIC,7,7,165,37
 END
 
 IDD_TORTURE DIALOGEX 0, 0, 332, 142
@@ -506,7 +506,7 @@ BEGIN
     COMBOBOX        IDC_COMBO2,90,78,200,81,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     LTEXT           "CPU &affinity:",IDC_AFFINITY_TEXT,9,98,45,8
     COMBOBOX        IDC_COMBO3,90,96,200,67,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Multithreading (&CPUs to use):",IDC_NUMCPUS_TEXT,9,116,102,8
+    LTEXT           "&CPUs to use (multithreading):",IDC_NUMCPUS_TEXT,9,116,102,8
     EDITTEXT        IDC_NUMCPUS,126,114,36,12
     LTEXT           "WARNING: It is strongly recommended that you use the default priority of 1.  This program is unlikely to run any faster at a higher priority.",IDC_WARN1,7,143,293,18
     LTEXT           "Pick a priority between 1 and 10 where 1 is the lowest priority and 10 is the highest.  Screen savers run at priority 4.  Most applications run at priority 7 or 9.",IDC_WARN2,7,162,293,18
@@ -546,8 +546,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 25,9,4,0
- PRODUCTVERSION 25,9,0,0
+ FILEVERSION 25,11,1,0
+ PRODUCTVERSION 25,11,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -563,12 +563,12 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "FileDescription", "PRIME95 Application"
-            VALUE "FileVersion", "25, 9, 4, 0"
+            VALUE "FileVersion", "25, 11, 1, 0"
             VALUE "InternalName", "PRIME95"
             VALUE "LegalCopyright", "Copyright © 1996-2009, Mersenne Research Inc."
             VALUE "OriginalFilename", "PRIME95.EXE"
             VALUE "ProductName", "PRIME95 Application"
-            VALUE "ProductVersion", "25, 9, 0, 0"
+            VALUE "ProductVersion", "25, 11, 0, 0"
         END
     END
     BLOCK "VarFileInfo"

@@ -1,4 +1,4 @@
-# Makefile for Linux mprime
+# Makefile for Linux 32-bit mprime
 #
 
 CC = gcc
@@ -8,21 +8,16 @@ CPP = g++
 CPPFLAGS = -I.. -I../gwnum -O2 -march=i486 -malign-double
 
 LFLAGS = -Wl,-M
-LIBS   = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lm -lpthread -lcurl -lstdc++
-LIBS2  = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lm -lpthread -lcurl -lstdc++ -static
+LIBS = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lm -lpthread -Wl,-Bstatic -lcurl -lstdc++ -Wl,-Bdynamic -ldl
 
 FACTOROBJ = factor32.o
 LINUXOBJS = prime.o menu.o
 EXE      = mprime
-EXE2	 = sprime
 
 #########################################################################
 
 $(EXE): security $(LINUXOBJS) $(FACTOROBJ)
 	$(CC) $(LFLAGS) -o $(EXE) $(LINUXOBJS) $(FACTOROBJ) $(LIBS)
-
-$(EXE2): security $(LINUXOBJS) $(FACTOROBJ)
-	$(CC) $(LFLAGS) -o $(EXE2) $(LINUXOBJS) $(FACTOROBJ) $(LIBS2)
 
 security:
 	[ ! -e ../security.h ] && touch ../security.h || true
@@ -30,7 +25,7 @@ security:
 	[ ! -e ../secure5.c ] && touch ../secure5.c || true
 
 clean:
-	rm -f $(EXE) $(EXE2) $(LINUXOBJS) $(FACTOROBJ)
+	rm -f $(EXE) $(EXE2) $(LINUXOBJS)
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2008 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
 | Author:  George Woltman
 | Email: woltman@alum.mit.edu
 |
@@ -49,8 +49,11 @@ extern double CPU_SPEED;		/* Actual CPU Speed in MHz */
 #define CPU_SSE41	0x0200
 #define CPU_SSE42	0x0400
 extern unsigned int CPU_FLAGS;		/* Cpu capabilities */
+extern unsigned int CPU_CORES;		/* Number CPU cores */
 extern unsigned int CPU_HYPERTHREADS;	/* Number of virtual processors */
-					/* that each CPU core supports */
+					/* that each CPU core supports. */
+					/* Total number logical processors */
+					/* is CPU_CORES * CPU_HYPERTHREADS */
 extern int CPU_L1_CACHE_SIZE;		/* In KB */
 extern int CPU_L2_CACHE_SIZE;		/* In KB */
 extern int CPU_L3_CACHE_SIZE;		/* In KB */

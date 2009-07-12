@@ -1,4 +1,4 @@
-; Copyright 2001-2006 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2009 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -15,7 +15,7 @@
 
 pass1_forward_fft_setup MACRO endlp
 	mov	NEXT_BLOCK, 0		;; Flag indicating forward fft setup
-	MOVOFFSET rax, endlp		;; Auxillary thread entry point
+	mov	rax, OFFSET endlp	;; Auxillary thread entry point
 	mov	THREAD_WORK_ROUTINE, rax ;; save addr for C code to call
 	c_call	PASS1_WAKE_UP_THREADS	;; C callback routine
 	ENDM
@@ -25,7 +25,7 @@ pass1_forward_fft_setup MACRO endlp
 pass1_inverse_fft_setup MACRO endlp
 	start_timer 1
 	mov	NEXT_BLOCK, 1		;; Flag indicating inverse fft setup
-	MOVOFFSET rax, endlp		;; Auxillary thread entry point
+	mov	rax, OFFSET endlp	;; Auxillary thread entry point
 	mov	THREAD_WORK_ROUTINE, rax ;; save addr for C code to call
 	c_call	PASS1_WAKE_UP_THREADS	;; C callback routine
 	ENDM
@@ -72,7 +72,7 @@ again:	c_call	PASS1_GET_NEXT_BLOCK	;; C callback routine
 	je	b0b			;; Do another forward FFT
 	cmp	al, 3
 	jl	short done		;; Pass 1 main thread done
-	JE_Y	pass1_aux_entry_point_return ;; Pass 1 auxillary thread done
+	je	pass1_aux_entry_point_return ;; Pass 1 auxillary thread done
 	cmp	al, 5
 	jl	pass2			;; Start pass 2
 
@@ -81,14 +81,14 @@ again:	c_call	PASS1_GET_NEXT_BLOCK	;; C callback routine
 ;; FFT data.
 
 	start_timer 29
-	CALL_Y	xgw_carries
+	call	xgw_carries
 	end_timer 29
 	jmp	short again
 
 ;; All done, end timer and jump to cleanup code
 
 done:	end_timer 1
-	JMP_Y	xgw_finish_mult
+	jmp	xgw_finish_mult
 	ENDM
 
 
@@ -132,7 +132,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -324,7 +324,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -527,7 +527,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -715,7 +715,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -936,7 +936,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -1143,7 +1143,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -1328,7 +1328,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -1634,7 +1634,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -1948,7 +1948,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -2230,7 +2230,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -2571,7 +2571,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -2881,7 +2881,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -3151,7 +3151,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -3488,7 +3488,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -3822,7 +3822,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -4107,7 +4107,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -4490,7 +4490,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -4822,7 +4822,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -5095,7 +5095,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -5550,7 +5550,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -6001,7 +6001,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -6365,7 +6365,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -6855,7 +6855,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -7304,7 +7304,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	xgw_finish_fft
+	je	xgw_finish_fft
 
 ;; Do the inverse FFT
 

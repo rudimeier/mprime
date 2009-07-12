@@ -1,0 +1,34 @@
+# Makefile for Haiku mprime
+#
+
+CC = gcc
+CFLAGS = -I.. -I../gwnum -O2 -march=i586 -malign-double
+
+CPP = g++
+CPPFLAGS = -I.. -I../gwnum -O2 -march=i586 -malign-double
+
+LFLAGS = -Wl,-M
+LIBS   = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lnetwork -lcurl -lstdc++.r4
+
+FACTOROBJ = factor32.o
+HAIKUOBJS = prime.o menu.o
+EXE      = mprime
+
++#########################################################################
+
+$(EXE): security $(HAIKUOBJS) $(FACTOROBJ)
+	$(CC) $(LFLAGS) -o $(EXE) $(HAIKUOBJS) $(FACTOROBJ) $(LIBS)
+
+security:
+	[ ! -e ../security.h ] && touch ../security.h || true
+	[ ! -e ../security.c ] && touch ../security.c || true
+	[ ! -e ../secure5.c ] && touch ../secure5.c || true
+
+clean:
+	rm -f $(EXE) $(HAIKUOBJS)
+	
+.c.o:
+	$(CC) $(CFLAGS) -c $<
+
+.cpp.o:
+	$(CPP) $(CPPFLAGS) -c $<

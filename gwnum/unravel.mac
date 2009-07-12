@@ -1,4 +1,4 @@
-; Copyright 1995-2008 - Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2009 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -26,6 +26,24 @@ ENDIF
 IFDEF	X86_64
 INCLUDE ksamd64.inc
 ENDIF
+
+;; MSVC 2005's MASM does not recognize the ROUNDPD instruction.  When I upgrade
+;; to a later version, this macro can be deleted.
+
+roundpd	MACRO arg1, arg2, arg3
+	LOCAL	x, y
+x:	nop				;; Roundpd is 3-byte opcode vs addpd 2 bytes
+	addpd	arg1, arg2		;; Get register byte written in proper spot
+	org	x
+	addpd	arg1, arg2		;; Get prefix byte(s) written in proper spot
+y:
+	org	y-3
+	DB	00Fh			;; Output roundpd's 3 byte opcode
+	DB	03Ah
+	DB	009h
+	org	y+1
+	DB	arg3			;; Output roundpd's immediate byte
+	ENDM
 
 ;; We must be very careful to obey the various ABIs on the OSes we run.
 ;; These macros help us do just that.
@@ -233,47 +251,70 @@ ah_prolog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
 
 ;; In Linux 64-bit, we are required to save fewer registers than
 ;; Windows 64-bit.  Stack must be maintained on a 16-byte boundary.
+;; This prolog code mimics what gcc produces in 64-bit mode with
+;; the -fomit-frame-pointer option.
 
 	IFDEF LINUX64
 
-	;; Save registers that callee must preserve
+	;; Calculate space needed to save registers that callee must preserve
 	push_amt = 0
 	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
-		push	rbx
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
-		push	rbp
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
-		push	r12
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
-		push	r13
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
-		push	r14
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
-		push	r15
 		push_amt = push_amt+8
 	ENDIF
 
 	;; Sum up and allocate space needed including pad for proper alignment
 	;; Adjust push_amt so that caller can access args on the stack.
-	stack_space = space_needed
+	stack_space = push_amt + space_needed
 	first_local = 0
-	IF ((stack_space + push_amt + 8) MOD 16) NE 0
-		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	IF ((stack_space + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + 8) MOD 16))
 	ENDIF
 	IF stack_space NE 0
-		lea	rsp, [rsp-stack_space]
-		push_amt = push_amt + stack_space
+		sub	rsp, stack_space
 	ENDIF
+
+	;; Save registers that callee must preserve
+	push_amt = 0
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		mov	[rsp+stack_space-push_amt-8], rbx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		mov	[rsp+stack_space-push_amt-8], rbp
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		mov	[rsp+stack_space-push_amt-8], r12
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		mov	[rsp+stack_space-push_amt-8], r13
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		mov	[rsp+stack_space-push_amt-8], r14
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		mov	[rsp+stack_space-push_amt-8], r15
+		push_amt = push_amt+8
+	ENDIF
+	push_amt = stack_space
 
 	ENDIF
 
@@ -513,34 +554,42 @@ ah_epilog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
 		push_amt = push_amt+8
 	ENDIF
 
-	stack_space = space_needed
-	IF ((stack_space + push_amt + 8) MOD 16) NE 0
-		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	stack_space = push_amt + space_needed
+	IF ((stack_space + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + 8) MOD 16))
 	ENDIF
+
+	;; Restore registers that prolog saved
+	push_amt = 0
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		mov	rbx, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		mov	rbp, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		mov	r12, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		mov	r13, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		mov	r14, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		mov	r15, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	push_amt = stack_space
 
 	;; De-allocate stack space prolog allocated
 	IF stack_space NE 0
-		lea	rsp, [rsp+stack_space]
-	ENDIF
-
-	;; Pop registers that prolog saved
-	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
-		pop	r15
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
-		pop	r14
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
-		pop	r13
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
-		pop	r12
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
-		pop	rbp
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
-		pop	rbx
+		add	rsp, stack_space
 	ENDIF
 
 	ret
@@ -922,69 +971,109 @@ int_prolog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
 
 ;; In Linux 64-bit, we are required to save fewer registers than
 ;; Windows 64-bit.  Stack must be maintained on a 16-byte boundary.
+;; This prolog code mimics what gcc produces in 64-bit mode with
+;; the -fomit-frame-pointer option.
 
 	IFDEF LINUX64
 
-	;; Save registers that callee must preserve
+	;; Calculate space needed to save registers that callee must preserve
 	push_amt = 0
 	IFNB <regs>
 	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
-		push	rax
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
-		push	rbx
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
-		push	rcx
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
-		push	rdx
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
-		push	rbp
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
-		push	rsi
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
-		push	rdi
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
-		push	r12
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
-		push	r13
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
-		push	r14
 		push_amt = push_amt+8
 	ENDIF
 	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
-		push	r15
 		push_amt = push_amt+8
 	ENDIF
 	ENDIF
 
 	;; Sum up and allocate space needed including pad for proper alignment
 	;; Adjust push_amt so that caller can access args on the stack.
-	stack_space = space_needed
+	stack_space = push_amt + space_needed
 	first_local = 0
-	IF ((stack_space + push_amt + 8) MOD 16) NE 0
-		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	IF ((stack_space + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + 8) MOD 16))
 	ENDIF
 	IF stack_space NE 0
-		lea	rsp, [rsp-stack_space]
-		push_amt = push_amt + stack_space
+		sub	rsp, stack_space
 	ENDIF
+
+	;; Save registers that callee must preserve
+	push_amt = 0
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		mov	[rsp+stack_space-push_amt-8], rax
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		mov	[rsp+stack_space-push_amt-8], rbx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		mov	[rsp+stack_space-push_amt-8], rcx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		mov	[rsp+stack_space-push_amt-8], rdx
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		mov	[rsp+stack_space-push_amt-8], rbp
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		mov	[rsp+stack_space-push_amt-8], rsi
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		mov	[rsp+stack_space-push_amt-8], rdi
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		mov	[rsp+stack_space-push_amt-8], r12
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		mov	[rsp+stack_space-push_amt-8], r13
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		mov	[rsp+stack_space-push_amt-8], r14
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		mov	[rsp+stack_space-push_amt-8], r15
+		push_amt = push_amt+8
+	ENDIF
+	ENDIF
+	push_amt = stack_space
 
 	ENDIF
 
@@ -1287,51 +1376,64 @@ int_epilog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
 	ENDIF
 	ENDIF
 
-	stack_space = space_needed
-	IF ((stack_space + push_amt + 8) MOD 16) NE 0
-		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
+	stack_space = push_amt + space_needed
+	IF ((stack_space + 8) MOD 16) NE 0
+		stack_space = stack_space + (16 - ((stack_space + 8) MOD 16))
 	ENDIF
+
+	;; Restore registers that prolog saved
+	push_amt = 0
+	IFNB <regs>
+	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
+		mov	rax, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
+		mov	rbx, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
+		mov	rcx, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
+		mov	rdx, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
+		mov	rbp, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
+		mov	rsi, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
+		mov	rdi, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
+		mov	r12, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
+		mov	r13, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
+		mov	r14, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
+		mov	r15, [rsp+stack_space-push_amt-8]
+		push_amt = push_amt+8
+	ENDIF
+	ENDIF
+	push_amt = stack_space
 
 	;; De-allocate stack space prolog allocated
 	IF stack_space NE 0
-		lea	rsp, [rsp+stack_space]
-	ENDIF
-
-	;; Pop registers that prolog saved
-	IFNB <regs>
-	IF (@INSTR (,@CATSTR (regs),r15)) NE 0
-		pop	r15
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),r14)) NE 0
-		pop	r14
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),r13)) NE 0
-		pop	r13
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),r12)) NE 0
-		pop	r12
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),rdi)) NE 0
-		pop	rdi
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),rsi)) NE 0
-		pop	rsi
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),rbp)) NE 0
-		pop	rbp
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),rdx)) NE 0
-		pop	rdx
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),rcx)) NE 0
-		pop	rcx
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),rbx)) NE 0
-		pop	rbx
-	ENDIF
-	IF (@INSTR (,@CATSTR (regs),rax)) NE 0
-		pop	rax
-	ENDIF
+		add	rsp, stack_space
 	ENDIF
 
 	ret
@@ -1628,15 +1730,15 @@ ENDIF
 
 CALLP	MACRO x
 IFDEF AMD
-	CALL_Y	&x&AMD
+	call	&x&AMD
 ELSE
 IFDEF PFETCH
-	CALL_Y	&x&P3
+	call	&x&P3
 ELSE
 IFDEF PPRO
-	CALL_Y	&x&PPRO
+	call	&x&PPRO
 ELSE
-	CALL_Y	&x
+	call	&x
 ENDIF
 ENDIF
 ENDIF
@@ -1644,141 +1746,19 @@ ENDIF
 
 JMPP	MACRO x
 IFDEF AMD
-	JMP_Y	&x&AMD
+	jmp	&x&AMD
 ELSE
 IFDEF PFETCH
-	JMP_Y	&x&P3
+	jmp	&x&P3
 ELSE
 IFDEF PPRO
-	JMP_Y	&x&PPRO
+	jmp	&x&PPRO
 ELSE
-	JMP_Y	&x
+	jmp	&x
 ENDIF
 ENDIF
 ENDIF
 	ENDM
-
-;
-; Call and Jump instructions to make Linux objcopy happy (it has an off
-; by 4 bug jumping to labels defined outside the current file).
-; Use these for calling or jumping to labels defined outside the current file
-;
-; Now that we are using Agner Fog's objconv, we don't need these tricks
-;
-
-IFDEF USING_BUGGY_OBJCOPY
-
-CALL_Y	MACRO	DEST
-	LOCAL	xxx
-	IFNDEF	X86_64
-	push	OFFSET xxx
-	JMP_Y	DEST
-xxx:
-	ELSE
-	IFDEF	LINUX64
-	call	DEST-4
-	ELSE
-	call	DEST
-	ENDIF
-	ENDIF
-	ENDM
-
-JL_Y	MACRO	DEST
-	LOCAL	xxx
-	IFNDEF	X86_64
-	jge	short xxx
-	JMP_Y	DEST
-xxx:
-	ELSE
-	IFDEF	LINUX64
-	jl	DEST-4
-	ELSE
-	jl	DEST
-	ENDIF
-	ENDIF
-	ENDM
-
-JE_Y	MACRO	DEST
-	LOCAL	xxx
-	IFNDEF	X86_64
-	jne	short xxx
-	JMP_Y	DEST
-xxx:
-	ELSE
-	IFDEF	LINUX64
-	je	DEST-4
-	ELSE
-	je	DEST
-	ENDIF
-	ENDIF
-	ENDM
-
-JMP_Y	MACRO	DEST
-	IFNDEF	X86_64
-	push	OFFSET DEST
-	retn
-	ELSE
-	IFDEF	LINUX64
-	jmp	DEST-4
-	ELSE
-	jmp	DEST
-	ENDIF
-	ENDIF
-	ENDM
-
-ELSE
-
-CALL_Y	MACRO	DEST
-	call	DEST
-	ENDM
-
-JL_Y	MACRO	DEST
-	jl	DEST
-	ENDM
-
-JE_Y	MACRO	DEST
-	je	DEST
-	ENDM
-
-JMP_Y	MACRO	DEST
-	jmp	DEST
-	ENDM
-
-ENDIF
-
-;; Linux x86-64 objcopy has trouble relocating offsets of labels or data
-;; declared in the same file.  We trick MASM into generating RIP-relative
-;; addressing instead.
-
-IFDEF USING_BUGGY_OBJCOPY
-
-MOVOFFSET MACRO reg, addr
-	LOCAL	x, y
-	IFNDEF X86_64
-	mov	reg, OFFSET addr
-	ELSE
-	IFIDN <reg>,<rax>
-x:	nop			;; Use call instruction to generate offset
-	nop
-	call	addr
-y:	org x
-	DB	48h		;; LEA rax, rip-relative opcodes
-	DB	8Dh
-	DB	05h
-	org y
-	ELSE
-	not_implemented
-	ENDIF
-	ENDIF
-	ENDM
-
-ELSE
-
-MOVOFFSET MACRO reg, addr
-	mov	reg, OFFSET addr
-	ENDM
-
-ENDIF
 
 ;
 ; Macros to manage 32 timer values (only used when optimizing code)

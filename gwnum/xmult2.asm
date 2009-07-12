@@ -1,4 +1,4 @@
-; Copyright 2001-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -161,8 +161,22 @@ ilp0:	mov	eax, loopcount1		; Get list of counts
 	add	rbx, rsi
 	xnorm012_2d_part2
 	sub	rax, rax		; Clear big/little flag
+	cmp	B_IS_2, 0		; Is b = 2?
+	jne	ilp1			; Yes, do simpler roundings
+nb2ilp1:mov	rbx, norm_col_mults	; Addr of the column multipliers
+	xnorm012_2d noexec		; Split carries for one cache line
+	mov	ebx, cache_line_multiplier; Cache lines in each pass1 loop
+	lea	rsi, [rsi+64]		; Next carries pointer
+	add	rbp, pass1blkdst	; Next FFT data pointer
+	cmp	RATIONAL_FFT, 0		; Don't bump these two pointers
+	jne	short nb2iskip		; for rational FFTs
+	lea	rdx, [rdx+128]		; Next group multiplier
+	lea	rdi, [rdi+rbx*4]	; Next big/little flags pointer
+nb2iskip:sub	loopcount2, 1		; Test loop counter
+	jnz	nb2ilp1			; Next carry row in section
+	jmp	ilp0			; Next section
 ilp1:	mov	rbx, norm_col_mults	; Addr of the column multipliers
-	xnorm012_2d			; Split carries for one cache line
+	xnorm012_2d exec		; Split carries for one cache line
 	mov	ebx, cache_line_multiplier; Cache lines in each pass1 loop
 	lea	rsi, [rsi+64]		; Next carries pointer
 	add	rbp, pass1blkdst	; Next FFT data pointer
@@ -184,12 +198,8 @@ xgw_carries_zpad:
 	mov	rsi, DESTARG		; Addr of the FFT data
 	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
 	mov	rbp, norm_col_mults	; Addr of the group multipliers
-	cmp	const_fft, 0		; Call correct part1 macro
-	je	c2a			; Jump if not const
-	xnorm012_2d_zpad_part1 exec
-	jmp	c2b
-c2a:	xnorm012_2d_zpad_part1 noexec
-c2b:	mov	rsi, carries		; Addr of the carries
+	xnorm012_2d_zpad_part1
+	mov	rsi, carries		; Addr of the carries
 	mov	rbp, DESTARG		; Addr of the FFT data
 	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
 	mov	rdx, norm_grp_mults	; Addr of the group multipliers
@@ -206,12 +216,9 @@ zlp0:	mov	eax, loopcount1		; Get list of counts
 	add	rbx, rsi
 	xnorm012_2d_zpad_part2
 	sub	rax, rax		; Clear big/little flag
+	movapd	XMM_TMP1, xmm6		; xnorm012_2d_zpad needs to use this register
 zlp1:	mov	rbx, norm_col_mults	; Addr of the column multipliers
-	cmp	const_fft, 0		; Call correct zpad macro
-	je	c2c			; Jump if not const
-	xnorm012_2d_zpad exec		; Split carries for one cache line
-	jmp	c2d
-c2c:	xnorm012_2d_zpad noexec		; Split carries for one cache line
+	xnorm012_2d_zpad		; Split carries for one cache line
 c2d:	mov	ebx, cache_line_multiplier; Cache lines in each pass1 loop
 	lea	rsi, [rsi+64]		; Next carries pointer
 	add	rbp, pass1blkdst	; Next FFT data pointer
@@ -221,6 +228,7 @@ c2d:	mov	ebx, cache_line_multiplier; Cache lines in each pass1 loop
 	lea	rdi, [rdi+rbx*4]	; Next big/little flags pointer
 zskip:	sub	loopcount2, 1		; Test loop counter
 	jnz	zlp1			; Next carry row in section
+	movapd	xmm6, XMM_TMP1		; Restore saved register
 	jmp	zlp0			; Next section
 zpldn:	mov	const_fft, 0		; Clear mul-by-const-fft flag
 

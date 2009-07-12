@@ -71,7 +71,6 @@ inline CPrime95Doc* CPrime95View::GetDocument()
 
 void PositionViews (int forceTile);
 void SaveViews (void);
-void destroy_window (int thread_num);
 
 /////////////////////////////////////////////////////////////////////////////
 

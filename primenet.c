@@ -9,7 +9,7 @@
 // THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
 // PARTICULAR PURPOSE.
 //
-// Copyright (c) 1997-2008 Mersenne Research, Inc. All Rights Reserved.
+// Copyright (c) 1997-2009 Mersenne Research, Inc. All Rights Reserved.
 //
 //  MODULE:   primenet.c
 //
@@ -68,7 +68,7 @@ unsigned short bswap(unsigned short);
 
 char iniSection[] = "PrimeNet";
 char hx[] = "0123456789ABCDEF";
-char szSITE[] = "v5.mersenne.org";	/* PrimeNet Server's home domain */
+char szSITEstr[] = "v5.mersenne.org";	/* PrimeNet Server's home domain */
 #define nHostPort 80			/* Internet PrimeNet port */
 char szFILE[] = "/v5server/?";		/* HTTP GET string */
 
@@ -276,6 +276,7 @@ int pnHttpServer (char *pbuf, unsigned cbuf, char* postargs)
 	char	szProxyHost[PROXY_HOST_BUFSIZE];
 	char	szProxyUser[PROXY_USER_BUFSIZE];
 	char	szProxyPassword[PROXY_PASSWORD_BUFSIZE];
+	char	szSITE[80];
 	char	*con_host;
 	char	szOtherGetInfo[256];
 	unsigned short nProxyPort, con_port;
@@ -285,6 +286,12 @@ int pnHttpServer (char *pbuf, unsigned cbuf, char* postargs)
 	debug = IniSectionGetInt (INI_FILE, iniSection, "Debug", 0);
 	url_format = IniSectionGetInt (INI_FILE, iniSection, "UseFullURL", 2);
  
+/* Use MersenneIP setting so that SeventeenOrBust can use the */
+/* UseCurl=0 option. */
+
+	IniSectionGetString (INI_FILE, iniSection, "MersenneIP",
+			     szSITE, sizeof (szSITE), szSITEstr);
+
 /* Get information about the optional proxy server */
 
 	getProxyInfo (szProxyHost, &nProxyPort, szProxyUser, szProxyPassword);
@@ -312,12 +319,6 @@ redirect:
 
 	hp = gethostbyname (con_host);
 	if (!hp) {
-		char	szAltSiteAddr[30];
-		if (con_host == szSITE) {
-			IniSectionGetString (INI_FILE, iniSection,
-					"MersenneIP", szAltSiteAddr, 29, NULL);
-			con_host = szAltSiteAddr;
-		}
 		if (!inet_aton (con_host, &defaddr)) {
 			sprintf (buf, "Unknown host: %s\n", con_host);
 			if (debug) LogMsg (buf);
@@ -652,7 +653,7 @@ int pnHttpServerCURL (char *pbuf, unsigned cbuf, char* postargs)
 	CURL	*curl;
 	CURLcode res;
 	int	debug;
-	char	szAltSiteAddr[120];
+	char	szSITE[120];
 	char	url[4096], buf[4150], errbuf[CURL_ERROR_SIZE];
 	char	szProxyHost[PROXY_HOST_BUFSIZE];
 	char	szProxyUser[PROXY_USER_BUFSIZE];
@@ -673,11 +674,8 @@ int pnHttpServerCURL (char *pbuf, unsigned cbuf, char* postargs)
 
 	strcpy (url, "http://");
 	IniSectionGetString (INI_FILE, iniSection, "MersenneIP",
-			     szAltSiteAddr, sizeof (szAltSiteAddr), NULL);
-	if (szAltSiteAddr[0])
-		strcat (url, szAltSiteAddr);
-	else
-		strcat (url, szSITE);
+			     szSITE, sizeof (szSITE), szSITEstr);
+	strcat (url, szSITE);
 	if (IniSectionGetInt (INI_FILE, iniSection, "SendPortNumber", 0))
 		sprintf (url + strlen (url), ":%d", nHostPort);
 	strcat (url, szFILE);

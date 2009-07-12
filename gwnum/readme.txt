@@ -6,8 +6,8 @@ Welcome to the gwnum library.
 	do this yourself or let gwinit do it for you (it will call the
 	guessCpuType and guessCpuSpeed routines).
 
-	Next, study gwnum.h for a list of functions.  Also, study prp.c
-	or commonb.c or ecm.c for examples of how to use the gwnum library.
+	Next, study gwnum.h for a list of functions.  Also, study 
+	commonb.c or ecm.c for examples of how to use the gwnum library.
 
 -> how to compile / how to port
 
@@ -20,54 +20,60 @@ Windows:
 	to build the 64-bit libraries.
 
 Linux:
-	The object files have already been converted to ELF format using
-	Agner Fog's objconv on a Windows machine.  Copy gwnum.a from the
-	gwnum\linux directory to gwnum.
+	The assembly code object files have already been converted to ELF format using
+	Agner Fog's objconv on a Windows machine.
 
-	makefile is used to compile the necessary C and C++ source files on the
-	Linux machine and to finish building the gwnum library.  It adds to the
-	ELF library built on the Windows machine.
-	
+	"make -f makefile is used to compile the necessary C and C++ source files on the
+	Linux machine and to finish building the gwnum.a library.
+
 	A C application using gwnum must link with:
 		gwnum.a gwnum.ld -lpthread -lstdc++
 
 Linux 64-bit:
-	The object files have already been converted to ELF format using
-	Agner Fog's objconv on a Windows machine.  Copy gwnum.a from the
-	gwnum\linux64 directory to gwnum.
+	The assembly code object files have already been converted to ELF format using
+	Agner Fog's objconv on a Windows machine.
 
-	make64 is used to compile the necessary C and C++ source files on the
-	Linux machine and to finish building the gwnum library
+	"make -f make64" is used to compile the necessary C and C++ source files on the
+	Linux machine and to finish building the gwnum.a library.
 	
 	A C application using gwnum must link with:
 		gwnum.a gwnum.ld -lpthread -lstdc++
 
 FreeBSD:
-	The object files have already been converted to ELF format using
-	Agner Fog's objconv on a Windows machine.  Copy gwnum.a from the
-	gwnum\linux directory to gwnum.
+	The assembly code object files have already been converted to ELF format using
+	Agner Fog's objconv on a Windows machine.
 
-	make.bsd is used to compile the	necessary C and C++ source files and
-	finish building the gwnum library.  It adds to the ELF library
-	built on the Windows machine.
+	"make -f make.bsd" is used to compile the necessary C and C++ source files
+	and to finish building the gwnum.a library
 
 	A C application must link with:
 		-lcompat gwnum.a gwnum.ld -lpthread -lstdc++
 
 Mac OS X:
-	The object files have already been converted to Mach-O format using
-	Agner Fog's objconv on a Windows machine.  Copy gwnum.a from the
-	gwnum\macosx directory to gwnum.
-
-	makemac is used to compile the necessary C and C++ source files and
-	finish building the gwnum library.  It adds to the MAC OS X library
-	built on the Windows machine.
+	The Mac OS X build procedure is different than linux (because universal
+	binaries require both the 32-bit and 64-bit libraries).  The assembly code object
+	files have already been converted to Mach-O format using Agner Fog's
+	objconv on a Windows machine.  To finish building the libraries, run
+	"make -f makemac".  The resulting libraries will be in release/gwnum.a,
+	debug/gwnum.a, amd64/release/gwnum.a, amd64/debug/gwnum.a.
 
 	A C application must link with gwnum.a -lpthread -lstdc++
+	You may also need to add multutil.o to the linker command line.
+	For reasons unknown, the linker has trouble pulling it out of gwnum.a
+
+Haiku:
+	The assembly code object files have already been converted to ELF format using
+	Agner Fog's objconv on a Windows machine.
+
+	"make -f makehaiku" is used to compile the necessary C and C++ source files on the
+	Haiku machine to finish building the gwnum.a library.
+
+	A C application using gwnum must link with:
+		gwnum.a gwnum.ld and either -lstdc++.r4 (for GCC2) or -lstdc++ (for GCC4)
 
 -> Legal stuff
 
-Copyright (c) 1996-2008, Mersenne Research, Inc.  All rights reserved. 
+Copyright (c) 1996-2009, Mersenne Research, Inc.  All rights reserved. 
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are 

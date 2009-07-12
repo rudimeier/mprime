@@ -598,16 +598,6 @@ unsigned long GetSuggestedMemory (unsigned long nDesiredMemory)
 #endif
 }
 
-/* Return the number of CPUs in the system */
-
-unsigned long num_cpus (void)
-{
-	SYSTEM_INFO sys;
-
-	GetSystemInfo (&sys);
-	return (sys.dwNumberOfProcessors);
-}
-
 /* Return 1 to print time in AM/PM format.  Return 2 to print */
 /* times using a 24-hour clock. */
 

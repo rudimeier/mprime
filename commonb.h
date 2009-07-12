@@ -1,3 +1,7 @@
+/*----------------------------------------------------------------------
+| Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
++---------------------------------------------------------------------*/
+
 //#define SERVER_TESTING
 
 /* These macros produce the security codes used for sending in results */
@@ -106,6 +110,7 @@ void stop_workers_for_reread_ini (void);
 #define RESTART_END_PAUSE		0x0004
 #define RESTART_MEM_WAIT		0x0008
 #define RESTART_BATTERY			0x0010
+#define RESTART_LOADAVG			0x0020
 void restart_waiting_workers (int);
 void restart_one_waiting_worker (int, int);
 void stop_worker_for_abort (int);
@@ -154,6 +159,13 @@ void read_pause_info (void);
 void checkPauseWhileRunning (void);
 void implement_pause (int thread_num);
 int is_LowMemWhileRunning_active (int thread_num);
+
+/* Load average routines */
+
+void read_load_average_info (void);
+double get_load_average (void);		/* Implemented by each OS */
+void checkLoadAverage (void);
+void implement_loadavg (int thread_num);
 
 /* throttle routines */
 

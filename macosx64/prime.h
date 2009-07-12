@@ -24,6 +24,9 @@
 #define PORT	9
 #endif
 #endif
+#ifdef __HAIKU__
+#define PORT	11
+#endif
 
 /* This controls whether we want to pause computation if the load average */
 /* becomes too great.  This does not apply to OS/2. */

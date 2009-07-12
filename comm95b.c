@@ -4,6 +4,9 @@
  * Comm95a contains information used only during setup
  * Comm95b contains information used only during execution
  * Comm95c contains information used during setup and execution
+ *
+ * Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+ *
  */ 
 
 /* Common global variables */
@@ -483,3 +486,10 @@ ntdone:	if (lpdwPIDs) HeapFree (GetProcessHeap(), 0, lpdwPIDs);
 }
 
 #endif
+
+/* Get the load average - Windows does not support this */
+
+double get_load_average (void)
+{
+	return (-1.0);
+}

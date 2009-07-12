@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -240,6 +240,32 @@ zlp2:	fld	QWORD PTR [esi]		; Copy low word
 gwcopyzero1 ENDP
 
 ;;
+;; Mul by a small value with carry propogation
+;;
+
+PROCF	gwmuls1
+	ad_prolog 0,0,rbx,rbp,rsi,rdi
+	mov	esi, DESTARG		; Address of destination
+	fld	DBLARG			; Load small value
+	fmul	XMM_NORM012_FF		; Mul by two-to-minus-phi fudge
+	fstp	XMM_TMP5		; Save multiplier
+	mov	ebp, FFTLEN		; Load loop counter
+	fld	BIGVAL			; Start process with no carry
+	fld	BIGVAL
+	mov	ebx, norm_col_mults	; Address of the multipliers
+	mov	edi, norm_biglit_array	; Computes big vs little word flag
+	sub	eax, eax		; Clear big/lit flags
+nmullp:	norm_smallmul_1d		; Mul and normalize 8 values
+	sub	ebp, 8			; Decrement loop counter
+	jnz	nmullp			; Loop til done
+	mov	esi, DESTARG		; Address of squared number
+	mov	ebx, norm_col_mults	; Address of the multipliers
+	norm_op_1d_cleanup
+	ad_epilog 0,0,rbx,rbp,rsi,rdi
+gwmuls1	ENDP
+
+
+;;
 ;; Routines to do the normalization after a multiply
 ;;
 
@@ -303,7 +329,7 @@ sub_7_words MACRO
 
 inorm	MACRO	lab, ttp, zero, echk, const
 	LOCAL	ilp
-	PROCF	lab
+	PROCFL	lab
 	int_prolog 0,0,0
 	mov	esi, DESTARG		;; Address of multiplied number
 	fld	MAXERR			;; Load MAXERR
@@ -334,7 +360,7 @@ no zero	jmp	idn			;; Go to normal end code
 
 zpnorm	MACRO	lab, ttp, echk, const
 	LOCAL	ilp
-	PROCF	lab
+	PROCFL	lab
 	int_prolog 0,0,0
 	mov	esi, DESTARG		;; Address of multiplied number
 	fld	MAXERR			;; Load MAXERR

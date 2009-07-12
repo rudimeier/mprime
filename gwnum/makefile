@@ -14,6 +14,7 @@ LIB = gwnum.a
 #########################################################################
 
 $(LIB): $(LINUXOBJS)
+	cp linux/gwnum.a .
 	ar -rs $(LIB) $(LINUXOBJS)
 
 clean:

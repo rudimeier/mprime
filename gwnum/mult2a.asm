@@ -62,7 +62,7 @@ saved_esi	EQU	DPTR [rsp+first_local+16]
 
 inorm	MACRO	lab, ttp, zero, echk, const
 	LOCAL	noadd, ilp0, ilp1, ilpdn, done
-	PROCFP	lab
+	PROCFLP	lab
 	int_prolog 20,0,0,rcx,rbp
 	mov	saved_edx, edx		;; Save registers for top_carry_adjust
 	mov	saved_esi, esi
@@ -128,7 +128,7 @@ done:	int_epilog 20,0,0,rcx,rbp
 
 zpnorm	MACRO	lab, ttp, echk, const
 	LOCAL	ilp0, ilp1, ilpdn
-	PROCFP	lab
+	PROCFLP	lab
 	int_prolog 12,0,0,rcx,rdx,rsi,rbp
 const	mov	const_fft, 1		;; Set flag saying mul-by-const
 echk	fld	MAXERR			;; Load maximum error

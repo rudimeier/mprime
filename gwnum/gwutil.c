@@ -4,13 +4,16 @@
 | This file contains various utility routines that may be used by gwnum
 | routines, prime95, or PRP.
 | 
-|  Copyright 2004-2008 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2004-2009 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 /* Include files */
 
+#ifdef _WIN32
+#include "windows.h"
+#endif
 #include <stdlib.h>
-#ifndef __APPLE__
+#if defined (__linux__) || defined (__HAIKU__)
 #include <malloc.h>
 #endif
 #include "gwcommon.h"
@@ -71,5 +74,65 @@ void aligned_free (
 #else
 	if (ptr == NULL) return;
 	free (* (void **) ((char *) ptr - sizeof (void *)));
+#endif
+}
+
+void * large_pages_malloc (
+	size_t	size)
+{
+
+#ifdef _WIN32
+	static int first_call = 1;
+	static size_t large_page_size = 0;
+	LPVOID p;
+
+	if (first_call) {
+		HANDLE hToken;
+		LUID luid;
+		TOKEN_PRIVILEGES tp;
+		HINSTANCE  hDll;      
+		int (*pGetLargePageMinimum)(void);
+
+		first_call = 0;
+
+		// Grant large page access
+		OpenProcessToken (GetCurrentProcess(),
+				  TOKEN_ADJUST_PRIVILEGES, &hToken);
+		LookupPrivilegeValue (NULL, "SeLockMemoryPrivilege", &luid);
+
+		tp.PrivilegeCount = 1;
+		tp.Privileges[0].Luid = luid;
+		tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+		AdjustTokenPrivileges (hToken, FALSE, &tp,
+				       sizeof (TOKEN_PRIVILEGES),
+				       (PTOKEN_PRIVILEGES) NULL,
+				       (PDWORD) NULL);
+
+		// Dynamic link to get large page size
+		// Call succeeds only on Windows Server 2003 SP1 or later
+		hDll = LoadLibrary (TEXT ("kernel32.dll"));
+		pGetLargePageMinimum = (int (*)(void)) GetProcAddress (hDll, "GetLargePageMinimum");
+		if (pGetLargePageMinimum != NULL) 
+			large_page_size = (*pGetLargePageMinimum)();
+		FreeLibrary(hDll);
+	}
+
+	// If this system does not support large pages, return NULL
+	if (large_page_size == 0) return (NULL);
+
+	// Now allocate the memory
+	p = VirtualAlloc (NULL, (size + large_page_size - 1) & ~(large_page_size - 1),
+			  MEM_RESERVE | MEM_COMMIT | MEM_LARGE_PAGES, PAGE_READWRITE);
+	return (p);
+#else
+	return (NULL);
+#endif
+}
+
+void large_pages_free (
+	void	*ptr)
+{
+#ifdef _WIN32
+	VirtualFree (ptr, 0, MEM_RELEASE);
 #endif
 }

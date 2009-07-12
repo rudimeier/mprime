@@ -81,7 +81,7 @@ release\giants.obj: giants.c giants.h
     $(cl) /Forelease\giants.obj giants.c
 
 debug\giants.obj: giants.c giants.h
-    $(cld) /Fodebug\giants.obj giants.c
+    $(cldo) /Fodebug\giants.obj giants.c
 
 release\ecmstag1.obj: ecmstag1.c gwnum.h
     $(cl) /Forelease\ecmstag1.obj ecmstag1.c

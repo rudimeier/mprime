@@ -1,3 +1,5 @@
+/* Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved */
+
 /* Common strings */
 
 #define MANUAL_QUIT	"You have elected to remove this computer from the Great Internet Mersenne Prime Search.  Other computers using this user ID will not be affected.  Please send the file results.txt to woltman@alum.mit.edu.\n\nAre you sure you want to do this?"
@@ -9,4 +11,4 @@
 /* Common routines */
 
 void sanitizeString (char *);
-void rangeStatusMessage (char *);
+void rangeStatusMessage (char *, unsigned int);

@@ -1,7 +1,9 @@
+/* Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved */
+
 /* Constants */
 
-#define VERSION		"25.9"
-#define BUILD_NUM	"4"
+#define VERSION		"25.11"
+#define BUILD_NUM	"2"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
 /* Linux (mprime)  #2 */
@@ -13,6 +15,8 @@
 /* Linux x86-64	   #8 */
 /* Mac OS X	   #9 */
 /* Mac OS X 64-bit #10 */
+/* Haiku	   #11 */
+/* FreeBSD 64-bit  #12 */
 
 #define MIN_PRIME	5L		/* Smallest testable prime */
 #define MAX_FACTOR	2000000000	/* Largest factorable Mersenne number*/
@@ -137,7 +141,7 @@ extern unsigned int MODEM_RETRY_TIME;	/* How often to try sending msgs */
 					/* to primenet server whem modem off */
 extern unsigned int NETWORK_RETRY_TIME;	/* How often to try sending msgs */
 					/* to primenet server */
-extern unsigned int DAYS_BETWEEN_CHECKINS; /* Days between sending updated */
+extern double DAYS_BETWEEN_CHECKINS;	/* Days between sending updated */
 					/* completion dates to the server */
 extern int NUM_BACKUP_FILES;		/* Between 1 and 3 backup files (or 99 */
 					/* for overwrite) */
@@ -199,12 +203,13 @@ void getCpuInfo (void);
 void getCpuDescription (char *, int);
 
 int isPrime (unsigned long p);
-unsigned int strToMinutes (char	*);
+unsigned int strToMinutes (const char	*);
 void minutesToStr (unsigned int, char *);
 void write_memory_settings (unsigned int, unsigned int, unsigned int, unsigned int);
 int read_memory_settings (unsigned int *, unsigned int *, unsigned int *, unsigned int *);
 
 void nameAndReadIniFiles (int named_ini_files);
+void initCommCode (void);
 int readIniFiles (void);
 
 void IniSectionGetString (const char *, const char *, const char *, char *, unsigned int, const char *);
@@ -242,7 +247,8 @@ int PTOHasOptionChanged (char *shadow_keyword, unsigned int *array, int tnum);
 
 #define MAIN_THREAD_NUM		-2
 #define COMM_THREAD_NUM		-1
-void create_window (int);
+void create_window (int thread_num);
+void destroy_window (int thread_num);
 void TileViews (void);
 void base_title (int, char *);
 void title (int, char *);
@@ -369,7 +375,6 @@ int writeResults (char	*);
 
 unsigned long physical_memory (void);
 unsigned long GetSuggestedMemory (unsigned long nDesiredMemory);
-unsigned long num_cpus (void);
 int getDefaultTimeFormat (void);
 
 /******************************************************************************
@@ -412,8 +417,9 @@ int PRIMENET (short, void *);
 #define TE_READ_PAUSE_DATA	11	/* Reread PauseWhileRunning info */
 #define TE_READ_INI_FILE	12	/* Reread prime.txt settings because */
 					/* a during/else time period has ended */
+#define TE_LOAD_AVERAGE		13	/* Linux/FreeBSD/Apple load average check */
 
-#define MAX_TIMED_EVENTS	13	/* Maximum number of timed events */
+#define MAX_TIMED_EVENTS	14	/* Maximum number of timed events */
 
 void init_timed_event_handler (void);
 

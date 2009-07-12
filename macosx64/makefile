@@ -10,17 +10,16 @@ CPP = g++
 CPPFLAGS = -I.. -I../gwnum -I../linux -O2 -DX86_64 -m64
 
 LFLAGS = -m64
-LIBS   = ../gwnum/gwnum.a -lm -lpthread -lcurl -lIOKit -framework CoreFoundation -lstdc++
+LIBS   = ../gwnum/amd64/release/gwnum.a -lm -lpthread -lcurl -lIOKit -framework CoreFoundation -lstdc++
 
-FACTOROBJ = factor64.o
-LINUXOBJS = prime.o menu.o
+FACTOROBJ = ../prime95/macosx64/factor64.o
+OBJS = prime.o menu.o
 EXE      = mprime
 
 #########################################################################
 
-$(EXE): security $(LINUXOBJS) $(FACTOROBJ)
-	ar -x ../gwnum/gwnum.a multutil.o
-	$(ENVP) $(CC) $(LFLAGS) -o $(EXE) $(LINUXOBJS) $(FACTOROBJ) multutil.o $(LIBS)
+$(EXE): security $(OBJS) $(FACTOROBJ)
+	$(ENVP) $(CC) $(LFLAGS) -o $(EXE) $(OBJS) $(FACTOROBJ) ../gwnum/amd64/release/multutil.o $(LIBS)
 
 security:
 	[ ! -e ../security.h ] && touch ../security.h || true
@@ -28,7 +27,7 @@ security:
 	[ ! -e ../secure5.c ] && touch ../secure5.c || true
 
 clean:
-	rm -f $(EXE) $(EXE2) $(LINUXOBJS)
+	rm -f $(EXE) $(EXE2) $(OBJS)
 
 .c.o:
 	$(ENVP) $(CC) $(CFLAGS) -c $<

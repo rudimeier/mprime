@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -394,6 +394,60 @@ c0:	fstp	QWORD PTR [edi+16]	; Save result
 	jnz	short zlp0		; Loop if necessary
 	ad_epilog 0,0,rbx,rsi,rdi
 gwcopyzero2 ENDP
+
+
+;;
+;; Mul by a small value with carry propogation
+;;
+
+loopcount1	EQU	DPTR [rsp+first_local+12]
+loopcount2	EQU	DPTR [rsp+first_local+8]
+loopcount3	EQU	DPTR [rsp+first_local+4]
+loopcount4	EQU	DPTR [rsp+first_local]
+
+PROCF	gwmuls2
+	ad_prolog 16,0,rbx,rbp,rsi,rdi
+	mov	esi, DESTARG		; Address of destination
+	fld	DBLARG			; Load small value
+	fmul	XMM_NORM012_FF		; Mul by two-to-minus-phi fudge
+	fstp	XMM_TMP5		; Save multiplier
+	mov	ebp, norm_grp_mults	; Address of group multipliers
+	mov	edi, norm_biglit_array	; Addr of the big/little flags array
+	fld	BIGVAL			; Start process with no carry
+	fld	BIGVAL
+	mov	eax, addcount1		; Load block count
+	mov	loopcount1, eax
+mblk:	mov	eax, normval4		; Load outer count (4KB pages in a blk)
+	mov	loopcount2, eax
+	mov	ebx, norm_col_mults	; Addr of the column multipliers
+imul0:	mov	eax, normval1		; Load middle count (clms in 4KB page)
+	mov	loopcount3, eax		; Save middle count
+imul1:	mov	eax, cache_line_multiplier ; Load inner loop count (clm)
+	mov	loopcount4, eax		; Save inner loop count
+	sub	eax, eax		; Clear big/lit flag
+imul2:	norm_smallmul_2d		; Mul and normalize 4 values
+	sub	loopcount4, 1		; Decrement inner loop counter
+	jnz	imul2 			; Loop til done
+	add	edi, normval2		; Adjust ptr to little/big flags
+	sub	loopcount3, 1		; Decrement middle loop counter
+	jnz	imul1			; Loop til done
+	lea	esi, [esi+64]		; Skip 64 bytes every 4KB
+	sub	loopcount2, 1		; Decrement outer loop counter
+	jnz	imul0			; Loop til done
+	lea	esi, [esi+64]		; Skip 64 bytes every blk
+	lea	ebp, [ebp+2*16]		; Next set of 2 group multipliers
+	add	edi, normval3		; Adjust little/big flags ptr
+	sub	loopcount1, 1		; Decrement outer loop counter
+	jnz	mblk 			; Loop til done
+
+	;; All blocks done
+
+	mov	esi, DESTARG		; Addr of FFT data
+	mov	ebp, norm_grp_mults	; Addr of the group multipliers
+	norm_op_2d_cleanup		; Add 2 carries to start of fft
+
+	ad_epilog 16,0,rbx,rbp,rsi,rdi
+gwmuls2	ENDP
 
 
 _TEXT	ENDS

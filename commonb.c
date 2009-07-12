@@ -1,4 +1,6 @@
 /*----------------------------------------------------------------------
+| Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+|
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
 | in one of the source code files of each port.
@@ -70,6 +72,8 @@ struct pause_info *STOP_FOR_PAUSE[MAX_NUM_WORKER_THREADS] = {NULL};
 				/* pause while another program runs */
 struct pause_info *STOP_FOR_LOW_MEMORY = NULL; /* Set when LowMemWhileRunning active */
 				/* Workers using lots of memory will be stopped */
+int	STOP_FOR_LOADAVG = 0;	/* Count of workers to pause due */
+				/* to a period of high system load. */
 char	STOP_FOR_THROTTLE[MAX_NUM_WORKER_THREADS] = {0};
 				/* Flags indicating it is time to pause */
 				/* a worker for throttling. */
@@ -99,6 +103,11 @@ gwevent END_PAUSE_OR_STOP[MAX_NUM_WORKER_THREADS] = {0};
 				/* Signal for telling implement_pause */
 				/* that the pause has ended or */
 				/* all threads are stopping */
+char	END_LOADAVG_OR_STOP_INITIALIZED[MAX_NUM_WORKER_THREADS] = {0};
+gwevent END_LOADAVG_OR_STOP[MAX_NUM_WORKER_THREADS] = {0};
+				/* Signal for telling implement_loadavg */
+				/* that the load average condition has ended */
+				/* or all threads are stopping */
 char	OFF_BATTERY_OR_STOP_INITIALIZED[MAX_NUM_WORKER_THREADS] = {0};
 gwevent OFF_BATTERY_OR_STOP[MAX_NUM_WORKER_THREADS] = {0};
 				/* Signal for telling implement_stop_battery */
@@ -441,6 +450,16 @@ EXTERNC int stopCheck (
 //		return (stopCheck (thread_num));
 	}
 
+/* Check if thread should pause because system load is high. */
+/* When pause completes, check stop codes again.  We may have been paused */
+/* a long time during which other stop timers may have fired. */
+
+	if (STOP_FOR_LOADAVG) {
+		STOP_FOR_LOADAVG--;
+		implement_loadavg (thread_num);
+		return (stopCheck (thread_num));
+	}
+
 /* If the thread needs to pause because of the throttle option, then */
 /* do so now. */
 
@@ -463,6 +482,7 @@ void init_stop_code (void)
 	STOP_FOR_RESTART = FALSE;
 	STOP_FOR_REREAD_INI = FALSE;
 	STOP_FOR_BATTERY = FALSE;
+	STOP_FOR_LOADAVG = 0;
 	memset (STOP_FOR_MEM_CHANGED, 0, sizeof (STOP_FOR_MEM_CHANGED));
 	memset (STOP_FOR_PRIORITY_WORK, 0, sizeof (STOP_FOR_PRIORITY_WORK));
 	memset (STOP_FOR_PAUSE, 0, sizeof (STOP_FOR_PAUSE));
@@ -496,6 +516,10 @@ void restart_one_waiting_worker (
 	if (restart_flags & RESTART_END_PAUSE &&
 	    END_PAUSE_OR_STOP_INITIALIZED[thread_num]) {
 		gwevent_signal (&END_PAUSE_OR_STOP[thread_num]);
+	}
+	if (restart_flags & RESTART_LOADAVG &&
+	    END_LOADAVG_OR_STOP_INITIALIZED[thread_num]) {
+		gwevent_signal (&END_LOADAVG_OR_STOP[thread_num]);
 	}
 	if (restart_flags & RESTART_MEM_WAIT &&
 	    MEM_WAIT_OR_STOP_INITIALIZED[thread_num]) {
@@ -943,12 +967,12 @@ int set_memory_usage (
 
 			MEM_FLAGS[thread_num] |= MEM_WAITING;
 			gwmutex_unlock (&MEM_MUTEX);
-			MEM_WAIT_OR_STOP_INITIALIZED[thread_num] = 1;
 			gwevent_init (&MEM_WAIT_OR_STOP[thread_num]);
 			gwevent_reset (&MEM_WAIT_OR_STOP[thread_num]);
+			MEM_WAIT_OR_STOP_INITIALIZED[thread_num] = 1;
 			gwevent_wait (&MEM_WAIT_OR_STOP[thread_num], 20);
-			gwevent_destroy (&MEM_WAIT_OR_STOP[thread_num]);
 			MEM_WAIT_OR_STOP_INITIALIZED[thread_num] = 0;
+			gwevent_destroy (&MEM_WAIT_OR_STOP[thread_num]);
 			gwmutex_lock (&MEM_MUTEX);
 			MEM_FLAGS[thread_num] &= ~MEM_WAITING;
 		}
@@ -1119,12 +1143,12 @@ int avail_mem (
 		if (MEM_FLAGS[i] & MEM_USAGE_NOT_SET ||
 		    MEM_FLAGS[i] & MEM_RESTARTING) {
 			gwmutex_unlock (&MEM_MUTEX);
-			MEM_WAIT_OR_STOP_INITIALIZED[thread_num] = 1;
 			gwevent_init (&MEM_WAIT_OR_STOP[thread_num]);
 			gwevent_reset (&MEM_WAIT_OR_STOP[thread_num]);
+			MEM_WAIT_OR_STOP_INITIALIZED[thread_num] = 1;
 			gwevent_wait (&MEM_WAIT_OR_STOP[thread_num], 20 + thread_num);
-			gwevent_destroy (&MEM_WAIT_OR_STOP[thread_num]);
 			MEM_WAIT_OR_STOP_INITIALIZED[thread_num] = 0;
+			gwevent_destroy (&MEM_WAIT_OR_STOP[thread_num]);
 			gwmutex_lock (&MEM_MUTEX);
 		}
 	}
@@ -1414,12 +1438,12 @@ void implement_stop_battery (
 /* that would trigger the wait event has already fired.  */
 
 	if (OnBattery ()) {
-		OFF_BATTERY_OR_STOP_INITIALIZED[thread_num] = 1;
 		gwevent_init (&OFF_BATTERY_OR_STOP[thread_num]);
 		gwevent_reset (&OFF_BATTERY_OR_STOP[thread_num]);
+		OFF_BATTERY_OR_STOP_INITIALIZED[thread_num] = 1;
 		gwevent_wait (&OFF_BATTERY_OR_STOP[thread_num], 0);
-		gwevent_destroy (&OFF_BATTERY_OR_STOP[thread_num]);
 		OFF_BATTERY_OR_STOP_INITIALIZED[thread_num] = 0;
+		gwevent_destroy (&OFF_BATTERY_OR_STOP[thread_num]);
 	}
 
 /* Output message, change title and icon */
@@ -1454,7 +1478,7 @@ int isPriorityWork (
 	if ((w->work_type == WORK_TEST || w->work_type == WORK_DBLCHK) &&
 	    (w->sieve_depth < w->factor_to || !w->pminus1ed))
 		return (TRUE);
-	if (w->work_type == WORK_PRP && !w->pminus1ed)
+	if (w->work_type == WORK_PRP && w->tests_saved > 0.0)
 		return (TRUE);
 	return (FALSE);
 }
@@ -1546,13 +1570,10 @@ void implement_stop_one_worker (
 
 /* Initialize and then wait for the event */
 
-	USER_START_OR_STOP_INITIALIZED[thread_num] = 1;
 	gwevent_init (&USER_START_OR_STOP[thread_num]);
 	gwevent_reset (&USER_START_OR_STOP[thread_num]);
+	USER_START_OR_STOP_INITIALIZED[thread_num] = 1;
 	gwevent_wait (&USER_START_OR_STOP[thread_num], 0);
-
-/* Destroy the event */
-
 	USER_START_OR_STOP_INITIALIZED[thread_num] = 0;
 	gwevent_destroy (&USER_START_OR_STOP[thread_num]);
 
@@ -1912,12 +1933,12 @@ void implement_pause (
 
 /* Wait for the end of the pause */
 
-	END_PAUSE_OR_STOP_INITIALIZED[thread_num] = 1;
 	gwevent_init (&END_PAUSE_OR_STOP[thread_num]);
 	gwevent_reset (&END_PAUSE_OR_STOP[thread_num]);
+	END_PAUSE_OR_STOP_INITIALIZED[thread_num] = 1;
 	gwevent_wait (&END_PAUSE_OR_STOP[thread_num], 0);
-	gwevent_destroy (&END_PAUSE_OR_STOP[thread_num]);
 	END_PAUSE_OR_STOP_INITIALIZED[thread_num] = 0;
+	gwevent_destroy (&END_PAUSE_OR_STOP[thread_num]);
 
 /* Output another informative message */
 
@@ -1957,6 +1978,115 @@ int is_LowMemWhileRunning_active (
 
 	gwmutex_unlock (&PAUSE_MUTEX);
 	return (TRUE);
+}
+
+/**************************************************************/
+/*            Routines dealing with load average              */
+/**************************************************************/
+
+long LOAD_CHECK_TIME = 0;
+double HI_LOAD = 0.0;
+double LO_LOAD = 0.0;
+
+void read_load_average_info (void)
+{
+	char	buf[20];
+
+	IniGetString (INI_FILE, "MaxLoad", buf, sizeof (buf), "0");
+	HI_LOAD = atof (buf);
+	IniGetString (INI_FILE, "MinLoad", buf, sizeof (buf), "0");
+	LO_LOAD = atof (buf);
+	LOAD_CHECK_TIME = IniGetInt (INI_FILE, "PauseTime", 20);
+}
+
+void start_load_average_timer (void)
+{
+	if (HI_LOAD <= 0.0 || LOAD_CHECK_TIME <= 0) return;
+	if (get_load_average () < 0.0) return;
+	add_timed_event (TE_LOAD_AVERAGE, LOAD_CHECK_TIME);
+}
+
+void stop_load_average_timer (void)
+{
+	delete_timed_event (TE_LOAD_AVERAGE);
+}
+
+/* Every time the pause-while-running timer fires, this routine is called */
+
+void checkLoadAverage (void)
+{
+	double	load;
+	long	recheck_interval;
+	int	i;
+
+/* Get the load average */
+
+	load = get_load_average ();
+	recheck_interval = LOAD_CHECK_TIME;
+
+/* Check if we need to stop one or more workers. */
+/* Wait at least a minute before rechecking the load */
+/* This gives the system time to adjust the average to */
+/* reflect our stopped worker. */
+
+	if (load >= HI_LOAD) {
+		double	threads_per_worker;
+		int	workers_to_stop;
+
+		threads_per_worker = (double) NUM_CPUS / (double) NUM_WORKER_THREADS;
+		if (threads_per_worker < 1.0) threads_per_worker = 1.0;
+		workers_to_stop = (int) ((load - HI_LOAD) / threads_per_worker);
+		if (workers_to_stop < 1) workers_to_stop = 1;
+		STOP_FOR_LOADAVG = workers_to_stop;
+		if (recheck_interval < 65) recheck_interval = 65;
+	}
+
+/* Check if we need to restart a worker.  We restart workers */
+/* one at a time so that we slowly build the load back up. */	
+/* Wait at least a minute before rechecking the load to give the */
+/* system time to adjust the average to reflect our restarted worker. */
+
+	if (load >= 0.0 && load <= LO_LOAD) {
+		for (i = 0; i < (int) NUM_WORKER_THREADS; i++) {
+			if (END_LOADAVG_OR_STOP_INITIALIZED[i]) {
+				restart_one_waiting_worker (i, RESTART_LOADAVG);
+				if (recheck_interval < 65) recheck_interval = 65;
+				break;
+			}
+		}
+	}
+
+/* Set the timer to check the load average again in the near future */
+
+	add_timed_event (TE_LOAD_AVERAGE, recheck_interval);
+}
+
+/* This routine implements a load average pause for one worker thread */
+
+void implement_loadavg (
+	int	thread_num)
+{
+	char	buf[140];
+
+/* Output an informative message. */
+
+	sprintf (buf, "Pausing due to high load.\n");
+	OutputStr (thread_num, buf);
+	title (thread_num, "Paused");
+
+/* Wait for the end of the high load */
+
+	gwevent_init (&END_LOADAVG_OR_STOP[thread_num]);
+	gwevent_reset (&END_LOADAVG_OR_STOP[thread_num]);
+	END_LOADAVG_OR_STOP_INITIALIZED[thread_num] = 1;
+	gwevent_wait (&END_LOADAVG_OR_STOP[thread_num], 0);
+	END_LOADAVG_OR_STOP_INITIALIZED[thread_num] = 0;
+	gwevent_destroy (&END_LOADAVG_OR_STOP[thread_num]);
+
+/* Output another informative message */
+
+	OutputStr (thread_num, "Resuming processing.\n");
+	title (thread_num, "Resuming");
 }
 
 /**************************************************************/
@@ -2031,7 +2161,8 @@ int isKnownMersennePrime (
 		p == 859433 || p == 1257787 || p == 1398269 || p == 2976221 ||
 		p == 3021377 || p == 6972593 || p == 13466917 ||
 		p == 20996011 || p == 24036583 || p == 25964951 ||
-		p == 30402457 || p == 32582657 || p == 37156667 || p == 43112609);
+		p == 30402457 || p == 32582657 || p == 37156667 ||
+		p == 42643801 || p == 43112609);
 }
 
 /* Make a string out of a 96-bit value (a found factor) */
@@ -2479,6 +2610,10 @@ again:	clearThreadHandleArray ();
 
 		start_pause_while_running_timer ();
 
+/* Start the timer that checks the load average */
+
+		start_load_average_timer ();
+
 /* Start the throttle timer */
 
 		start_throttle_timer ();
@@ -2528,6 +2663,7 @@ again:	clearThreadHandleArray ();
 		stop_battery_timer ();
 		stop_priority_work_timer ();
 		stop_pause_while_running_timer ();
+		stop_load_average_timer ();
 		stop_throttle_timer ();
 	}
 
@@ -2841,12 +2977,12 @@ check_stop_code:
 /* OR user entering new work via the dialog boxes OR the discovery of a .add */
 /* file OR wait for a thread stop event (like ESC or shutdown). */
 
-	WORK_AVAILABLE_OR_STOP_INITIALIZED[thread_num] = 1;
 	gwevent_init (&WORK_AVAILABLE_OR_STOP[thread_num]);
 	gwevent_reset (&WORK_AVAILABLE_OR_STOP[thread_num]);
+	WORK_AVAILABLE_OR_STOP_INITIALIZED[thread_num] = 1;
 	gwevent_wait (&WORK_AVAILABLE_OR_STOP[thread_num], 3600);
-	gwevent_destroy (&WORK_AVAILABLE_OR_STOP[thread_num]);
 	WORK_AVAILABLE_OR_STOP_INITIALIZED[thread_num] = 0;
+	gwevent_destroy (&WORK_AVAILABLE_OR_STOP[thread_num]);
 	OutputStr (thread_num, "Resuming.\n");
 	ChangeIcon (thread_num, WORKING_ICON);
 
@@ -2867,26 +3003,26 @@ int testUniqueFileName (
 	int	thread_num,
 	char	*filename)
 {
-static	int	SAVEFILE_MUTEX_INITIALIZED = FALSE;
-static	gwmutex	SAVEFILE_MUTEX;
+static	int	USED_FILENAMES_MUTEX_INITIALIZED = FALSE;
+static	gwmutex	USED_FILENAMES_MUTEX;
 static	char	USED_FILENAMES[MAX_NUM_WORKER_THREADS][32];
 	int	i;
 
 /* Initialize the lock and used file array */
 
-	if (!SAVEFILE_MUTEX_INITIALIZED) {
-		SAVEFILE_MUTEX_INITIALIZED = 1;
-		gwmutex_init (&SAVEFILE_MUTEX);
+	if (!USED_FILENAMES_MUTEX_INITIALIZED) {
+		USED_FILENAMES_MUTEX_INITIALIZED = 1;
+		gwmutex_init (&USED_FILENAMES_MUTEX);
 		for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) USED_FILENAMES[i][0] = 0;
 	}
 
-/* Scan array to see if the save file names is in use by another thread. */
+/* Scan array to see if the save file name is in use by another thread. */
 
-	gwmutex_lock (&SAVEFILE_MUTEX);
+	gwmutex_lock (&USED_FILENAMES_MUTEX);
 	for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
 		if (i != thread_num &&
 		    strcmp (filename, USED_FILENAMES[i]) == 0) {
-			gwmutex_unlock (&SAVEFILE_MUTEX);
+			gwmutex_unlock (&USED_FILENAMES_MUTEX);
 			return (FALSE);
 		}
 	}
@@ -2894,7 +3030,7 @@ static	char	USED_FILENAMES[MAX_NUM_WORKER_THREADS][32];
 /* File name not in use, add the name to the array. */
 
 	strcpy (USED_FILENAMES[thread_num], filename);
-	gwmutex_unlock (&SAVEFILE_MUTEX);
+	gwmutex_unlock (&USED_FILENAMES_MUTEX);
 	return (TRUE);
 }
 
@@ -2909,18 +3045,19 @@ void uniquifySaveFile (
 	char	original_filename[32];
 	int	i;
 
-/* Our first preference is to use the save file name without any extensions */
-
-	if (testUniqueFileName (thread_num, filename)) return;
-
-/* Nuts, it is in use.  We must generate a filename with an extension */
+/* Remember the orignal save file name */
 
 	strcpy (original_filename, filename);
 
-/* Our second preference is to use an existing save file with an extension */
+/* Our first preference is to use an existing save file with an extension */
 /* consisting of this thread number */
 
 	sprintf (filename, "%s_%d", original_filename, thread_num+1);
+	if (fileExists (filename) && testUniqueFileName (thread_num, filename)) return;
+
+/* Our second preference is to use an existing save file without any extensions */
+
+	strcpy (filename, original_filename);
 	if (fileExists (filename) && testUniqueFileName (thread_num, filename)) return;
 
 /* Our third preference is to use any existing save file */
@@ -2930,7 +3067,12 @@ void uniquifySaveFile (
 		if (fileExists (filename) && testUniqueFileName (thread_num, filename)) return;
 	}
 
-/* Our fourth preference is to use an extension consisting of this thread number */
+/* Our fourth preference is to use the save file name without any extensions */
+
+	strcpy (filename, original_filename);
+	if (testUniqueFileName (thread_num, filename)) return;
+
+/* Our fifth preference is to use an extension consisting of this thread number */
 
 	sprintf (filename, "%s_%d", original_filename, thread_num+1);
 	if (testUniqueFileName (thread_num, filename)) return;
@@ -3317,14 +3459,14 @@ loop:	*res = factorChunk (facdata);
 	    facdata->asm_data->FACLSW > 1) {
 		giant	f, x;
 
-		f = newgiant (100);
+		f = allocgiant (100);
 		itog ((int) facdata->asm_data->FACHSW, f);
 		gshiftleft (32, f);
 		uladdg (facdata->asm_data->FACMSW, f);
 		gshiftleft (32, f);
 		uladdg (facdata->asm_data->FACLSW, f);
 
-		x = newgiant (100);
+		x = allocgiant (100);
 		itog (2, x);
 		powermod (x, p, f);
 		*res = isone (x);
@@ -3376,6 +3518,7 @@ int primeFactor (
 	unsigned long test_bits;	/* How far to factor to */
 	long	factor_found;		/* Returns true if factor found */
 	int	fd;			/* Continuation file handle or zero */
+	int	max_read_attempts;
 	int	first_iter_msg, continuation, stop_reason, find_smaller_factor;
 	unsigned long endpthi, endptlo;
 	double	endpt, startpt;		/* For computing percent complete */
@@ -3467,10 +3610,12 @@ int primeFactor (
 		}
 	}
 	
-/* Read v25+ continuation file */
+/* Read v25+ continuation file.  Limit number of backup files we try */
+/* to read in case there is an error deleting bad save files. */
 
 	filename[0] = 'f';
-	while (!continuation && saveFileExists (thread_num, filename)) {
+	max_read_attempts = 99;
+	while (!continuation && saveFileExists (thread_num, filename) && max_read_attempts--) {
 		unsigned long version, sum, fachsw, facmsw;
 
 		fd = _open (filename, _O_BINARY | _O_RDONLY);
@@ -3958,7 +4103,7 @@ int generateResidue64 (
 	int	err_code;
 
 	*reshi = *reslo = 0;
-	tmp = popg (&lldata->gwdata.gdata, (lldata->gwdata.n >> 5) + 5);
+	tmp = popg (&lldata->gwdata.gdata, ((int) lldata->gwdata.bit_length >> 5) + 5);
 	err_code = gwtogiant (&lldata->gwdata, lldata->lldata, tmp);
 	if (err_code < 0) return (err_code);
 	if (tmp->sign == 0) return (0);
@@ -4011,7 +4156,7 @@ int convertOldStyleLLSaveFile (
 
 /* Read the fft data */
 
-	bits = (int) lldata->gwdata.BITS_PER_WORD + 1;
+	bits = (int) lldata->gwdata.NUM_B_PER_SMALL_WORD + 1;
 	sum = 0;
 	zero = TRUE;
 	for (i = 0; i < gwfftlen (&lldata->gwdata); i++) {
@@ -4198,7 +4343,7 @@ void lucas_fixup (
 
 /* Tell gwnum code the value to subtract 2 from the squared result. */
 
-	gwsetaddinatbit (&lldata->gwdata, -2, lldata->units_bit);
+	gwsetaddinatpowerofb (&lldata->gwdata, -2, lldata->units_bit);
 }
 
 /* Generate random FFT data for timing the Lucas-Lehmer code */
@@ -4452,6 +4597,7 @@ int prime (
 	double	reallyminerr = 1.0;
 	double	reallymaxerr = 0.0;
 	double	*addr1;
+	int	max_read_attempts;
 	int	first_iter_msg, saving, near_fft_limit, sleep5;
 	unsigned long high32, low32;
 	int	rc, isPrime, stop_reason;
@@ -4470,13 +4616,13 @@ int prime (
 
 /* Do some of the trial factoring.  We treat factoring that is part of a */
 /* LL test as priority work (done in pass 1).  We don't do all the trial */
-/* factoring as the last 2 bit levels take a lot of time and are unlikely */
+/* factoring as the last bit level takes a lot of time and is unlikely */
 /* to find a factor.  The P-1 test will probably be needed anyway and */
-/* may find a factor thus saving us from doing the last 2 bit levels. */
+/* may find a factor thus saving us from doing the last bit level. */
 
 	if ((w->work_type == WORK_TEST || w->work_type == WORK_DBLCHK) &&
 	    ! IniGetInt (INI_FILE, "SkipTrialFactoring", 0)) {
-		stop_reason = primeFactor (thread_num, sp_info, w, 2);
+		stop_reason = primeFactor (thread_num, sp_info, w, 1);
 		if (stop_reason) return (stop_reason);
 	}
 
@@ -4531,6 +4677,8 @@ int prime (
 /* Setup the LL test */
 
 begin:	gwinit (&lldata.gwdata);
+	if (IniGetInt (LOCALINI_FILE, "UseLargePages", 0))
+		gwset_use_large_pages (&lldata.gwdata);
 	gwset_num_threads (&lldata.gwdata, THREADS_PER_TEST[thread_num]);
 	gwset_thread_callback (&lldata.gwdata, SetAuxThreadPriority);
 	gwset_thread_callback_data (&lldata.gwdata, sp_info);
@@ -4541,10 +4689,12 @@ begin:	gwinit (&lldata.gwdata);
 
 	set_memory_usage (thread_num, 0, cvt_gwnums_to_mem (&lldata.gwdata, 1));
 
-/* Loop reading from save files (and backup save files) */
+/* Loop reading from save files (and backup save files).  Limit number of backup */
+/* files we try to read in case there is an error deleting bad save files. */
 
 	tempFileName (w, filename);
-	for ( ; ; ) {
+	max_read_attempts = 99;
+	while (max_read_attempts--) {
 
 /* If there are no more save files, start off with the 1st Lucas number. */
 
@@ -4948,9 +5098,9 @@ begin:	gwinit (&lldata.gwdata);
 	formatMsgForResultsFile (buf, w);
 	rc = writeResults (buf);
 
-/* Output results to the screen, results file, and server */
+/* Send results to the server if they might possibly be of interest */
 
-	{
+	if (p > 1000000 && (!isPrime || !isKnownMersennePrime (p))) {
 		struct primenetAssignmentResult pkt;
 		memset (&pkt, 0, sizeof (pkt));
 		strcpy (pkt.computer_guid, COMPUTER_GUID);
@@ -6329,6 +6479,8 @@ int primeTime (
 /* Init the FFT code */
 
 	gwinit (&lldata.gwdata);
+	if (IniGetInt (LOCALINI_FILE, "UseLargePages", 0))
+		gwset_use_large_pages (&lldata.gwdata);
 	gwset_num_threads (&lldata.gwdata, num_threads);
 	gwset_thread_callback (&lldata.gwdata, SetAuxThreadPriority);
 	gwset_thread_callback_data (&lldata.gwdata, &sp_info);
@@ -6532,7 +6684,7 @@ int primeBench (
 	char	buf[512];
 	unsigned int threads;
 	int	fft_lengths[] = {4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 640, 768, 896, 1024, 1280, 1536, 1792, 2048, 2560, 3072, 3584, 4096, 5120, 6144, 7168, 8192, 10240, 12288, 14336, 16384, 20480, 24576, 28672, 32768};
-	int	all_bench, plus1, stop_reason;
+	int	all_bench, full_bench, plus1, stop_reason;
 	double	timers[2];
 	struct primenetBenchmarkData pkt;
 
@@ -6586,7 +6738,8 @@ int primeBench (
 /* Loop over all FFT lengths */
 
 	  all_bench = IniGetInt (INI_FILE, "AllBench", 0);
-	  if (IniGetInt (INI_FILE, "FullBench", 0)) {
+	  full_bench = IniGetInt (INI_FILE, "FullBench", 0);
+	  if (full_bench) {
 	    i = 0;
 	    num_lengths = sizeof (fft_lengths) / sizeof (int);
 	  } else {
@@ -6603,6 +6756,8 @@ int primeBench (
 /* my 1400 MHz P4 to run 10 iterations of a 1792K FFT. */
 
 		gwinit (&lldata.gwdata);
+		if (IniGetInt (LOCALINI_FILE, "UseLargePages", 0))
+			gwset_use_large_pages (&lldata.gwdata);
 		gwset_num_threads (&lldata.gwdata, threads);
 		gwset_thread_callback (&lldata.gwdata, SetAuxThreadPriority);
 		gwset_thread_callback_data (&lldata.gwdata, &sp_info);
@@ -6615,9 +6770,10 @@ int primeBench (
 
 /* Output start message for this FFT length */
 
-		sprintf (buf, "Timing %d iterations at %dK%s FFT length.  ",
+		sprintf (buf, "Timing %d iterations at %dK%s FFT length%s.  ",
 			 iterations, fft_lengths[i],
-			 plus1 ? " all-complex" : "");
+			 plus1 ? " all-complex" : "",
+			 gw_using_large_pages (&lldata.gwdata) ? " using large pages" : "");
 		OutputStr (thread_num, buf);
 
 /* Fill data space with random values. */
@@ -6669,9 +6825,15 @@ int primeBench (
 		print_timer (timers, 0, buf, TIMER_NL | TIMER_MS);
 		writeResults (buf);
 
-/* Accumulate best times to send to the server */
+/* Accumulate best times to send to the server.  Limit the number sent since */
+/* we can only send fifty. */
 
 		if (!all_bench &&
+		    ((full_bench &&
+		      threads == 1) ||
+		     (!full_bench &&
+		      fft_lengths[i] > 768 &&
+		      (threads == 1 || threads == 2 || threads == 4))) &&
 		    pkt.num_data_points < PRIMENET_BENCH_MAX_DATAPOINTS) {
 			if (threads == 1)
 				sprintf (pkt.data_points[pkt.num_data_points].bench,
@@ -6810,7 +6972,7 @@ int prp (
 	gwhandle gwdata;
 	gwnum	x;
 	giant	N, tmp;
-	int	first_iter_msg, res, stop_reason;
+	int	max_read_attempts, first_iter_msg, res, stop_reason;
 	int	echk, saving, near_fft_limit, sleep5, isProbablePrime;
 	unsigned long Nlen, counter, iters, error_count;
 	int	slow_iteration_count;
@@ -6837,7 +6999,7 @@ int prp (
 /* In that case, skip onto doing the PRP test until more memory becomes */
 /* available. */
 
-	if (w->work_type == WORK_PRP && ! w->pminus1ed && pass != 3) {
+	if (w->work_type == WORK_PRP && w->tests_saved > 0.0 && pass != 3) {
 		int	pass_to_pfactor;
 
 		pass_to_pfactor = (WELL_BEHAVED_WORK || SEQUENTIAL_WORK) ? 2 : 1;
@@ -6869,6 +7031,8 @@ int prp (
 /* Init the FFT code for squaring modulo k*b^n+c. */
 
 begin:	gwinit (&gwdata);
+	if (IniGetInt (LOCALINI_FILE, "UseLargePages", 0))
+		gwset_use_large_pages (&gwdata);
 	gwset_num_threads (&gwdata, THREADS_PER_TEST[thread_num]);
 	gwset_thread_callback (&gwdata, SetAuxThreadPriority);
 	gwset_thread_callback_data (&gwdata, sp_info);
@@ -6918,10 +7082,12 @@ begin:	gwinit (&gwdata);
 	sprintf (buf, "PRP %s", string_rep);
 	title (thread_num, buf);
 
-/* Loop reading from save files (and backup save files) */
+/* Loop reading from save files (and backup save files).  Limit number of backup */
+/* files we try to read in case there is an error deleting bad save files. */
 
 	tempFileName (w, filename);
-	for ( ; ; ) {
+	max_read_attempts = 99;
+	while (max_read_attempts--) {
 
 /* If there are no more save files, start off with the 1st PRP squaring. */
 
@@ -7177,7 +7343,7 @@ OutputStr (thread_num, "Iteration failed.\n");
 			if (first_iter_msg) {
 				strcat (buf, ".\n");
 				clear_timer (timers, 0);
-			} if (CUMULATIVE_TIMING) {
+			} else if (CUMULATIVE_TIMING) {
 				strcat (buf, ".  Total time: ");
 				print_timer (timers, 0, buf, TIMER_NL);
 			} else {

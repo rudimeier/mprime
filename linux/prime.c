@@ -1,4 +1,4 @@
-/* Copyright 1995-2008 Mersenne Research, Inc. */
+/* Copyright 1995-2009 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -30,14 +30,13 @@
 #ifdef __APPLE__
 #include <dirent.h>
 #include <pthread.h>
+#include <sched.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <sys/sysctl.h>
 #include <sys/time.h>
 #include <sys/timeb.h>
-#define PTHREAD_MIN_PRIORITY 0		/* Missing #defines from pthreads.h */
-#define PTHREAD_MAX_PRIORITY 31		/* Missing #defines from pthreads.h */
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/ps/IOPowerSources.h>
 #include <IOKit/ps/IOPSKeys.h>
@@ -47,8 +46,10 @@
 #ifdef __FreeBSD__
 #include <dirent.h>
 #include <pthread.h>
+#include <sched.h>
 #include <unistd.h>
 #include <sys/resource.h>
+#include <sys/sysctl.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/timeb.h>
@@ -76,20 +77,23 @@ typedef int pid_t;
 #include <sys/timeb.h>
 #endif
 
+/* Required Haiku files */
+#ifdef __HAIKU__
+#include <dirent.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <sys/resource.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/timeb.h>
+#endif
+
 /* Globals */
 
 #ifndef __WATCOMC__
 #ifndef __APPLE__
 #define OPEN_MAX 20
 #endif
-#endif
-
-#ifdef MPRIME_LOADAVG
-#define LINUX_LDAV_FILE "/proc/loadavg"
-int volatile SLEEP_STOP = 0;
-long LOAD_CHECK_TIME = 0;
-double HI_LOAD = 0.0;
-double LO_LOAD = 0.0;
 #endif
 
 int volatile THREAD_KILL = 0;
@@ -116,91 +120,6 @@ void sigterm_handler(int signo)
 	(void)signal(signo, sigterm_handler);
 }
 
-#ifdef MPRIME_LOADAVG
-
-/* Routine to get the current load average */
-double get_load_average (void)
-{
-#ifdef __linux__
-	char	ldavgbuf[40];
-	double	load_avg;
-	int	fd, count;
-
-	fd = open (LINUX_LDAV_FILE, O_RDONLY);
-	if (fd == -1) return (-1.0);
-	count = read (fd, ldavgbuf, 40);
-	(void) close (fd);
-	if (count <= 0) return (-1.0);
-	count = sscanf (ldavgbuf, "%lf", &load_avg);
-	if (count < 1) return (-1.0);
-	return (load_avg);
-#endif
-#if defined (__FreeBSD__) || defined (__APPLE__)
-	double load[3];
-
-	if (getloadavg (load, sizeof(load)/sizeof(load[0])) < 0) return (-1.0);
-	return (load[0]);
-#endif
-}
-
-/* load_handler: call by signal routine,
-   sets SLEEP_STOP to TRUE if load is too high */
-void load_handler (
-	int	sig)
-{
-	double  load_avg;
-
-	load_avg = get_load_average ();
-	if (load_avg < 0.0) return;
-  
-	if (SLEEP_STOP) {
-		if (load_avg < LO_LOAD)
-			SLEEP_STOP = FALSE;
-	} else {
-		if (load_avg > HI_LOAD)
-			SLEEP_STOP = TRUE;
-	}
-}
-
-/* init_load_check: initialises timer that calls load_handler
-   every LOAD_CHECK_TIME seconds */
-void init_load_check (void)
-{
-	struct itimerval timer, otimer;
-	struct sigaction sigact;
-	int	ret;
-
-	timer.it_interval.tv_sec  =  LOAD_CHECK_TIME;
-	timer.it_interval.tv_usec =  0;
-	timer.it_value.tv_sec     =  LOAD_CHECK_TIME;
-	timer.it_value.tv_usec    =  0;
-
-	ret = setitimer (ITIMER_REAL, &timer, &otimer);
-	if (ret < 0) return;
-  
-	sigact.sa_handler = &load_handler;
-	sigemptyset(&sigact.sa_mask);
-	sigact.sa_flags =  SA_RESTART;
-	ret = sigaction(SIGALRM, &sigact, NULL);
-	if (ret < 0) { /* clean up after ourselves */
-		setitimer (ITIMER_REAL, &otimer, NULL);
-	}
-}
-
-/* test_sleep: tests if SLEEP_STOP is set and sleeps until load is normal
-   again or WORKER_THREADS_STOPPING is set
-*/
-void test_sleep (void) 
-{
-	sigset_t newmask;
-
-	while (SLEEP_STOP && !WORKER_THREADS_STOPPING) {
-		sigemptyset (&newmask);
-		sigsuspend (&newmask);
-	}
-}
-#endif
-
 /* Main entry point! */
 
 int main (
@@ -211,7 +130,7 @@ int main (
 	int	named_ini_files = -1;
 	int	contact_server = 0;
 	int	torture_test = 0;
-	int	i;
+	int	i, nice_level;
 	char	*p;
 
 /* catch termination signals */
@@ -224,7 +143,7 @@ int main (
 	setvbuf (stdout, NULL, _IONBF, 0);
 
 /* Change to the executable's directory */
-/* NOTE:  This only change's the working directory if the user typed */
+/* NOTE:  This only changes the working directory if the user typed */
 /* in a full path to the executable (as opposed to finding it on the PATH) */
 
 	strcpy (buf, argv[0]);
@@ -333,24 +252,29 @@ int main (
 	}
 
 /* Determine the names of the INI files, read them, do other initialization. */
+/* Skip the comm code initialization if we are just displaying the status */
+/* or running a torture test */
 
 	nameAndReadIniFiles (named_ini_files);
+	if (MENUING != 2 && !torture_test) initCommCode ();
 
-/* Read load averaging settings from INI files */
+/* If not running a torture test, set the program to nice priority. */
+/* Technically, this is not necessary since worker threads are set to */
+/* the lowest possible priority.  However, sysadmins might be alarmed */
+/* to see a CPU intensive program not running at nice priority when */
+/* executing a ps command. */
 
-#ifdef MPRIME_LOADAVG
-	IniGetString (INI_FILE, "MaxLoad", buf, sizeof (buf), "0");
-	HI_LOAD = atof (buf);
-	IniGetString (INI_FILE, "MinLoad", buf, sizeof (buf), "0");
-	LO_LOAD = atof (buf);
-	IniGetString (INI_FILE, "PauseTime", buf, sizeof (buf), "0");
-	LOAD_CHECK_TIME = atol (buf);
-
-/* Initialise load checking */
-
-	if (HI_LOAD > 0.0 && LOAD_CHECK_TIME > 0)
-		init_load_check ();
+	nice_level = IniGetInt (INI_FILE, "Nice", 10);
+	if (!torture_test && nice_level) {
+/* Linux ranges from -20 to +19, lower values give more favorable scheduling */
+#if defined (__linux__) || defined (__HAIKU__)
+		setpriority (PRIO_PROCESS, 0, nice_level);
 #endif
+/* FreeBSD ranges from -20 to +20, lower values give more favorable scheduling */
+#if defined (__APPLE__) || defined (__FreeBSD__)
+		setpriority (PRIO_PROCESS, 0, nice_level);
+#endif
+	}
 
 /* If running the torture test, do so now. */
 
@@ -389,6 +313,7 @@ int main (
 
 	else if (contact_server) {
 		do_manual_comm_now ();
+		while (COMMUNICATION_THREAD) Sleep (50);
 	}
 
 /* Bring up the main menu */
@@ -418,7 +343,7 @@ usage:	printf ("Usage: mprime [-cdhmstv] [-aN] [-wDIR]\n");
 	printf ("-s\tDisplay status.\n");
 	printf ("-t\tRun the torture test.\n");
 	printf ("-v\tPrint the version number.\n");
-	printf ("-aN\tUse an alternate set of INI and output files.\n");
+	printf ("-aN\tUse an alternate set of INI and output files (obsolete).\n");
 	printf ("-wDIR\tRun from a different working directory.\n");
 	printf ("\n");
 	return (1);
@@ -451,33 +376,6 @@ void flashWindowAndBeep (void)
 	printf ("\007");
 }
 
-/* Do some work prior to launching worker threads */
-/* Windows uses this to implement boot delay. */
-
-void PreLaunchCallback (
-	int	launch_type)
-{
-}
-
-/* Do some work after worker threads have terminated */
-
-void PostLaunchCallback (
-	int	launch_type)
-{
-}
-
-/* OSes that must poll for whether the ESC key was hit do it here. */
-/* We use this opportunity to perform other miscellaneous tasks that */
-/* can't be done any other way. */
-
-void stopCheckCallback (
-	int	thread_num)
-{
-#ifdef MPRIME_LOADAVG
-	test_sleep ();
-#endif
-}
-
 void RealOutputStr (int thread_num, char *buf)
 {
 static	int	last_char_out_was_newline = TRUE;
@@ -499,282 +397,6 @@ static	int	last_char_out_was_newline = TRUE;
 			printf ("%s", buf);
 		last_char_out_was_newline = (buf[strlen(buf)-1] == '\n');
 	}
-}
-
-/* Return TRUE if we are on battery power. */
-
-int OnBattery (void)
-{
-#ifdef __APPLE__
-/* The following copyright applies to the battery detection code below.  I did modify */
-/* substantially as it did far more than I needed. */
-
-/* Copyright (c) 2003 Thomas Runge (coto@core.de)
- * Mach and Darwin specific code is Copyright (c) 2006 Eric Pooch (epooch@tenon.com)
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the author nor the names of its contributors
- *    may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
-	CFTypeRef blob = IOPSCopyPowerSourcesInfo();
-	CFArrayRef sources = IOPSCopyPowerSourcesList(blob);
-
-	int i, acstat;
-	CFDictionaryRef pSource = NULL;
-	const void *psValue;
-
-	acstat = TRUE;
-
-	for(i = 0; i < CFArrayGetCount(sources); i++)
-	{
-		pSource = IOPSGetPowerSourceDescription(blob, CFArrayGetValueAtIndex(sources, i));
-		if(!pSource) break;
-
-		psValue = (CFStringRef)CFDictionaryGetValue(pSource, CFSTR(kIOPSNameKey));
-
-		if (CFDictionaryGetValueIfPresent(pSource, CFSTR(kIOPSIsPresentKey), &psValue) && (CFBooleanGetValue(psValue) > 0))
-		{
-			psValue = (CFStringRef)CFDictionaryGetValue(pSource, CFSTR(kIOPSPowerSourceStateKey));
-
-			if (CFStringCompare(psValue,CFSTR(kIOPSBatteryPowerValue),0)==kCFCompareEqualTo)
-			{
-				/* We are running on a battery power source. */
-				acstat = FALSE;
-			}
-		}
-	}
-
-	CFRelease(blob);
-	CFRelease(sources);
-
-	return(!acstat);
-#endif
-#ifdef __linux__
-	FILE	*fd;
-	char	buf[180];
-	int	ac_state;
-
-	ac_state = -1;
-	fd = fopen ("/proc/acpi/battery/BAT0/state", "r");
-	if (fd != NULL) {
-		while (fgets (buf, sizeof (buf), fd) != NULL) {
-			char	*p;
-			p = strstr (buf, "charging state:");
-			if (p == NULL) continue;
-			if (strstr (p+14, "discharging") != NULL) ac_state = 0;
-			else if (strstr (p+14, "charging") != NULL) ac_state = 1;
-			else if (strstr (p+14, "charged") != NULL) ac_state = 1;
-		}
-		fclose (fd);
-	}
-	return (ac_state == 0);
-#endif
-}
-
-/* The current implementation comes courtesy of Tim Wood and Dennis Gregorovic */
-
-unsigned long physical_memory (void)
-{
-#ifdef __APPLE__
-	int	mib[2];
-	union {
-		uint32_t ui32;
-		uint64_t ui64;
-	} value;
-	size_t	len;
-
-	mib[0] = CTL_HW;
-	mib[1] = HW_MEMSIZE;
-	len = sizeof (value);
-	if (sysctl (mib, 2, &value, &len, NULL, 0) < 0)
-		return (1024);		/* On error, guess 1GB */
-	if (len == sizeof (uint32_t))
-		return (value.ui32 >> 20);
-	else
-		return ((unsigned long) (value.ui64 >> 20));
-#else
-        struct sysinfo sys_info;
-
-        if (sysinfo(&sys_info) != 0) return (1024);  /* Guess 1GB */
-
-	return ((unsigned long)
-		((double) sys_info.totalram *
-		 (double) sys_info.mem_unit / 1048576.0));
-#endif
-}
-
-unsigned long num_cpus (void)
-{
-#ifdef __APPLE__
-	int	mib[2];
-	int	ncpus;
-	size_t	len;
-
-	mib[0] = CTL_HW;
-	mib[1] = HW_NCPU;
-	len = sizeof (ncpus);
-	sysctl (mib, 2, &ncpus, &len, NULL, 0);
-	return (ncpus);
-#else
-	FILE	*fd;
-	char	buf[200];
-	int	count;
-
-	count = 0;
-	fd = fopen ("/proc/cpuinfo", "r");
-	if (fd != NULL) {
-		while (fgets (buf, sizeof (buf), fd) != NULL) {
-			buf[9] = 0;
-			if (strcmp (buf, "processor") == 0) count++;
-		}
-		fclose (fd);
-	}
-	if (count == 0) count = 1;
-	return (count);
-#endif
-}
-
-/* Return a better guess for amount of memory to use in a torture test. */
-/* Caller passes in its guess for amount of memory to use, but this routine */
-/* can reduce that guess based on OS-specific code that looks at amount */
-/* of available physical memory. */
-/* This code was written by an anonymous GIMPS user. */
-
-unsigned long GetSuggestedMemory (unsigned long nDesiredMemory)
-{
-	return (nDesiredMemory);
-}
-
-int getDefaultTimeFormat (void)
-{
-	return (2);
-}
-
-void Sleep (
-	long	ms) 
-{
-#ifdef __IBMC__
-	DosSleep(ms);
-#else
-	usleep (ms * 1000);
-#endif
-}
-
-/* Clear the array of active thread handles */
-
-void clearThreadHandleArray (void)
-{
-}
-
-/* Register a thread termination.  We remove the thread handle from the */
-/* list of active worker threads. */
-
-void registerThreadTermination (void)
-{
-}
-
-/* When stopping or exiting we raise the priority of all worker threads */
-/* so that they can terminate in a timely fashion even if there are other */
-/* CPU bound tasks running. */
-
-void raiseAllWorkerThreadPriority (void)
-{
-}
-
-
-/* Set priority.  Map one (prime95's lowest priority) to 20 */
-/* (linux's lowest priority).  Map eight (prime95's normal priority) to */
-/* 0 (linux's normal priority). */
-
-void setThreadPriorityAndAffinity (
-	int	priority,		/* Priority, 1=low, 9=high */
-	int	mask)			/* Affinity mask */
-{
-#ifdef __IBMC__
-	DosSetPriority(PRTYS_PROCESS,
-		(priority < 6) ? PRTYC_IDLETIME : PRTYC_REGULAR,
-		(priority == 1 || priority == 6) ? PRTYD_MINIMUM :
-		(priority == 2 || priority == 7) ? -10 :
-		(priority == 3 || priority == 8) ? 0 :
-		(priority == 4 || priority == 9) ? 10 :
-		PRTYD_MAXIMUM,
-		0);
-#endif
-#ifdef __linux__
-	int	linux_priority, errcode;
-	pid_t	thread_id;
-
-/* I couldn't get the standard syscall0 declaration of gettid to */
-/* work in my Linux distro.  Use the direct system call instead. */
-	thread_id = (pid_t) syscall (__NR_gettid);
-
-/* Set priority.  Map one (prime95's lowest priority) to 19 */
-/* (linux's lowest priority).  Map eight (prime95's normal priority) to */
-/* 0 (linux's normal priority). */
-
-	linux_priority = (8 - (int) priority) * 19 / 7;
-	errcode = setpriority (PRIO_PROCESS, thread_id, linux_priority);
-
-/* Set affinity for this thread.  We assume the processor mask is the same */
-/* as in Windows with physical CPUs representing the least significant bits */
-/* and hyperthreaded logical CPUs as the next set of more significant bits */
-
-	errcode = sched_setaffinity (thread_id, sizeof (mask), &mask);
-#endif
-
-#if defined (__APPLE__) || defined (__FreeBSD__)
-static	int	default_priority = 0;
-static	int	default_policy = 0;
-	struct sched_param sp;
-
-/* Get the default thread priority when a thread is first launched */
-	if (default_priority == 0) {
-		memset (&sp, 0, sizeof(struct sched_param));
-	        if (pthread_getschedparam (pthread_self(),
-					   &default_policy, &sp) >= 0) {
-			default_priority = sp.sched_priority;
-		} else {
-			default_policy = SCHED_RR;
-			default_priority = PTHREAD_MIN_PRIORITY +
-					   (PTHREAD_MAX_PRIORITY -
-					    PTHREAD_MIN_PRIORITY) / 2;
-		}
-	}
-
-/* Map one (prime95's lowest priority) to PTHREAD_MIN_PRIORITY */
-/* (pthread's lowest priority).  Map eight (prime95's normal priority) to */
-/* pthread's default priority. */
-
-	memset (&sp, 0, sizeof(struct sched_param));
-	sp.sched_priority = PTHREAD_MIN_PRIORITY +
-			    (priority - 1) *
-				(default_priority - PTHREAD_MIN_PRIORITY) / 7;
-	pthread_setschedparam (pthread_self(), default_policy, &sp);
-#endif
 }
 
 void BlinkIcon (int thread_num, int x)
@@ -814,10 +436,9 @@ void linuxContinue (
 	running_pid = IniGetInt (LOCALINI_FILE, "Pid", 0);
 	if (running_pid == 0 || my_pid == running_pid) goto ok;
 
-#ifdef __APPLE__
+#if defined (__APPLE__) || defined (__HAIKU__)
 	goto ok;
-#else
-#ifdef __OS2__
+#elif defined (__OS2__)
 
         {
             USHORT handle1 = 0, handle2 = 0;
@@ -851,7 +472,6 @@ void linuxContinue (
 	_close (fd);
 	if (inode1 != inode2) goto ok;
 #endif
-#endif
 
 /* The two pids are running the same executable, raise an error and return */
 
@@ -865,129 +485,7 @@ ok:	IniWriteInt (LOCALINI_FILE, "Pid", my_pid);
 	if (wait_flag) IniWriteInt (LOCALINI_FILE, "Pid", 0);
 }
 
-/* Load the PrimeNet DLL, make sure an internet connection is active */
+/* Implemenet the rest of the OS-specific routines */
 
-int LoadPrimeNet (void)
-{
-	/* Init stuff */
-	/* Set PRIMENET procedure pointer */
-	/* return false if not connected to internet */
+#include "os_routines.c"
 
-	int lines = 0;
-#ifndef AOUT
-	FILE* fd;
-	char buffer[4096];
-#ifdef __EMX__
-	char command[128];
-	char szProxyHost[120], *con_host;
-	char *colon;
-
-	IniSectionGetString (INI_FILE, "PrimeNet", "ProxyHost",
-			     szProxyHost, 120, NULL);
-	if (*szProxyHost) {
-		if ((colon = strchr(szProxyHost, ':'))) {
-			*colon = 0;
-		}
-		con_host = szProxyHost;
-	} else {
-		con_host = szSITE;
-	}
-
-	sprintf(command,"host %s",con_host);
-#ifdef __DEBUG
-	fprintf(stderr,"Command = %s\n",command);
-#endif
-	fd = popen(command,"r");
-	if (fd != NULL) {
-	  fgets(buffer, 199, fd);
-#ifdef __DEBUG
-	  fprintf(stderr,"Response = %s\n",buffer);
-#endif
-	  if (strncmp(buffer,"host:",5) != 0) {
-	    fclose(fd);
-	    return TRUE;
-	  }
-	  fclose(fd);
-	}
-#else
-#ifdef __linux__
-	/* Open file that will hopefully tell us if we are connected to */
-	/* the Internet.  There are four possible settings for RouteRequired */
-	/* 0:	Always return TRUE */
-	/* 1:   Use old version 19 code */
-	/* 2:   Use new code supplied by Matthew Ashton. */
-	/* 99:	Default.  Use case 2 above but if cannot open /proc/net/route*/
-	/*	then assume you are connected (we probably do not have read */
-	/*	permission or this is a funny Linux setup). */
-	{
-	  int RtReq = IniSectionGetInt (INI_FILE, "PrimeNet", "RouteRequired", 99);
-	  if (RtReq == 0) return (TRUE);
-	  fd = fopen("/proc/net/route","r");
-	  if (fd == NULL) return (RtReq == 99);
-	/* We have a readable /proc/net/route file.  Use the new check */
-	/* for an Internet connection written by Matthew Ashton. However, */
-	/* we still support the old style check (just in case) by setting */
-	/* RouteRequired to 1. */
-	  if (RtReq >= 2) {
-	    while (fgets(buffer, sizeof(buffer), fd)) {
-	      int dest;
-	      if(sscanf(buffer, "%*s %x", &dest) == 1 && dest == 0) {
-		fclose (fd);
-		return (TRUE);
-	      }
-	    }
-	  }
-	/* The old code for testing an Internet connection is below */
-	  else {
-	    fgets(buffer, 199, fd);
-	    fgets(buffer, 199, fd);
-	    while (!feof(fd)) {
-	      if (strncmp(buffer, "lo", 2)) {
-	        fclose(fd);
-	        return TRUE;
-	      }
-	      fgets(buffer, 199, fd);
-	    }
-	  }
-	  fclose(fd);
-	}
-#endif
-#if defined (__FreeBSD__) || defined (__APPLE__) || defined (__WATCOMC__)
-	/* The /proc/net/route test is not really meaningful under FreeBSD */
-	/* There doesn't seem to be any meaningful test to see whether the */
-	/* computer is connected to the Internet at the time using a non- */
-	/* invasive test (which wouldn't, say, activate diald or ppp or */
-	/* something else */
-	return TRUE;
-#endif                /* __FreeBSD__ */
-#endif
-#endif
-	OutputStr (COMM_THREAD_NUM, "You are not connected to the Internet.\n");
-	return FALSE;
-}
-
-/* Unload the PrimeNet DLL */
-
-void UnloadPrimeNet (void)
-{
-}
-
-/* Check if a program is currently running - not implemented for OS/2 */
-
-void checkPauseListCallback (void)
-{
-#ifndef __OS2__
-	FILE	*fd;
-	char	buf[80];
-
-	fd = popen ("ps -A -o ucomm", "r");
-	if (fd != NULL) {
-		while (fgets (buf, sizeof (buf), fd) != NULL) {
-			int	len = strlen (buf);
-			while (len && isspace (buf[len-1])) buf[--len] = 0;
-			isInPauseList (buf);
-		}
-		fclose (fd);
-	}
-#endif
-}

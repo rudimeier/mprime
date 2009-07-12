@@ -334,6 +334,7 @@ simple_mutex:	 	g_hMutexInst = CreateMutex (
 /* Name and read the INI files.  Perform some other startup initializations. */
 
 	nameAndReadIniFiles (named_ini_files);
+	initCommCode ();
 
 /* Before processing the INI file, hide and/or position the */
 /* main window so that we can display error messages */

@@ -7,6 +7,8 @@
 | Commona contains information used only during setup
 | Commonb contains information used only during execution
 | Commonc contains information used during setup and execution
+|
+| Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
 +---------------------------------------------------------------------*/
 
 /* Routine to eliminate odd puctuation characters from user ID */
@@ -33,7 +35,8 @@ void sanitizeString (
 #define STAT3 "No work queued up.\n"
 
 void rangeStatusMessage (
-	char	*buf)		/* 2000 character buffer */
+	char	*buf,
+	unsigned int buflen)		/* Originally coded for a 2000 character buffer */
 {
 	unsigned int tnum, ll_cnt, lines_per_worker;
 	double	prob, est;
@@ -44,10 +47,10 @@ void rangeStatusMessage (
 
 	if (! WORKER_THREADS_ACTIVE && !COMMUNICATION_THREAD) readIniFiles ();
 
-/* Init */
+/* Init.  Default is 32 lines in a 2000 character buffer */
 
 	lines_per_worker = (unsigned int)
-		IniGetInt (INI_FILE, "StatusLines", 32) / NUM_WORKER_THREADS;
+		IniGetInt (INI_FILE, "StatusLines", buflen / 62) / NUM_WORKER_THREADS;
 	if (lines_per_worker < 3) lines_per_worker = 3;
 	orig_buf = buf;
 	ll_cnt = 0;
@@ -117,7 +120,7 @@ void rangeStatusMessage (
 /* Stop adding worktodo lines if buffer is full.  We must still loop */
 /* through the worktodo lines to decrement the in-use counters. */
 
-		if (buf - orig_buf >= 1800 ||
+		if ((unsigned int) (buf - orig_buf) >= buflen - 200 ||
 		    lines_output >= lines_per_worker-1) {
 			if (! truncated_status_msg) {
 				strcpy (buf, "More...\n");
@@ -146,7 +149,7 @@ void rangeStatusMessage (
 		else if (w->work_type == WORK_PMINUS1)
 			sprintf (buf, "P-1 B1=%.0f", w->B1);
 		else if (w->work_type == WORK_FACTOR)
-			sprintf (buf, "factor from 2^%lu to 2^%lu",
+			sprintf (buf, "factor from 2^%d to 2^%d",
 				 (int) w->sieve_depth, (int) w->factor_to);
 		else
 			strcpy (buf, w->work_type == WORK_PFACTOR ?

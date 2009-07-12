@@ -1,4 +1,4 @@
-; Copyright 1995-2006 - Mersenne Research, Inc.  All rights reserved.
+; Copyright 1995-2009 - Mersenne Research, Inc.  All rights reserved.
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -3178,6 +3178,177 @@ norm_addsub_1d_cleanup MACRO
 	ENDM
 
 
+; *************** 1D normalized small multiply macro ******************
+; This macro multiplies by a small value, then "normalizes" eight FFT
+; data values.
+; st(1) = high carry
+; st(0) = low carry
+; edi = big vs. little array pointer
+; ebx = pointer two-to-power multipliers
+; esi = destination
+; eax = the big vs. little word flag
+; ebp is preserved
+; A pipelined version of this code:
+;	mov	al, [edi]		;; Load big vs. little flag
+;	fld	QWORD PTR [edx+0*8]	;; Load value
+;	fmul	XMM_TMP5		;; Mul by value * FFTLEN/2
+;	fmul	QWORD PTR [ebx+0*16+8]	;; Mul value by two-to-minus-phi
+;	faddp	st(1), st		;; x = value + carry
+;	fld	limit_bigmax[eax*8]	;; Load maximum * BIGVAL - BIGVAL
+;	fadd	st, st(1)		;; y = top bits of x
+;	fld	limit_bigmax[eax*8]	;; Load maximum * BIGVAL - BIGVAL
+;	fsubr	st, st(1)		;; z = y - (maximum * BIGVAL - BIGVAL)
+;	fmul	limit_inverse[eax*8]	;; next carry = shifted y
+;	fsubp	st(2), st		;; new value = x - z
+;	fmul	QWORD PTR [ebx+0*16]	;; new value = val * two-to-phi
+;	fstp	QWORD PTR [esi+0*8]	;; Save new value
+
+norm_smallmul_1d MACRO
+					;; c2, c1
+	mov	al, [edi+0]		;; Load big vs. little flags
+	fld	QWORD PTR [esi+0*8]	;; Load first value
+	fmul	QWORD PTR [ebx+0*16]	;; Mul by col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by value * two-to-minus-phi fudge
+	fld	QWORD PTR [esi+1*8]	;; Load second value
+	fmul	QWORD PTR [ebx+1*16]	;; Mul by col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by value * two-to-minus-phi fudge
+	fxch	st(3)			;; c1, x1, c2, x2
+	faddp	st(1), st		;; x1 = values + carry1
+	fxch	st(2)			;; x2, c2, x1
+	faddp	st(1), st		;; x2 = values + carry2
+	fld	XMM_LIMIT_BIGMAX[eax]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y1 = top bits of x
+	fld	XMM_LIMIT_BIGMAX[eax+8]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y2 = top bits of x
+	fld	XMM_LIMIT_INVERSE[eax]	;; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y1
+	fld	XMM_LIMIT_INVERSE[eax+8];; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y2
+	fxch	st(3)			;; y1, c1, y2, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax]	;; y1 = y1 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y2, c1, y1, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax+8]	;; y2 = y2 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y1, c1, y2, c2, x2, x1
+	fsubp	st(5), st		;; rounded value = x1 - y1
+	fxch	st(1)			;; y2, c1, c2, x2, x1
+	fsubp	st(3), st		;; rounded value = x2 - y2
+	fxch	st(3)			;; x1, c2, x2, c1
+	fmul	QWORD PTR [ebx+0*16+8]	;; mul by col two-to-phi
+	fstp	QWORD PTR [esi+0*8]	;; Save new value1
+	fxch	st(1)			;; x2, c2, c1
+	fmul	QWORD PTR [ebx+1*16+8]	;; mul by col two-to-phi
+	fstp	QWORD PTR [esi+1*8]	;; Save new value2
+
+					;; c2, c1
+	mov	al, [edi+1]		;; Load big vs. little flags
+	fld	QWORD PTR [esi+2*8]	;; Load first value
+	fmul	QWORD PTR [ebx+2*16]	;; Mul by col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by value * two-to-minus-phi fudge
+	fld	QWORD PTR [esi+3*8]	;; Load second value
+	fmul	QWORD PTR [ebx+3*16]	;; Mul by col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by value * two-to-minus-phi fudge
+	fxch	st(3)			;; c1, x1, c2, x2
+	faddp	st(1), st		;; x1 = values + carry1
+	fxch	st(2)			;; x2, c2, x1
+	faddp	st(1), st		;; x2 = values + carry2
+	fld	XMM_LIMIT_BIGMAX[eax]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y1 = top bits of x
+	fld	XMM_LIMIT_BIGMAX[eax+8]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y2 = top bits of x
+	fld	XMM_LIMIT_INVERSE[eax]	;; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y1
+	fld	XMM_LIMIT_INVERSE[eax+8];; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y2
+	fxch	st(3)			;; y1, c1, y2, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax]	;; y1 = y1 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y2, c1, y1, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax+8]	;; y2 = y2 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y1, c1, y2, c2, x2, x1
+	fsubp	st(5), st		;; rounded value = x1 - y1
+	fxch	st(1)			;; y2, c1, c2, x2, x1
+	fsubp	st(3), st		;; rounded value = x2 - y2
+	fxch	st(3)			;; x1, c2, x2, c1
+	fmul	QWORD PTR [ebx+2*16+8]	;; mul by col two-to-phi
+	fstp	QWORD PTR [esi+2*8]	;; Save new value1
+	fxch	st(1)			;; x2, c2, c1
+	fmul	QWORD PTR [ebx+3*16+8]	;; mul by col two-to-phi
+	fstp	QWORD PTR [esi+3*8]	;; Save new value2
+
+	mov	al, [edi+2]		;; Load big vs. little flags
+	fld	QWORD PTR [esi+4*8]	;; Load first value
+	fmul	QWORD PTR [ebx+4*16]	;; Mul by col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by value * two-to-minus-phi fudge
+	fld	QWORD PTR [esi+5*8]	;; Load second value
+	fmul	QWORD PTR [ebx+5*16]	;; Mul by col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by value * two-to-minus-phi fudge
+	fxch	st(3)			;; c1, x1, c2, x2
+	faddp	st(1), st		;; x1 = values + carry1
+	fxch	st(2)			;; x2, c2, x1
+	faddp	st(1), st		;; x2 = values + carry2
+	fld	XMM_LIMIT_BIGMAX[eax]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y1 = top bits of x
+	fld	XMM_LIMIT_BIGMAX[eax+8]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y2 = top bits of x
+	fld	XMM_LIMIT_INVERSE[eax]	;; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y1
+	fld	XMM_LIMIT_INVERSE[eax+8];; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y2
+	fxch	st(3)			;; y1, c1, y2, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax]	;; y1 = y1 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y2, c1, y1, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax+8]	;; y2 = y2 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y1, c1, y2, c2, x2, x1
+	fsubp	st(5), st		;; rounded value = x1 - y1
+	fxch	st(1)			;; y2, c1, c2, x2, x1
+	fsubp	st(3), st		;; rounded value = x2 - y2
+	fxch	st(3)			;; x1, c2, x2, c1
+	fmul	QWORD PTR [ebx+4*16+8]	;; mul by col two-to-phi
+	fstp	QWORD PTR [esi+4*8]	;; Save new value1
+	fxch	st(1)			;; x2, c2, c1
+	fmul	QWORD PTR [ebx+5*16+8]	;; mul by col two-to-phi
+	fstp	QWORD PTR [esi+5*8]	;; Save new value2
+
+					;; c2, c1
+	mov	al, [edi+3]		;; Load big vs. little flags
+	fld	QWORD PTR [esi+6*8]	;; Load first value
+	fmul	QWORD PTR [ebx+6*16]	;; Mul by col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by value * two-to-minus-phi fudge
+	fld	QWORD PTR [esi+7*8]	;; Load second value
+	fmul	QWORD PTR [ebx+7*16]	;; Mul by col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by value * two-to-minus-phi fudge
+	fxch	st(3)			;; c1, x1, c2, x2, sum, err
+	faddp	st(1), st		;; x1 = values + carry1
+	fxch	st(2)			;; x2, c2, x1, sum, err
+	faddp	st(1), st		;; x2 = values + carry2
+	fld	XMM_LIMIT_BIGMAX[eax]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y1 = top bits of x
+	fld	XMM_LIMIT_BIGMAX[eax+8]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y2 = top bits of x
+	fld	XMM_LIMIT_INVERSE[eax]	;; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y1
+	fld	XMM_LIMIT_INVERSE[eax+8];; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y2
+	fxch	st(3)			;; y1, c1, y2, c2, x2, x1, sum, err
+	fsub	XMM_LIMIT_BIGMAX[eax]	;; y1 = y1 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y2, c1, y1, c2, x2, x1, sum, err
+	fsub	XMM_LIMIT_BIGMAX[eax+8]	;; y2 = y2 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y1, c1, y2, c2, x2, x1, sum, err
+	fsubp	st(5), st		;; rounded value = x1 - y1
+	fxch	st(1)			;; y2, c1, c2, x2, x1, sum, err
+	fsubp	st(3), st		;; rounded value = x2 - y2
+	fxch	st(3)			;; x1, c2, x2, c1, sum, err
+	fmul	QWORD PTR [ebx+6*16+8]	;; mul by col two-to-phi
+	fstp	QWORD PTR [esi+6*8]	;; Save new value1
+	fxch	st(1)			;; x2, c2, c1, sum, err
+	fmul	QWORD PTR [ebx+7*16+8]	;; mul by col two-to-phi
+	fstp	QWORD PTR [esi+7*8]	;; Save new value2
+
+	lea	esi, [esi+8*8]		;; Next dest
+	lea	ebx, [ebx+8*16]		;; Next set of 8 multipliers
+	lea	edi, [edi+4]		;; Next big/lit flag
+	ENDM
+
+
 
 ; *************** 2D normalized add/sub macro ******************
 ; This macro adds or subtracts, then "normalizes" four FFT
@@ -3624,6 +3795,141 @@ norm_addsub_2d_cleanup MACRO
 	fmul	QWORD PTR [ebx+1*16+8]	;; carry *= grp two-to-phi
 	fadd	QWORD PTR [esi+8]	;; Add in value
 	fstp	QWORD PTR [esi+8]	;; Save value
+	ENDM
+
+
+; *************** 2D normalized small mul macro ******************
+; This macro multiplies, then "normalizes" four FFT
+; data values.
+; st(1) = high carry
+; st(0) = low carry
+; edi = big vs. little array ptr
+; ebp = pointer two-to-power group multipliers
+; esi = destination
+; eax = the big vs. little word flag
+; ebx = pointer two-to-power column multipliers
+; A pipelined version of this code:
+;	mov	al, [edi]		;; Load big vs. little flag
+;	fld	QWORD PTR [esi+0*dist1]	;; Load second number
+;	fmulp	st(1), st		;; Mul by value * two-to-minus-phi fudge
+;	faddp	st(4), st		;; x = value + carry
+;	fmul	limit_ttp_mult[eax*4]	;; Adjust next two-to-phi grp mult
+;	fld	limit_bigmax[eax*8]	;; y = rounding const
+;	fadd	st, st(4)		;; y = top bits of x
+;	fmul	limit_ttmp_mult[eax*4]	;; Adjust nxt two-to-minus-phi grp mult
+;	fld	limit_bigmax[eax*8]	;; Load maximum * BIGVAL - BIGVAL
+;	fsubr	st, st(3)		;; z = y - (maximum * BIGVAL - BIGVAL)
+;	fmul	limit_inverse[eax*8]	;; next carry = shifted y
+;	fld	QWORD PTR [edi+0*16]	;; Load next two-to-phi
+;	fsubp	st(6), st		;; rounded value = x - z
+;	fmul	st, st(2)		;; Compute next two-to-phi
+;	fmulp	st(5), st		;; new value = val * two-to-phi
+;	fld	QWORD PTR [edi+0*16+8]	;; Load next two-to-minus-phi col mult
+;	fmul	st, st(5)		;; Compute next two-to-minus-phi
+;	fstp	QWORD PTR [esi+0*dist1]	;; Save the value
+
+norm_smallmul_2d MACRO
+					;; c2, c1
+	mov	al, [edi+0]		;; Load big vs. little flags
+	fld	QWORD PTR [ebx+0*16]	;; Load col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by small value * two-to-minus-phi fudge
+	fld	QWORD PTR [ebp+0*16]	;; Load grp two-to-minus-phi
+	fmul	XMM_TTMP_FUDGE[eax]	;; Mul by fudge two-to-minus-phi
+	fld	QWORD PTR [esi+0*8]	;; Load first value
+	fld	QWORD PTR [ebp+1*16]	;; Mul by grp two-to-minus-phi
+	fmul	XMM_TTMP_FUDGE[eax+8]	;; Mul by fudge two-to-minus-phi
+	fld	QWORD PTR [esi+1*8]	;; Load second value
+	fxch	st(3)			;; v1mul,v2mul,v1,v2,colmul,c2,c1
+	fmulp	st(2), st
+	fmulp	st(2), st
+	fxch	st(2)			;; colmul,v2,v1,c2,c1
+	fmul	st(2), st
+	fmulp	st(1), st
+	fxch	st(3)			;; c1, v1, c2, v2
+	faddp	st(1), st		;; x1 = values + carry1
+	fxch	st(2)			;; x2, c2, x1
+	faddp	st(1), st		;; x2 = values + carry2
+	fld	XMM_LIMIT_BIGMAX[eax]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y1 = top bits of x
+	fld	XMM_LIMIT_BIGMAX[eax+8]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y2 = top bits of x
+	fld	XMM_LIMIT_INVERSE[eax]	;; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y1
+	fld	XMM_LIMIT_INVERSE[eax+8];; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y2
+	fxch	st(3)			;; y1, c1, y2, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax]	;; y1 = y1 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y2, c1, y1, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax+8]	;; y2 = y2 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y1, c1, y2, c2, x2, x1
+	fsubp	st(5), st		;; rounded value = x1 - y1
+	fxch	st(1)			;; y2, c1, c2, x2, x1
+	fsubp	st(3), st		;; rounded value = x2 - y2
+	fxch	st(3)			;; x1, c2, x2, c1
+	fmul	QWORD PTR [ebx+0*16+8]	;; mul by col two-to-phi
+	fld	QWORD PTR [ebp+0*16+8]	;; mul by grp two-to-phi
+	fmul	XMM_TTP_FUDGE[eax]	;; mul by two-to-phi fudge
+	fmulp	st(1), st
+	fstp	QWORD PTR [esi+0*8]	;; Save new value1
+	fxch	st(1)			;; x2, c2, c1
+	fmul	QWORD PTR [ebx+0*16+8]	;; mul by col two-to-phi
+	fld	QWORD PTR [ebp+1*16+8]	;; mul by grp two-to-phi
+	fmul	XMM_TTP_FUDGE[eax+8]	;; mul by two-to-phi fudge
+	fmulp	st(1), st
+	fstp	QWORD PTR [esi+1*8]	;; Save new value2
+
+					;; c2, c1
+	mov	al, [edi+1]		;; Load big vs. little flags
+	fld	QWORD PTR [ebx+1*16]	;; Load col two-to-minus-phi
+	fmul	XMM_TMP5		;; Mul by value * two-to-minus-phi fudge
+	fld	QWORD PTR [ebp+0*16]	;; Load grp two-to-minus-phi
+	fmul	XMM_TTMP_FUDGE[eax]	;; Mul by fudge two-to-minus-phi
+	fld	QWORD PTR [esi+2*8]	;; Load first value
+	fld	QWORD PTR [ebp+1*16]	;; Mul by grp two-to-minus-phi
+	fmul	XMM_TTMP_FUDGE[eax+8]	;; Mul by fudge two-to-minus-phi
+	fld	QWORD PTR [esi+3*8]	;; Load second value
+	fxch	st(3)			;; v1mul,v2mul,v1,v2,colmul,c2,c1
+	fmulp	st(2), st
+	fmulp	st(2), st
+	fxch	st(2)			;; colmul,v2,v1,c2,c1
+	fmul	st(2), st
+	fmulp	st(1), st
+	fxch	st(3)			;; c1, v1, c2, v2
+	faddp	st(1), st		;; x1 = values + carry1
+	fxch	st(2)			;; x2, c2, x1
+	faddp	st(1), st		;; x2 = values + carry2
+	fld	XMM_LIMIT_BIGMAX[eax]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y1 = top bits of x
+	fld	XMM_LIMIT_BIGMAX[eax+8]	;; Load maximum * BIGVAL - BIGVAL
+	fadd	st, st(2)		;; y2 = top bits of x
+	fld	XMM_LIMIT_INVERSE[eax]	;; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y1
+	fld	XMM_LIMIT_INVERSE[eax+8];; Load shifting constant
+	fmul	st, st(2)		;; next carry = shifted y2
+	fxch	st(3)			;; y1, c1, y2, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax]	;; y1 = y1 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y2, c1, y1, c2, x2, x1
+	fsub	XMM_LIMIT_BIGMAX[eax+8]	;; y2 = y2 - (maximum*BIGVAL-BIGVAL)
+	fxch	st(2)			;; y1, c1, y2, c2, x2, x1
+	fsubp	st(5), st		;; rounded value = x1 - y1
+	fxch	st(1)			;; y2, c1, c2, x2, x1
+	fsubp	st(3), st		;; rounded value = x2 - y2
+	fxch	st(3)			;; x1, c2, x2, c1
+	fmul	QWORD PTR [ebx+1*16+8]	;; mul by col two-to-phi
+	fld	QWORD PTR [ebp+0*16+8]	;; mul by grp two-to-phi
+	fmul	XMM_TTP_FUDGE[eax]	;; mul by two-to-phi fudge
+	fmulp	st(1), st
+	fstp	QWORD PTR [esi+2*8]	;; Save new value1
+	fxch	st(1)			;; x2, c2, c1
+	fmul	QWORD PTR [ebx+1*16+8]	;; mul by col two-to-phi
+	fld	QWORD PTR [ebp+1*16+8]	;; mul by grp two-to-phi
+	fmul	XMM_TTP_FUDGE[eax+8]	;; mul by two-to-phi fudge
+	fmulp	st(1), st
+	fstp	QWORD PTR [esi+3*8]	;; Save new value2
+
+	lea	esi, [esi+4*8]		;; Next dest
+	lea	ebx, [ebx+2*16]		;; Next set of 2 column multipliers
+	lea	edi, [edi+2]		;; Next big/lit flag
 	ENDM
 
 

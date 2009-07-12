@@ -408,7 +408,7 @@ again:	if (max_num_workers () > 1)
 			askNum ("Type of work to get", &m_work_pref[i], 0, 150);
 
 		if (NUM_CPUS * CPU_HYPERTHREADS > m_num_thread)
-			askNum ("Multithreading (Number of CPUs to use in LL test)",
+			askNum ("CPUs to use in LL test (multithreading)",
 				&m_numcpus[i], 1,
 				NUM_CPUS * CPU_HYPERTHREADS - m_num_thread + 1);
 		else
@@ -521,9 +521,9 @@ again:	if (max_num_workers () > 1)
 
 void test_status (void)
 {
-	char	buf[2000];
+	char	buf[4000];
 
-	rangeStatusMessage (buf);
+	rangeStatusMessage (buf, sizeof (buf));
 	strcat (buf, "\n");
 	outputLongLine (buf);
 }
@@ -802,13 +802,13 @@ again:	m_hours = CPU_HOURS;
 	askNum ("Hours per day this program will run", &m_hours, 1, 24);
 
 	printf ("\nPlease see the readme.txt file for important\n");
-	printf ("information on the available memory settings.\n\n");
+	printf ("information on the P-1/ECM stage 2 memory settings.\n\n");
 
 	if (m_memory_editable) {
 		max_mem = physical_memory () - 8;
 		if (max_mem < 8) max_mem = 8;
-		askNum ("Daytime available memory in MB", &m_day_memory, 8, max_mem);
-		askNum ("Nighttime available memory in MB", &m_night_memory, 8, max_mem);
+		askNum ("Daytime P-1/ECM stage 2 memory in MB", &m_day_memory, 8, max_mem);
+		askNum ("Nighttime P-1/ECM stage 2 memory in MB", &m_night_memory, 8, max_mem);
 		if (m_day_memory != m_night_memory) {
 			askStr ("Daytime begins at", (char *) &m_start_time, 12);
 			askStr ("Daytime ends at", (char *) &m_end_time, 12);

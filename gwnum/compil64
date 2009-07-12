@@ -12,6 +12,7 @@ objconv=c:\objconv\objconv
 
 cl64=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /O2 /c
 cl64d=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Zi /c
+cl64do=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Zi /O2 /c
 
 # List of all buildables in this makefile
 
@@ -73,13 +74,13 @@ amd64\release\gwdbldbl.obj: gwdbldbl.cpp gwdbldbl.h
     $(cl64) /I..\qd /Foamd64\release\gwdbldbl.obj gwdbldbl.cpp
 
 amd64\debug\gwdbldbl.obj: gwdbldbl.cpp gwdbldbl.h
-    $(cl64d) /I..\qd /Foamd64\debug\gwdbldbl.obj gwdbldbl.cpp
+    $(cl64do) /I..\qd /Foamd64\debug\gwdbldbl.obj gwdbldbl.cpp
 
 amd64\release\giants.obj: giants.c giants.h
     $(cl64) /Foamd64\release\giants.obj giants.c
 
 amd64\debug\giants.obj: giants.c giants.h
-    $(cl64d) /Foamd64\debug\giants.obj giants.c
+    $(cl64do) /Foamd64\debug\giants.obj giants.c
 
 amd64\release\ecmstag1.obj: ecmstag1.c gwnum.h
     $(cl64) /Foamd64\release\ecmstag1.obj ecmstag1.c

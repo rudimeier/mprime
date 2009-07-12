@@ -1,4 +1,4 @@
-; Copyright 1998-2006 - Mersenne Research, Inc.  All rights reserved
+; Copyright 1998-2009 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -44,7 +44,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -251,7 +251,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -269,7 +269,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -297,7 +297,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -507,7 +507,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -525,7 +525,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -553,7 +553,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -742,7 +742,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -760,7 +760,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -788,7 +788,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -997,7 +997,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -1015,7 +1015,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -1043,7 +1043,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -1254,7 +1254,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -1272,7 +1272,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -1300,7 +1300,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -1490,7 +1490,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -1508,7 +1508,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -1536,7 +1536,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -1863,7 +1863,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -1881,7 +1881,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -1909,7 +1909,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -2243,7 +2243,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -2261,7 +2261,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -2289,7 +2289,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -2561,7 +2561,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -2579,7 +2579,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -2607,7 +2607,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -2936,7 +2936,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -2954,7 +2954,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -2982,7 +2982,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -3316,7 +3316,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -3334,7 +3334,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -3362,7 +3362,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -3635,7 +3635,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -3653,7 +3653,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -3681,7 +3681,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -4016,7 +4016,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -4034,7 +4034,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -4062,7 +4062,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -4396,7 +4396,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -4414,7 +4414,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -4442,7 +4442,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -4714,7 +4714,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -4732,7 +4732,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -4760,7 +4760,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -5097,7 +5097,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -5115,7 +5115,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -5143,7 +5143,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -5477,7 +5477,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -5495,7 +5495,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -5523,7 +5523,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -5796,7 +5796,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -5814,7 +5814,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -5843,7 +5843,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -6301,7 +6301,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -6319,7 +6319,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -6348,7 +6348,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -6804,7 +6804,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -6822,7 +6822,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -6850,7 +6850,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -7205,7 +7205,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -7223,7 +7223,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -7252,7 +7252,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -7712,7 +7712,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -7730,7 +7730,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -7759,7 +7759,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -8216,7 +8216,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -8234,7 +8234,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -8262,7 +8262,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -8618,7 +8618,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -8636,7 +8636,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -8665,7 +8665,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -9123,7 +9123,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -9141,7 +9141,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -9170,7 +9170,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -9627,7 +9627,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -9645,7 +9645,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -9673,7 +9673,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -10028,7 +10028,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -10046,7 +10046,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -10075,7 +10075,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -10535,7 +10535,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -10553,7 +10553,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -10582,7 +10582,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -11039,7 +11039,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -11057,7 +11057,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -11085,7 +11085,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -11441,7 +11441,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -11459,7 +11459,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -11488,7 +11488,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -12069,7 +12069,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -12087,7 +12087,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -12116,7 +12116,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -12695,7 +12695,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -12713,7 +12713,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -12741,7 +12741,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -13179,7 +13179,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -13197,7 +13197,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -13226,7 +13226,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -13809,7 +13809,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -13827,7 +13827,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -13856,7 +13856,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -14436,7 +14436,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -14454,7 +14454,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 
@@ -14482,7 +14482,7 @@ pass2:	start_timer 0
 	CALLP	pass2_macro
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	JE_Y	gw_finish_fft
+	je	gw_finish_fft
 
 ;; Do the inverse FFT
 
@@ -14921,7 +14921,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; FFT data.
 
 	start_timer 28
-	CALL_Y	gw_carries
+	call	gw_carries
 	end_timer 28
 
 ;; Have we been given permission to start the FFT on the result?
@@ -14939,7 +14939,7 @@ fftdn:	lea	esi, [esi-p2cl*2*dist1-p2cl/128*64];; Restore source pointer
 ;; Now add in the FFT'ed carries, cleanup and return
 
 fftdn1:	end_timer 1
-	JMP_Y	gw_finish_mult
+	jmp	gw_finish_mult
 	ENDM
 
 ;;

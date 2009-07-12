@@ -5,24 +5,138 @@ ENVP= MACOSX_DEPLOYMENT_TARGET=10.3
 
 CC = gcc
 CFLAGS = -I.. -O2 -march=i686 -malign-double
+CFLAGSD = -I.. -g -DGDEBUG -march=i686 -malign-double
+CFLAGS64 = -I.. -O2 -DX86_64 -m64
+CFLAGS64D = -I.. -g -DGDEBUG -DX86_64 -m64
 
 CPP = g++
 CPPFLAGS = -I.. -I../qd -O2 -march=i686 -malign-double
+CPPFLAGSD = -I.. -I../qd -g -DGDEBUG -march=i686 -malign-double
+CPPFLAGS64 = -I.. -I../qd -O2 -DX86_64 -m64
+CPPFLAGS64D = -I.. -I../qd -g -DGDEBUG -DX86_64 -m64
 
-LINUXOBJS = cpuid.o gwnum.o gwthread.o gwutil.o gwdbldbl.o giants.o ecmstag1.o
+OBJS = release/cpuid.o release/gwnum.o release/gwthread.o release/gwutil.o release/gwdbldbl.o release/giants.o release/ecmstag1.o
+OBJSD = debug/cpuid.o debug/gwnum.o debug/gwthread.o debug/gwutil.o debug/gwdbldbl.o debug/giants.o debug/ecmstag1.o
+OBJS64 = amd64/release/cpuid.o amd64/release/gwnum.o amd64/release/gwthread.o amd64/release/gwutil.o amd64/release/gwdbldbl.o amd64/release/giants.o amd64/release/ecmstag1.o
+OBJS64D = amd64/debug/cpuid.o amd64/debug/gwnum.o amd64/debug/gwthread.o amd64/debug/gwutil.o amd64/debug/gwdbldbl.o amd64/debug/giants.o amd64/debug/ecmstag1.o
 
-LIB = gwnum.a
+LIB = release/gwnum.a
+LIBD = debug/gwnum.a
+LIB64 = amd64/release/gwnum.a
+LIB64D = amd64/debug/gwnum.a
 
 #########################################################################
 
-$(LIB): $(LINUXOBJS)
-	ar -rs $(LIB) $(LINUXOBJS)
+all: $(LIB) $(LIBD) $(LIB64) $(LIB64D)
 
 clean:
-	rm -f $(LINUXOBJS)
+	rm -f $(OBJS) $(OBJSD) $(OBJS64) $(OBJS64D)
 
-.c.o:
-	$(ENVP) $(CC) $(CFLAGS) -c $<
+$(LIB): $(OBJS)
+	cp macosx/gwnum.a release
+	ar -rs $(LIB) $(OBJS)
+	rm -f release/*.o
+	ar -x release/gwnum.a release/multutil.o
 
-.cpp.o:
-	$(ENVP) $(CPP) $(CPPFLAGS) -c $<
+$(LIBD): $(OBJSD)
+	cp macosx/gwnum.a debug
+	ar -rs $(LIBD) $(OBJSD)
+	rm -f debug/*.o
+	ar -x debug/gwnum.a debug/multutil.o
+
+$(LIB64): $(OBJS64)
+	cp macosx64/gwnum.a amd64/release
+	ar -rs $(LIB64) $(OBJS64)
+	rm -f amd64/release/*.o
+	ar -x amd64/release/gwnum.a amd64/release/multutil.o
+
+$(LIB64D): $(OBJS64D)
+	cp macosx64/gwnum.a amd64/debug
+	ar -rs $(LIB64D) $(OBJS64D)
+	rm -f amd64/debug/*.o
+	ar -x amd64/debug/gwnum.a amd64/debug/multutil.o
+
+release/cpuid.o:
+	$(ENVP) $(CC) $(CFLAGS) -c -o release/cpuid.o cpuid.c
+
+release/gwnum.o:
+	$(ENVP) $(CC) $(CFLAGS) -c -o release/gwnum.o gwnum.c
+
+release/gwthread.o:
+	$(ENVP) $(CC) $(CFLAGS) -c -o release/gwthread.o gwthread.c
+
+release/gwutil.o:
+	$(ENVP) $(CC) $(CFLAGS) -c -o release/gwutil.o gwutil.c
+
+release/gwdbldbl.o:
+	$(ENVP) $(CPP) $(CPPFLAGS) -c -o release/gwdbldbl.o gwdbldbl.cpp
+
+release/giants.o:
+	$(ENVP) $(CC) $(CFLAGS) -c -o release/giants.o giants.c
+
+release/ecmstag1.o:
+	$(ENVP) $(CC) $(CFLAGS) -c -o release/ecmstag1.o ecmstag1.c
+
+debug/cpuid.o:
+	$(ENVP) $(CC) $(CFLAGSD) -c -o debug/cpuid.o cpuid.c
+
+debug/gwnum.o:
+	$(ENVP) $(CC) $(CFLAGSD) -c -o debug/gwnum.o gwnum.c
+
+debug/gwthread.o:
+	$(ENVP) $(CC) $(CFLAGSD) -c -o debug/gwthread.o gwthread.c
+
+debug/gwutil.o:
+	$(ENVP) $(CC) $(CFLAGSD) -c -o debug/gwutil.o gwutil.c
+
+debug/gwdbldbl.o:
+	$(ENVP) $(CPP) $(CPPFLAGSD) -c -o debug/gwdbldbl.o gwdbldbl.cpp
+
+debug/giants.o:
+	$(ENVP) $(CC) $(CFLAGSD) -c -o debug/giants.o giants.c
+
+debug/ecmstag1.o:
+	$(ENVP) $(CC) $(CFLAGSD) -c -o debug/ecmstag1.o ecmstag1.c
+
+amd64/release/cpuid.o:
+	$(ENVP) $(CC) $(CFLAGS64) -c -o amd64/release/cpuid.o cpuid.c
+
+amd64/release/gwnum.o:
+	$(ENVP) $(CC) $(CFLAGS64) -c -o amd64/release/gwnum.o gwnum.c
+
+amd64/release/gwthread.o:
+	$(ENVP) $(CC) $(CFLAGS64) -c -o amd64/release/gwthread.o gwthread.c
+
+amd64/release/gwutil.o:
+	$(ENVP) $(CC) $(CFLAGS64) -c -o amd64/release/gwutil.o gwutil.c
+
+amd64/release/gwdbldbl.o:
+	$(ENVP) $(CPP) $(CPPFLAGS64) -c -o amd64/release/gwdbldbl.o gwdbldbl.cpp
+
+amd64/release/giants.o:
+	$(ENVP) $(CC) $(CFLAGS64) -c -o amd64/release/giants.o giants.c
+
+amd64/release/ecmstag1.o:
+	$(ENVP) $(CC) $(CFLAGS64) -c -o amd64/release/ecmstag1.o ecmstag1.c
+
+amd64/debug/cpuid.o:
+	$(ENVP) $(CC) $(CFLAGS64D) -c -o amd64/debug/cpuid.o cpuid.c
+
+amd64/debug/gwnum.o:
+	$(ENVP) $(CC) $(CFLAGS64D) -c -o amd64/debug/gwnum.o gwnum.c
+
+amd64/debug/gwthread.o:
+	$(ENVP) $(CC) $(CFLAGS64D) -c -o amd64/debug/gwthread.o gwthread.c
+
+amd64/debug/gwutil.o:
+	$(ENVP) $(CC) $(CFLAGS64D) -c -o amd64/debug/gwutil.o gwutil.c
+
+amd64/debug/gwdbldbl.o:
+	$(ENVP) $(CPP) $(CPPFLAGS64D) -c -o amd64/debug/gwdbldbl.o gwdbldbl.cpp
+
+amd64/debug/giants.o:
+	$(ENVP) $(CC) $(CFLAGS64D) -c -o amd64/debug/giants.o giants.c
+
+amd64/debug/ecmstag1.o:
+	$(ENVP) $(CC) $(CFLAGS64D) -c -o amd64/debug/ecmstag1.o ecmstag1.c
+

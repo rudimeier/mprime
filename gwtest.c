@@ -41,7 +41,42 @@ int gen_c (int bits)
 	return (c);
 }
 
-/* Generate a random n of the given size */
+/* Generate a random b */
+
+unsigned int gen_b ()
+{
+	unsigned int MIN_B, MAX_B;
+	unsigned int min_b_bits, max_b_bits, range_b_bits;
+	unsigned int b, bbits;
+
+/* Get control variables */
+
+	MIN_B = IniSectionGetInt (INI_FILE, "QA", "MIN_B", 2);
+	MAX_B = IniSectionGetInt (INI_FILE, "QA", "MAX_B", 2);
+
+/* Compute number of bits to generate */
+/* Note: 1/log(2) = 1.442695040888963407 */
+
+	min_b_bits = (unsigned int)
+		     floor (log ((double) MIN_B) * 1.442695040888963407);
+	max_b_bits = (unsigned int)
+		     ceil (log ((double) MAX_B) * 1.442695040888963407);
+	range_b_bits = max_b_bits - min_b_bits + 1;
+
+/* Loop until we successfully create an b value in the desired range */
+
+	do {
+		bbits = (unsigned int) rand () % range_b_bits + min_b_bits;
+		b = 1;
+		while (bbits--) b = b * 2 + (rand () & 1);
+	} while (b < MIN_B || b > MAX_B);
+
+/* Return our random b value */
+
+	return (b);
+}
+
+/* Generate a random n */
 
 unsigned int gen_n ()
 {
@@ -56,7 +91,7 @@ unsigned int gen_n ()
 
 /* Compute number of bits to generate */
 /* Note: 1/log(2) = 1.442695040888963407 */
-	
+
 	min_n_bits = (unsigned int)
 			floor (log ((double) MIN_N) * 1.442695040888963407);
 	max_n_bits = (unsigned int)
@@ -68,7 +103,7 @@ unsigned int gen_n ()
 	do {
 		nbits = (unsigned int) rand () % range_n_bits + min_n_bits;
  		n = 1;
-		while (--nbits) n = n * 2 + (rand () & 1);
+		while (nbits--) n = n * 2 + (rand () & 1);
 	} while (n < MIN_N || n > MAX_N);
 
 /* Return our random n value */
@@ -83,7 +118,7 @@ void compare (int thread_num, gwhandle *gwdata, gwnum x, giant g)
 {
 	giant	tmp;
 
-	tmp = popg (&gwdata->gdata, (gwdata->n >> 4) + 13);
+	tmp = popg (&gwdata->gdata, ((int) gwdata->bit_length >> 5) + 13);
 	gwtogiant (gwdata, x, tmp);
 	if (gcompg (g, tmp) != 0)
 		OutputBoth (thread_num, "Test failed.\n");
@@ -165,7 +200,7 @@ void test_it_all (
 
 	for (ii = 1; ii <= 2; ii++) {
 
-	    if (ii == 1) {
+	if (ii == 1) {
 #ifdef X86_64
 		continue;
 #else
@@ -181,11 +216,10 @@ void test_it_all (
 		gwset_num_threads (&gwdata, threads);
 		gwset_thread_callback (&gwdata, SetAuxThreadPriority);
 		gwset_thread_callback_data (&gwdata, sp_info);
-		if (ii == 1) gwdata.cpu_flags = CPU_FLAGS & ~CPU_SSE2;
-		else gwdata.cpu_flags = CPU_FLAGS;
+		if (ii == 1) gwdata.cpu_flags &= ~CPU_SSE2;
 		gwdata.qa_pick_nth_fft = nth_fft;
 		res = gwsetup (&gwdata, k, b, n, c);
-		nth_fft = gwdata.qa_pick_nth_fft;
+		nth_fft = gwdata.qa_picked_nth_fft;
 		if (res) break;
 
 /* Output a startup message */
@@ -207,7 +241,7 @@ void test_it_all (
 		if (x4 == NULL) goto nomem;
 
 		if (g == NULL) {
-			g = newgiant (((unsigned long) gwdata.bit_length >> 4) + 20);
+			g = allocgiant (((unsigned long) gwdata.bit_length >> 5) + 10);
 			if (g == NULL) goto nomem;
 			gen_data (&gwdata, x, g);
 		} else
@@ -223,7 +257,7 @@ void test_it_all (
 			gwstartnextfft (&gwdata, (i & 3) == 2);
 
 			/* Test gwsetaddin without and with POSTFFT set */
-			if ((i == 45 || i == 46) && abs (gwdata.c) == 1)
+			if ((i == 45 || i == 46) && abs (c) == 1)
 				gwsetaddin (&gwdata, -31);
 
 			/* Test several different ways to square a number */
@@ -243,7 +277,7 @@ void test_it_all (
 			/* Remember maximum difference */
 			diff = fabs (gwsuminp (&gwdata, x) - gwsumout (&gwdata, x));
 			if (diff > maxdiff) maxdiff = diff;
-			if ((i == 45 || i == 46) && abs (gwdata.c) == 1)
+			if ((i == 45 || i == 46) && abs (c) == 1)
 				gwsetaddin (&gwdata, 0);
 		}
 		if (gwdata.MAXDIFF < 1e50)
@@ -264,12 +298,12 @@ void test_it_all (
 /* Test square carefully */
 
 		gwfree (&gwdata, x3); gwfree (&gwdata, x4);
-		if (abs (gwdata.c) == 1) gwsetaddin (&gwdata, -42);
+		if (abs (c) == 1) gwsetaddin (&gwdata, -42);
 		gwsquare_carefully (&gwdata, x);
 		gwfree (&gwdata, gwdata.GW_RANDOM); gwdata.GW_RANDOM = NULL;
 		diff = fabs (gwsuminp (&gwdata, x) - gwsumout (&gwdata, x));
 		if (diff > maxdiff) maxdiff = diff;
-		if (abs (gwdata.c) == 1) gwsetaddin (&gwdata, 0);
+		if (abs (c) == 1) gwsetaddin (&gwdata, 0);
 
 /* Test gwaddquick, gwsubquick */
 
@@ -296,9 +330,10 @@ void test_it_all (
 		gwadd (&gwdata, x3, x);
 		gwadd (&gwdata, x4, x);
 
-/* Test gwaddsmall */
+/* Test gwsmalladd and gwsmallmul */
 
-		gwaddsmall (&gwdata, x, 111);
+		gwsmalladd (&gwdata, GWSMALLADD_MAX, x);
+		gwsmallmul (&gwdata, GWSMALLMUL_MAX-1.0, x);
 
 /* Do some multiplies to make sure that the adds and subtracts above */
 /* normalized properly. */
@@ -336,11 +371,11 @@ void test_it_all (
 /* Do the final compare */
 
 		if (g2 == NULL) {
-			g2 = newgiant (((unsigned long) gwdata.bit_length >> 4) + 20);
+			g2 = allocgiant (((unsigned long) gwdata.bit_length >> 5) + 10);
 			if (g2 == NULL) goto nomem;
 			gwtogiant (&gwdata, x, g2);
 		} else {
-			g3 = newgiant (((unsigned long) gwdata.bit_length >> 4) + 20);
+			g3 = allocgiant (((unsigned long) gwdata.bit_length >> 5) + 10);
 			if (g3 == NULL) goto nomem;
 			gwtogiant (&gwdata, x, g3);
 			if (gcompg (g2, g3)) {
@@ -524,12 +559,20 @@ void test_it (
 	}
 	gwadd (gwdata, x2, x); addg (g2, g);
 	gwadd (gwdata, x3, x); addg (g3, g);
-	gwadd (gwdata, x4, x); addg (g4, g);
+	gwadd (gwdata, x4, x); addg (g4, g); specialmodg (gwdata, g);
+	if (CHECK_OFTEN) compare (thread_num, gwdata, x, g);
 
-/* Test gwaddsmall */
+/* Test gwsmalladd and gwsmallmul */
 
-	gwaddsmall (gwdata, x, 111);
-	iaddg (111, g); specialmodg (gwdata, g);
+	gwsmalladd (gwdata, GWSMALLADD_MAX, x);
+	dbltog (GWSMALLADD_MAX, g4); addg (g4, g); specialmodg (gwdata, g);
+	if (CHECK_OFTEN) compare (thread_num, gwdata, x, g);
+	i = rand() % 10 + 2;
+	gwsmallmul (gwdata, i, x);
+	ulmulg (i, g); specialmodg (gwdata, g);
+	if (CHECK_OFTEN) compare (thread_num, gwdata, x, g);
+	gwsmallmul (gwdata, GWSMALLMUL_MAX-1.0, x);
+	ulmulg ((unsigned long) (GWSMALLMUL_MAX-1.0), g); specialmodg (gwdata, g);
 	if (CHECK_OFTEN) compare (thread_num, gwdata, x, g);
 
 /* Do some multiplies to make sure that the adds and subtracts above */
@@ -583,12 +626,12 @@ int test_randomly (
 	struct PriorityInfo *sp_info)	/* SetPriority information */
 {
 	gwhandle gwdata;
-	int	kbits, cbits, threads, stop_reason;
+	int	kbits, cbits, threads, res, stop_reason;
 	double	k;
 	unsigned int b;
 	int	c;
 	unsigned int n;
-	char	buf[100], fft_desc[100], SPECIFIC_K[20], SPECIFIC_C[20];
+	char	buf[140], fft_desc[100], SPECIFIC_K[20], SPECIFIC_C[20];
 	int	MAX_THREADS, MIN_K_BITS, MAX_K_BITS;
 	int	MAX_C_BITS_FOR_SMALL_K, MAX_C_BITS_FOR_LARGE_K;
 	int	SPECIFIC_B, SPECIFIC_N, SPECIFIC_L2_CACHE, SPECIFIC_THREADS;
@@ -618,7 +661,6 @@ int test_randomly (
 	SPECIFIC_THREADS = IniSectionGetInt (INI_FILE, "QA", "SPECIFIC_THREADS", 1);
 
 	set_seed (thread_num);
-	b = 2;
 	for ( ; ; ) {
 
 /* Abort loop when requested */
@@ -637,6 +679,7 @@ int test_randomly (
 			cbits = (unsigned int) rand () % MAX_C_BITS_FOR_LARGE_K + 1;
 		k = gen_k (kbits);
 		c = gen_c (cbits);
+		b = gen_b ();
 		n = gen_n ();
 		threads = rand () % MAX_THREADS + 1;
 		switch (rand () % 5) {
@@ -666,7 +709,14 @@ int test_randomly (
 		gwset_num_threads (&gwdata, threads);
 		gwset_thread_callback (&gwdata, SetAuxThreadPriority);
 		gwset_thread_callback_data (&gwdata, sp_info);
-		gwsetup (&gwdata, k, b, n, c);
+		res = gwsetup (&gwdata, k, b, n, c);
+		if (res) {
+			char	numstr[80];
+			gw_as_string (numstr, k, b, n, c);
+			sprintf (buf, "Gwsetup failed on %s with error code %d.\n", numstr, res);
+			OutputBoth (thread_num, buf);
+			continue;
+		}
 		if (! gwnear_fft_limit (&gwdata, FFT_LIMIT_THRESHOLD)) {
 			gwdone (&gwdata);
 			continue;
@@ -681,12 +731,12 @@ int test_randomly (
 		gwfft_description (&gwdata, fft_desc);
 		if (gwfftlen (&gwdata) < 140000)
 			sprintf (buf,
-				 "Using %s, bits_per_word=%.5g/%.5g\n",
+				 "Using %s, virtual_bits_per_word=%.5g/%.5g\n",
 				 fft_desc,
 				 virtual_bits_per_word (&gwdata),
 				 gwdata.fft_max_bits_per_word);
 		else
-			sprintf (buf, "Using %s, bits_per_word=%.5g/%.5g, L2_cache_size=%d\n",
+			sprintf (buf, "Using %s, virtual_bits_per_word=%.5g/%.5g, L2_cache_size=%d\n",
 				 fft_desc,
 				 virtual_bits_per_word (&gwdata),
 				 gwdata.fft_max_bits_per_word,
@@ -729,7 +779,6 @@ int test_all_impl (
 	MAX_C_BITS_FOR_LARGE_K = IniSectionGetInt (INI_FILE, "QA", "MAX_C_BITS_FOR_LARGE_K", 20);
 
 	set_seed (thread_num);
-	b = 2;
 	for ( ; ; ) {
 
 /* Abort loop when requested */
@@ -748,6 +797,7 @@ int test_all_impl (
 			cbits = (unsigned int) rand () % MAX_C_BITS_FOR_LARGE_K + 1;
 		k = gen_k (kbits);
 		c = gen_c (cbits);
+		b = gen_b ();
 		n = gen_n ();
 		threads = rand () % MAX_THREADS + 1;
 

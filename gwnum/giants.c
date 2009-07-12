@@ -7,7 +7,7 @@
  *  Massive rewrite by G. Woltman for 32-bit support
  *
  *  c. 1997,1998 Perfectly Scientific, Inc.
- *  c. 1998-2007 Just For Fun Software, Inc.
+ *  c. 1998-2009 Mersenne Research, Inc.
  *  All Rights Reserved.
  *
  **************************************************************/
@@ -86,17 +86,17 @@ void	divg_via_recip(ghandle *, giant d, giant r, giant n);
 void		normal_addg(giant, giant);
 void		normal_subg(giant, giant);
 void		reverse_subg(giant, giant, int);
-void 		automulg(ghandle *, giant a, giant b);
+int 		automulg(ghandle *, giant a, giant b);
 void 		grammarmulg(ghandle *, giant a, giant b);
 void		grammarsquareg(ghandle *, giant b);
 void 		karatmulg(ghandle *, giant a, giant b);
 void 		karatsquareg(ghandle *, giant b);
 
-void		init_sincos(ghandle *,int);
+int		init_sincos(ghandle *,int);
 int 		lpt(int);
 void 		addsignal(giant, int, double *, int);
-void 		FFTsquareg(ghandle *, giant x);
-void 		FFTmulg(ghandle *, giant y, giant x);
+int 		FFTsquareg(ghandle *, giant x);
+int 		FFTmulg(ghandle *, giant y, giant x);
 void 		giant_to_double(giant x, int sizex, double *z, int L);
 
 #define gswap(p,q)  {giant tgq; tgq = *(p); *(p) = *(q); *(q) = tgq;}
@@ -107,9 +107,9 @@ int		gcdg_common (ghandle *, giant, giant, int);
 int	 	cextgcdg (ghandle *, giant *, giant *, gmatrix A, int);
 int		ggcd (ghandle *, giant *, giant *, gmatrix, int);
 void 		onestep (ghandle *, giant *, giant *, gmatrix);
-void 		mulvM (ghandle *, gmatrix, giant, giant);
-void 		mulmM (ghandle *, gmatrix, gmatrix);
-void 		mulmMsp (ghandle *, gmatrix, gmatrix, int);
+int 		mulvM (ghandle *, gmatrix, giant, giant);
+int 		mulmM (ghandle *, gmatrix, gmatrix);
+int 		mulmMsp (ghandle *, gmatrix, gmatrix, int);
 void		punch (ghandle *, giant, gmatrix);
 int		hgcd (ghandle *, int, giant *, giant *, gmatrix, int);
 int		rhgcd (ghandle *, giant *, giant *, gmatrix, int);
@@ -133,21 +133,19 @@ int (*StopCheckRoutine)(int) = NULL;
  *
  **************************************************************/
 
-giant newgiant (		/* Create a new giant */
-	int 	numshorts)
+giant allocgiant (		/* Create a new giant */
+	int 	count)
 {
-	int 	numlongs, size;
+	int 	size;
 	giant 	thegiant;
 
-	ASSERTG (numshorts > 0);
+	ASSERTG (count > 0);
 
-	numlongs = (numshorts + 1) / 2;
-	size = sizeof (giantstruct) + numlongs * sizeof (uint32_t);
+	size = sizeof (giantstruct) + count * sizeof (uint32_t);
 	thegiant = (giant) malloc (size);
 	thegiant->sign = 0;
-	thegiant->n = (uint32_t *)
-		((char *) thegiant + sizeof (giantstruct));
-	setmaxsize (thegiant, numlongs);
+	thegiant->n = (uint32_t *) ((char *) thegiant + sizeof (giantstruct));
+	setmaxsize (thegiant, count);
 	return (thegiant);
 }
 
@@ -550,25 +548,27 @@ void setmulmode (
  * KARAT_MUL: force Karatsuba divide-conquer method.
  * FFT_MUL: force floating point FFT method. */
 
-void squareg (			/* b becomes b*b */
+int squareg (			/* b becomes b*b */
 	giant	b)
 {
 	ghandle gdata;
+	int	stop_reason;
 
 	init_ghandle (&gdata);
-	squaregi (&gdata, b);
+	stop_reason = squaregi (&gdata, b);
 	term_ghandle (&gdata);
+	return (stop_reason);
 }
 
-void squaregi (			/* b becomes b*b */
+int squaregi (			/* b becomes b*b */
 	ghandle *gdata,		/* Free memory blocks for temporaries */
 	giant	b)
 {
-	int 	bsize;
+	int 	bsize, stop_reason;
 
 	ASSERTG (b->sign == 0 || b->n[abs(b->sign)-1] != 0);
 
-	if (b->sign == 0) return;
+	if (b->sign == 0) return (0);
 
 	absg (b);
 	switch (mulmode) {
@@ -583,8 +583,10 @@ void squaregi (			/* b becomes b*b */
 		break;
 	case AUTO_MUL:
 		bsize = b->sign;
-		if (bsize >= FFT_BREAK_SQUARE)
-			FFTsquareg (gdata, b);
+		if (bsize >= FFT_BREAK_SQUARE) {
+			stop_reason = FFTsquareg (gdata, b);
+			if (stop_reason) return (stop_reason);
+		}
 		else if (bsize >= KARAT_BREAK_SQUARE)
 			karatsquareg (gdata, b);
 		else
@@ -593,6 +595,7 @@ void squaregi (			/* b becomes b*b */
 	}
 
 	ASSERTG (b->sign > 0 && b->n[b->sign-1] != 0);
+	return (0);
 }
 
 /* Optimized general multiply, b becomes a*b. Modes are:
@@ -601,18 +604,20 @@ void squaregi (			/* b becomes b*b */
  * KARAT_MUL: force Karatsuba divide-conquer method.
  * FFT_MUL: force floating point FFT method. */
 
-void mulg (			/* b becomes a*b */
+int mulg (			/* b becomes a*b */
 	giant	a,
 	giant	b)
 {
 	ghandle gdata;
+	int	stop_reason;
 
 	init_ghandle (&gdata);
-	mulgi (&gdata, a, b);
+	stop_reason = mulgi (&gdata, a, b);
 	term_ghandle (&gdata);
+	return (stop_reason);
 }
 
-void mulgi (			/* b becomes a*b */
+int mulgi (			/* b becomes a*b */
 	ghandle *gdata,		/* Free memory blocks for temporaries */
 	giant	a,
 	giant	b)
@@ -622,19 +627,18 @@ void mulgi (			/* b becomes a*b */
  * KARAT_MUL: force Karatsuba divide-conquer method.
  * FFT_MUL: force floating point FFT method. */
 {
-	int 	neg, asign;
+	int 	neg, asign, stop_reason;
 
 	ASSERTG (a->sign == 0 || a->n[abs(a->sign)-1] != 0);
 	ASSERTG (b->sign == 0 || b->n[abs(b->sign)-1] != 0);
 
 	if (a == b) {
-		squaregi (gdata, b);
-		return;
+		return (squaregi (gdata, b));
 	}
 
 	if (a->sign == 0 || b->sign == 0) {
 		b->sign = 0;
-		return;
+		return (0);
 	}
 
 	neg = 0;
@@ -653,7 +657,11 @@ void mulgi (			/* b becomes a*b */
 		karatmulg (gdata, a, b);
 		break;
 	case AUTO_MUL:
-		automulg (gdata, a, b);
+		stop_reason = automulg (gdata, a, b);
+		if (stop_reason) {
+			if (asign < 0) a->sign = -a->sign;	/* Restore a's sign */
+			return (stop_reason);
+		}
 		break;
 	}
 
@@ -661,6 +669,7 @@ void mulgi (			/* b becomes a*b */
 	if (neg) b->sign = -b->sign;
 	ASSERTG (b->sign != 0 && b->n[abs(b->sign)-1] != 0);
 	ASSERTG (abs (b->sign) <= b->maxsize);
+	return (0);
 }
 
 void ulmulg (			/* Giant g becomes g * i. */
@@ -709,13 +718,10 @@ void dblmulg (			/* Giant g becomes g * i. */
 	double	i,
 	giant	g)
 {
-	giantstruct tmp;
-	uint32_t tmparray[2];
+	stackgiant(tmp,2);
 
-	tmp.n = (uint32_t *) &tmparray;
-	setmaxsize (&tmp, 2);
-	dbltog (i, &tmp);
-	mulg (&tmp, g);
+	dbltog (i, tmp);
+	mulg (tmp, g);
 }
 
 void modg (		/* n becomes n%d. n is arbitrary, but the
@@ -762,13 +768,10 @@ void dbldivg (			/* Giant g becomes g / i. */
 	double	i,
 	giant	g)
 {
-	giantstruct tmp;
-	uint32_t tmparray[2];
+	stackgiant(tmp,2);
 
-	tmp.n = (uint32_t *) &tmparray;
-	setmaxsize (&tmp, 2);
-	dbltog (i, &tmp);
-	divg (&tmp, g);
+	dbltog (i, tmp);
+	divg (tmp, g);
 }
 
 void divg (		/* n becomes n/d. n is arbitrary, but the
@@ -854,6 +857,10 @@ void divgi (		/* n becomes n/d. n is arbitrary, but the
 
 		chunks = nsize / dsize - 1;
 
+/* This code only works on positive n values */
+		
+		if (nsign < 0) negg (n);
+
 /* Shift n right and do the first chunk */
 
 		n->sign -= chunks * dsize;
@@ -898,6 +905,10 @@ void divgi (		/* n becomes n/d. n is arbitrary, but the
 			subg (tmp, r);
 		}
 
+/* Negate n if it was originally negative */
+
+		if (nsign < 0) negg (n);
+
 		pushg (gdata, 2);
 	}
 
@@ -913,8 +924,8 @@ void divgi (		/* n becomes n/d. n is arbitrary, but the
 		if (gdata->cur_recip == NULL || gcompg (d, gdata->cur_den)) {
 			free (gdata->cur_recip);
 			free (gdata->cur_den);
-			gdata->cur_recip = newgiant ((d->sign << 1) + 1);
-			gdata->cur_den = newgiant (d->sign << 1);
+			gdata->cur_recip = allocgiant (d->sign + 1);
+			gdata->cur_den = allocgiant (d->sign);
 			gtog (d, gdata->cur_den);
 			make_recip (gdata, d, gdata->cur_recip);
 		}
@@ -1013,12 +1024,12 @@ void powermod (			/* x becomes x^n (mod g). */
 	powermodg (x, &ng, g);
 }
 
-void automulg (			/* b becomes a*b */
+int automulg (			/* b becomes a*b */
 	ghandle *gdata,		/* Free memory blocks for temporaries */
 	giant	a,
 	giant	b)
 {
-	int 	asize, bsize;
+	int 	asize, bsize, stop_reason;
 
 	ASSERTG (a->sign >= 0);
 	ASSERTG (b->sign >= 0);
@@ -1041,14 +1052,17 @@ void automulg (			/* b becomes a*b */
 		giant	d;
 
 		d = popg (gdata, bsize);	/* d is upper half of b */
+		if (d == NULL) return (GIANT_OUT_OF_MEMORY);
 		gtogshiftright (asize << 5, b, d);
 		b->sign = asize;		/* b is lower half of b */
 		while (b->sign && b->n[b->sign-1] == 0) b->sign--;
 
-		automulg (gdata, a, d);	/* Compute a * upper part of b */
-		if (b->sign)
-			automulg (gdata, a, b);/* Compute a * lower part of b */
-		else {
+		stop_reason = automulg (gdata, a, d);	/* Compute a * upper part of b */
+		if (stop_reason) goto done;
+		if (b->sign) {
+			stop_reason = automulg (gdata, a, b);/* Compute a * lower part of b */
+			if (stop_reason) goto done;
+		} else {
 			memset (b->n, 0, asize * sizeof (uint32_t));
 			b->sign = asize;
 		}
@@ -1059,8 +1073,8 @@ void automulg (			/* b becomes a*b */
 		b->sign += asize;	/* Undo the trick */
 		b->n -= asize;
 
-		pushg (gdata, 1);
-		return;
+done:		pushg (gdata, 1);
+		return (stop_reason);
 	}
 
 /* Do a Karatsuba or FFT multiply */
@@ -1069,10 +1083,13 @@ void automulg (			/* b becomes a*b */
 	         (asize >= FFT_BREAK_MULT2 && bsize >= FFT_BREAK_MULT2 &&
 	          asize < FFT_BREAK_MULT3 && bsize < FFT_BREAK_MULT3))
 		karatmulg (gdata, a, b);
-	else
-		FFTmulg (gdata, a, b);
+	else {
+		stop_reason = FFTmulg (gdata, a, b);
+		if (stop_reason) return (stop_reason);
+	}
 
 	ASSERTG (b->sign != 0 && b->n[abs(b->sign)-1] != 0);
+	return (0);
 }
 
 void grammarsquareg (		/* a := a^2. */
@@ -1186,7 +1203,7 @@ void karatsquareg (		/* x becomes x^2. */
 	giant	x)
 {
 	int	s = x->sign, w;
-	giantstruct a, b;
+ 	giantstruct a, b;
 	giant	c;
 
 	ASSERTG (x->sign >= 0);
@@ -1417,17 +1434,19 @@ void gtogshiftright (	/* shift src right. Equivalent to dest = src/2^bits. */
 	ASSERTG (dest->sign == 0 || dest->n[abs(dest->sign)-1] != 0);
 }
 
-void invg (		/* Computes 1/y, that is the number n such that */
+int invg (		/* Computes 1/y, that is the number n such that */
 			/* n * y mod x = 1.  If x and y are not */
 			/* relatively prime, y is the -1 * GCD (x, y). */
 	giant 	xx,
 	giant 	yy)
 {
 	ghandle gdata;
+	int	stop_reason;
 
 	init_ghandle (&gdata);
-	invg_common (&gdata, xx, yy, 0);
+	stop_reason = invg_common (&gdata, xx, yy, 0);
 	term_ghandle (&gdata);
+	return (stop_reason);
 }
 
 int invgi (		/* Interruptable version of invg */
@@ -1456,7 +1475,9 @@ int invg_common (	/* Common invg code */
 /* Copy the first argument, we can trash the second */
 
 	ss = stackstart (gdata);
-	x = popg (gdata, xx->sign); gtog (xx, x);
+	x = popg (gdata, xx->sign);
+	if (x == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	gtog (xx, x);
 	y = yy;
 
 /* Make y positive and less than x */
@@ -1469,18 +1490,26 @@ int invg_common (	/* Common invg code */
 /* right side of the matrix is needed.  However, the recursive */
 /* ggcd code needs the left side of the array allocated. */
 
-	A.ur = popg (gdata, x->sign); setzero (A.ur);
-	A.lr = popg (gdata, x->sign); setone (A.lr);
+	A.ur = popg (gdata, x->sign);
+	if (A.ur == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	setzero (A.ur);
+	A.lr = popg (gdata, x->sign);
+	if (A.lr == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	setone (A.lr);
 	if (y->sign <= GCDLIMIT) {
 		A.ul = &ul; setzero (A.ul); setmaxsize (A.ul, 1);
 		A.ll = &ll; setzero (A.ll); setmaxsize (A.ll, 1);
 		stop_reason = cextgcdg (gdata, &x, &y, &A, interruptable);
-		if (stop_reason) goto esc;
+		if (stop_reason) goto done;
 	} else {
-		A.ul = popg (gdata, x->sign); setone (A.ul);
-		A.ll = popg (gdata, x->sign); setzero (A.ll);
+		A.ul = popg (gdata, x->sign);
+		if (A.ul == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+		setone (A.ul);
+		A.ll = popg (gdata, x->sign);
+		if (A.ll == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+		setzero (A.ll);
 		stop_reason = ggcd (gdata, &x, &y, &A, interruptable);
-		if (stop_reason) goto esc;
+		if (stop_reason) goto done;
 		pushg (gdata, 2);
 	}
 
@@ -1502,9 +1531,7 @@ int invg_common (	/* Common invg code */
 
 /* Cleanup and return */
 
-	pushg (gdata, 3);
-	return (0);
-esc:	pushall (gdata, ss);
+done:	pushall (gdata, ss);
 	return (stop_reason);
 }
 
@@ -1588,16 +1615,18 @@ int gcdhlp_wrapper (
 }
 
 
-void gcdg (	/* Computes the GCD of x and y and returns the GCD in y */
+int gcdg (	/* Computes the GCD of x and y and returns the GCD in y */
 		/* The x argument is not destroyed */
 	giant	xx,
 	giant	yy)
 {
 	ghandle gdata;
+	int	stop_reason;
 
 	init_ghandle (&gdata);
-	gcdg_common (&gdata, xx, yy, 0);
+	stop_reason = gcdg_common (&gdata, xx, yy, 0);
 	term_ghandle (&gdata);
+	return (stop_reason);
 }
 
 int gcdgi (			/* Interruptable version of the above */
@@ -1624,7 +1653,9 @@ int gcdg_common (		/* Common code for above */
 /* Copy the first argument, we can trash the second */
 
 	ss = stackstart (gdata);
-	x = popg (gdata, xx->sign + 1); gtog (xx, x);
+	x = popg (gdata, xx->sign + 1);
+	if (x == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	gtog (xx, x);
 	y = yy;
 
 /* Make y less than x */
@@ -1635,10 +1666,10 @@ int gcdg_common (		/* Common code for above */
 
 	if (abs (y->sign) <= GCDLIMIT) {
 		stop_reason = cextgcdg (gdata, &x, &y, NULL, interruptable);
-		if (stop_reason) goto esc;
+		if (stop_reason) goto done;
 	} else {
 		stop_reason = ggcd (gdata, &x, &y, NULL, interruptable);
-		if (stop_reason) goto esc;
+		if (stop_reason) goto done;
 	}
 
 /* If the routines we called happened to return the result in yy, then great */
@@ -1649,9 +1680,7 @@ int gcdg_common (		/* Common code for above */
 /* Cleanup and return */
 
 	ASSERTG (yy->sign > 0 && yy->n[yy->sign-1] != 0);
-	pushg (gdata, 1);
-	return (0);
-esc:	pushall (gdata, ss);
+done:	pushall (gdata, ss);
 	return (stop_reason);
 }
 
@@ -1924,19 +1953,48 @@ int lpt (		/* Returns least power of two greater than n. */
 void makewt (int nw, int *ip, double *w);
 void makect (int nc, int *ip, double *c);
 
-void init_sincos (
+int init_sincos (
 	ghandle	*gdata,
 	int 	n)
 {
-	if (n <= gdata->ooura_fft_size) return;
+	if (n <= gdata->ooura_fft_size) return (0);
+
+/* Free the old sin/cos data */
+
 	aligned_free (gdata->ooura_sincos);
+	gdata->ooura_sincos = NULL;
+	free (gdata->ooura_ip);
+	gdata->ooura_ip = NULL;
+	gdata->ooura_fft_size = 0;
+
+/* If there are any freed gwnum's deallocate one so that */
+/* aligned_malloc can access the memory.  We do this because */
+/* ECM and P-1 allocate gobs of memory then they call GCD. */
+/* There may not be memory available on the heap, but there may be */
+/* some freed-but-cached gwnums.  We uncache one so that we will */
+/* have plenty of memory available. */
+
+	if (gdata->deallocate != NULL)
+		(*gdata->deallocate) (gdata->handle);
+
+/* Allocate new arrays for sin/cos data */
+
 	gdata->ooura_sincos = (double *) aligned_malloc ((n/2) * sizeof (double), sizeof (double));
-	if (gdata->ooura_ip) free (gdata->ooura_ip);
+	if (gdata->ooura_sincos == NULL) return (GIANT_OUT_OF_MEMORY);
 	gdata->ooura_ip = (int *) malloc (((int) sqrt((double)(n/2)) + 2) * sizeof (int));
+	if (gdata->ooura_ip == NULL) {
+		aligned_free (gdata->ooura_sincos);
+		gdata->ooura_sincos = NULL;
+		return (GIANT_OUT_OF_MEMORY);
+	}
+
+/* Init the new sin/cos data */
+
 	gdata->ooura_ip[0] = 0;
 	gdata->ooura_fft_size = n;
-        makewt (n >> 2, gdata->ooura_ip, gdata->ooura_sincos);
-        makect (n >> 2, gdata->ooura_ip, gdata->ooura_sincos + (n >> 2));
+	makewt (n >> 2, gdata->ooura_ip, gdata->ooura_sincos);
+	makect (n >> 2, gdata->ooura_ip, gdata->ooura_sincos + (n >> 2));
+	return (0);
 }
 
 void mp_squ_cmul (int nfft, double dinout[])
@@ -2018,19 +2076,25 @@ void addsignal (
 	ASSERTG (x->n[x->sign-1] != 0);
 }
 
-void FFTsquareg (
+int FFTsquareg (
 	ghandle *gdata,	/* Free memory blocks for temporaries */
 	giant	x)
 {
 	int	size = x->sign;
 	double	*z1;
-	register int 	L;
+	int 	ss, L, stop_reason;
 
 	ASSERTG (x->sign >= 4 && x->n[x->sign-1] != 0);
 
+	ss = stackstart (gdata);
+
 	L = lpt (size+size) << 1;
-	init_sincos (gdata, L);
-	z1 = (double *) aligned_malloc (L * sizeof (double), sizeof (double));
+	stop_reason = init_sincos (gdata, L);
+	if (stop_reason) goto done;
+
+	z1 = (double *) popg (gdata, (L+1) * sizeof (double) / sizeof (uint32_t));
+	if (z1 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	z1 = align_ptr (z1, sizeof (double));
 
 	giant_to_double (x, size, z1, L);
 	rdft (L, 1, z1, gdata->ooura_ip, gdata->ooura_sincos);
@@ -2038,28 +2102,40 @@ void FFTsquareg (
 	rdft (L, -1, z1, gdata->ooura_ip, gdata->ooura_sincos);
 	addsignal (x, size+size, z1, L);
 
-	aligned_free (z1);
+done:	pushall (gdata, ss);
+	return (stop_reason);
 }
 
-void FFTmulg (			/* x becomes y*x. */
+int FFTmulg (			/* x becomes y*x. */
 	ghandle *gdata,		/* Free memory blocks for temporaries */
 	giant	y,
 	giant	x)
 {
 	int	sizex = x->sign, sizey = y->sign;
 	double	*z1, *z2;
-	register int	L;
+	int	ss, L, stop_reason;
 
 	ASSERTG (y->sign >= 4 && y->n[y->sign-1] != 0);
 	ASSERTG (x->sign >= 4 && x->n[x->sign-1] != 0);
 
-/* Do the FFT multiply.  Make sure the arrays of doubles are aligned on */
+/* Allocate FFT arrays.  Make sure the arrays of doubles are aligned on */
 /* an eight byte boundaries. */
 
+	ss = stackstart (gdata);
+
 	L = lpt (sizex+sizey) << 1;
-	init_sincos (gdata, L);
-	z1 = (double *) aligned_malloc (L * sizeof (double), sizeof (double));
-	z2 = (double *) aligned_malloc (L * sizeof (double), sizeof (double));
+	stop_reason = init_sincos (gdata, L);
+	if (stop_reason) goto done;
+
+	z1 = (double *) popg (gdata, (L+1) * sizeof (double) / sizeof (uint32_t));
+	if (z1 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	z1 = align_ptr (z1, sizeof (double));
+
+	z2 = (double *) popg (gdata, (L+1) * sizeof (double) / sizeof (uint32_t));
+	if (z2 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	z2 = align_ptr (z2, sizeof (double));
+
+/* Do the FFT multiply. */
 
 	giant_to_double (x, sizex, z1, L);
 	giant_to_double (y, sizey, z2, L);
@@ -2069,9 +2145,9 @@ void FFTmulg (			/* x becomes y*x. */
 	rdft (L, -1, z1, gdata->ooura_ip, gdata->ooura_sincos);
 	addsignal (x, sizex+sizey, z1, L);
 
-	aligned_free (z1);
-	aligned_free (z2);
 	ASSERTG (y->sign > 0 && y->n[y->sign-1] != 0);
+done:	pushall (gdata, ss);
+	return (stop_reason);
 }
 
 void giant_to_double (
@@ -2184,7 +2260,7 @@ void onestep (		/* Do one step of the euclidean algorithm and modify
 	pushg (gdata, 1);
 }
 
-void mulvM (		/* Multiply vector by Matrix; changes x,y. */
+int mulvM (		/* Multiply vector by Matrix; changes x,y. */
 			/* Caller must make sure x and y variables */
 			/* can hold larger intermediate results */
 	ghandle *gdata,	/* Free memory blocks for temporaries */
@@ -2192,72 +2268,131 @@ void mulvM (		/* Multiply vector by Matrix; changes x,y. */
 	giant 	x,
 	giant 	y)
 {
-	giant s0 = popg (gdata, abs(A->ll->sign) + x->sign);
-	giant s1 = popg (gdata, abs(A->ur->sign) + y->sign);
+	giant	s0, s1;
+	int	ss, stop_reason;
+
+	ss = stackstart (gdata);
+	s0 = popg (gdata, abs(A->ll->sign) + x->sign);
+	if (s0 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	s1 = popg (gdata, abs(A->ur->sign) + y->sign);
+	if (s1 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
 
 	gtog (x, s0);
 	gtog (y, s1);
-	mulgi (gdata, A->ul, x); mulgi (gdata, A->ur, s1); addg (s1, x);
-	mulgi (gdata, A->lr, y); mulgi (gdata, A->ll, s0); addg (s0, y);
+	stop_reason = mulgi (gdata, A->ul, x);
+	if (stop_reason) goto done;
+	mulgi (gdata, A->ur, s1);
+	if (stop_reason) goto done;
+	addg (s1, x);
 
-	pushg (gdata, 2);
+	stop_reason = mulgi (gdata, A->lr, y);
+	if (stop_reason) goto done;
+	stop_reason = mulgi (gdata, A->ll, s0);
+	if (stop_reason) goto done;
+	addg (s0, y);
+
+done:	pushall (gdata, ss);
+	return (stop_reason);
 }
 
-void mulmM (		/* Multiply matrix by Matrix; changes second matrix. */
+int mulmM (		/* Multiply matrix by Matrix; changes second matrix. */
 	ghandle *gdata,	/* Free memory blocks for temporaries */
 	gmatrix A,
 	gmatrix B)
 {
-	giant s0 = popg (gdata, abs(A->ll->sign) + abs(B->ur->sign));
-	giant s1 = popg (gdata, abs(A->ur->sign) + abs(B->lr->sign));
+	giant	s0, s1;
+	int	ss, stop_reason;
+
+	ss = stackstart (gdata);
+	s0 = popg (gdata, abs(A->ll->sign) + abs(B->ur->sign));
+	if (s0 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	s1 = popg (gdata, abs(A->ur->sign) + abs(B->lr->sign));
+	if (s1 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
 
 	gtog (B->ul, s0);
 	gtog (B->ll, s1);
-	mulgi (gdata, A->ul, B->ul); mulgi (gdata, A->ur, s1); addg (s1, B->ul);
-	mulgi (gdata, A->lr, B->ll); mulgi (gdata, A->ll, s0); addg (s0, B->ll);
+	stop_reason = mulgi (gdata, A->ul, B->ul);
+	if (stop_reason) goto done;
+	stop_reason = mulgi (gdata, A->ur, s1);
+	if (stop_reason) goto done;
+	addg (s1, B->ul);
+
+	stop_reason = mulgi (gdata, A->lr, B->ll);
+	if (stop_reason) goto done;
+	stop_reason = mulgi (gdata, A->ll, s0);
+	if (stop_reason) goto done;
+	addg (s0, B->ll);
+
 	gtog (B->ur, s0);
 	gtog (B->lr, s1);
-	mulgi (gdata, A->ul, B->ur); mulgi (gdata, A->ur, s1); addg (s1, B->ur);
-	mulgi (gdata, A->lr, B->lr); mulgi (gdata, A->ll, s0); addg (s0, B->lr);
+	stop_reason = mulgi (gdata, A->ul, B->ur);
+	if (stop_reason) goto done;
+	stop_reason = mulgi (gdata, A->ur, s1);
+	if (stop_reason) goto done;
+	addg (s1, B->ur);
+	stop_reason = mulgi (gdata, A->lr, B->lr);
+	if (stop_reason) goto done;
+	stop_reason = mulgi (gdata, A->ll, s0);
+	if (stop_reason) goto done;
+	addg (s0, B->lr);
 
-	pushg (gdata, 2);
+done:	pushall (gdata, ss);
+	return (stop_reason);
 }
 
-void mulmMsp (		/* Like mulmM except that the data areas of A */
+int mulmMsp (		/* Like mulmM except that the data areas of A */
+			/* are in the upper half B (see hgcd) */
 	ghandle *gdata,	/* Free memory blocks for temporaries */
-	gmatrix A,	/* are in the upper half B (see hgcd) */
+	gmatrix A,
 	gmatrix B,
 	int	maxsize)
 {
-	giant tmp0 = popg (gdata, maxsize);
-	giant tmp1 = popg (gdata, maxsize);
-	giant tmp2 = popg (gdata, maxsize);
-	giant tmp3 = popg (gdata, maxsize);
+	giant	tmp0, tmp1, tmp2, tmp3;
+	int	ss, stop_reason;
+
+	ss = stackstart (gdata);
+	tmp0 = popg (gdata, maxsize);
+	if (tmp0 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	tmp1 = popg (gdata, maxsize);
+	if (tmp1 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	tmp2 = popg (gdata, maxsize);
+	if (tmp2 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	tmp3 = popg (gdata, maxsize);
+	if (tmp3 == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
 
 	gtog (A->ur, tmp0);	/* Copy A->ur before the mul destroys it */
 	gtog (A->lr, tmp2);	/* Copy A->lr before the mul destroys it */
 	gtog (B->ur, tmp1);	/* Copy B->ur before the mul destroys it */
 
-	mulgi (gdata, A->ul, B->ur);	/* A->ul * B->ur (destroys A->ur & A->lr) */
+	stop_reason = mulgi (gdata, A->ul, B->ur);	/* A->ul * B->ur (destroys A->ur & A->lr) */
+	if (stop_reason) goto done;
 	gtog (tmp0, tmp3);
-	mulgi (gdata, B->lr, tmp3);	/* A->ur * B->lr */
-	addg (tmp3, B->ur);		/* B->ur = A->ul * B->ur + A->ur * B->lr */
+	stop_reason = mulgi (gdata, B->lr, tmp3);	/* A->ur * B->lr */
+	if (stop_reason) goto done;
+	addg (tmp3, B->ur);				/* B->ur = A->ul * B->ur + A->ur * B->lr */
 
-	mulgi (gdata, A->ll, tmp1);	/* A->ll * B->ur */
-	mulgi (gdata, tmp2, B->lr);	/* A->lr * B->lr */
-	addg (tmp1, B->lr);		/* B->lr = A->ll * B->ur + A->lr * B->lr */
+	stop_reason = mulgi (gdata, A->ll, tmp1);	/* A->ll * B->ur */
+	if (stop_reason) goto done;
+	stop_reason = mulgi (gdata, tmp2, B->lr);	/* A->lr * B->lr */
+	if (stop_reason) goto done;
+	addg (tmp1, B->lr);				/* B->lr = A->ll * B->ur + A->lr * B->lr */
 
-	mulgi (gdata, B->ll, tmp0);	/* A->ur * B->ll */
-	gtog (B->ul, tmp1);		/* Copy B->ul before the mul destroys it */
-	gtog (A->ll, tmp3);		/* Copy A->ll before the mul destroys it */
-	mulgi (gdata, A->ul, B->ul);	/* A->ul * B->ul (destroys A->ul & A->ll) */
-	addg (tmp0, B->ul);		/* B->ul = A->ul * B->ul + A->ur * B->ll */
+	stop_reason = mulgi (gdata, B->ll, tmp0);	/* A->ur * B->ll */
+	if (stop_reason) goto done;
+	gtog (B->ul, tmp1);				/* Copy B->ul before the mul destroys it */
+	gtog (A->ll, tmp3);				/* Copy A->ll before the mul destroys it */
+	stop_reason = mulgi (gdata, A->ul, B->ul);	/* A->ul * B->ul (destroys A->ul & A->ll) */
+	if (stop_reason) goto done;
+	addg (tmp0, B->ul);				/* B->ul = A->ul * B->ul + A->ur * B->ll */
 
-	mulgi (gdata, tmp3, tmp1);	/* A->ll * B->ul */
-	mulgi (gdata, tmp2, B->ll);	/* A->lr * B->ll */
-	addg (tmp1, B->ll);		/* B->ll = A->ll * B->ul + A->lr * B->ll */
+	stop_reason = mulgi (gdata, tmp3, tmp1);	/* A->ll * B->ul */
+	if (stop_reason) goto done;
+	stop_reason = mulgi (gdata, tmp2, B->ll);	/* A->lr * B->ll */
+	if (stop_reason) goto done;
+	addg (tmp1, B->ll);				/* B->ll = A->ll * B->ul + A->lr * B->ll */
 
-	pushg (gdata, 4);
+done:	pushall (gdata, ss);
+	return (stop_reason);
 }
 
 void punch (		/* Multiply the matrix A on the left by [0,1,1,-q]. */
@@ -2288,13 +2423,19 @@ int ggcd (		/* A giant gcd.  Modifies its arguments. */
 	int	interruptable)
 {
 	gmatrixstruct A;
-	int	stop_reason;
+	int	ss, stop_reason;
+
+/* Remember stack pointer in case of error */
+
+	ss = stackstart (gdata);
 
 /* To avoid continually expanding the sincos array, figure out (roughly) */
 /* the maximum size table we will need and allocate it now. */
 
-	if ((*x)->sign / 2 > FFT_BREAK_MULT1)
-		init_sincos (gdata, lpt ((*x)->sign / 2) << 1);
+	if ((*x)->sign / 2 > FFT_BREAK_MULT1) {
+		stop_reason = init_sincos (gdata, lpt ((*x)->sign / 2) << 1);
+		if (stop_reason) return (stop_reason);
+	}
 
 /* If R is not NULL then we are doing an extended GCD.  Recursively */
 /* do half GCDs and then multiply the matrices in reverse order for */
@@ -2325,16 +2466,25 @@ int ggcd (		/* A giant gcd.  Modifies its arguments. */
 			a_size = third_size;
 		else
 			a_size = quarter_size;
-		A.ul = popg (gdata, a_size); setone (A.ul);
-		A.ll = popg (gdata, a_size); setzero (A.ll);
-		A.ur = popg (gdata, a_size); setzero (A.ur);
-		A.lr = popg (gdata, a_size); setone (A.lr);
+
+		A.ul = popg (gdata, a_size);
+		if (A.ul == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+		setone (A.ul);
+		A.ll = popg (gdata, a_size);
+		if (A.ll == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+		setzero (A.ll);
+		A.ur = popg (gdata, a_size);
+		if (A.ur == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+		setzero (A.ur);
+		A.lr = popg (gdata, a_size);
+		if (A.lr == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+		setone (A.lr);
 
 /* Do the first recursion */
 
 		stop_reason = hgcd (gdata, (*y)->sign - (a_size + a_size + 1),
 				    x, y, &A, interruptable);
-		if (stop_reason) return (stop_reason);
+		if (stop_reason) goto done;
 
 /* Do a single step if the hgcd call didn't make any progress */
 
@@ -2354,6 +2504,11 @@ int ggcd (		/* A giant gcd.  Modifies its arguments. */
 /* Do the last few words in a brute force way */
 
 	return (cextgcdg (gdata, x, y, NULL, interruptable));
+
+/* Error exit */
+	
+done:	pushall (gdata, ss);
+	return (stop_reason);
 }
 
 int rhgcd (	/* recursive hgcd calls accumulating extended GCD info */
@@ -2365,25 +2520,37 @@ int rhgcd (	/* recursive hgcd calls accumulating extended GCD info */
 	int	interruptable)
 {
 	gmatrixstruct A;
-	int	stop_reason;
+	int	ss, stop_reason;
 
-	A.ul = popg (gdata, (*x)->sign); setone (A.ul);
-	A.ll = popg (gdata, (*x)->sign); setzero (A.ll);
-	A.ur = popg (gdata, (*x)->sign); setzero (A.ur);
-	A.lr = popg (gdata, (*x)->sign); setone (A.lr);
+	ss = stackstart (gdata);
+	A.ul = popg (gdata, (*x)->sign);
+	if (A.ul == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	setone (A.ul);
+	A.ll = popg (gdata, (*x)->sign);
+	if (A.ll == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	setzero (A.ll);
+	A.ur = popg (gdata, (*x)->sign);
+	if (A.ur == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	setzero (A.ur);
+	A.lr = popg (gdata, (*x)->sign);
+	if (A.lr == NULL) { stop_reason = GIANT_OUT_OF_MEMORY; goto done; }
+	setone (A.lr);
+
 	if ((*y)->sign <= GCDLIMIT) {
 		stop_reason = cextgcdg (gdata, x, y, &A, interruptable);
-		if (stop_reason) return (stop_reason);
+		if (stop_reason) goto done;
 	} else {
 		stop_reason = hgcd (gdata, 0, x, y, &A, interruptable);
-		if (stop_reason) return (stop_reason);
+		if (stop_reason) goto done;
 		if (isone (A.lr)) onestep (gdata, x, y, &A);
 		stop_reason = rhgcd (gdata, x, y, &A, interruptable);
-		if (stop_reason) return (stop_reason);
+		if (stop_reason) goto done;
 	}
-	mulmM (gdata, &A, R);
-	pushg (gdata, 4);
-	return (0);
+	stop_reason = mulmM (gdata, &A, R);
+	if (stop_reason) goto done;
+
+done:	pushall (gdata, ss);
+	return (stop_reason);
 }
 
 int hgcd (	/* hgcd(n,x,y,A) chops n words off x and y and computes the
@@ -2491,7 +2658,8 @@ int hgcd (	/* hgcd(n,x,y,A) chops n words off x and y and computes the
 		stop_reason = hgcd (gdata, y->sign - (b_size + b_size + 1),
 				    &x, &y, &B, interruptable);
 		if (stop_reason) return (stop_reason);
-		mulmMsp (gdata, &B, A, half_size);
+		stop_reason = mulmMsp (gdata, &B, A, half_size);
+		if (stop_reason) return (stop_reason);
 	}
 
 /* Copy the x and y values, then undo the changes we made to the input */
@@ -2517,7 +2685,11 @@ int hgcd (	/* hgcd(n,x,y,A) chops n words off x and y and computes the
 /* Now apply the matrix A to the bits of xx and yy that were shifted off */
 /* This lets us compute the final x and y values for the caller */
 
-		mulvM (gdata, A, xinp, yinp);
+		stop_reason = mulvM (gdata, A, xinp, yinp);
+		if (stop_reason) {
+			pushg (gdata, 2);
+			return (stop_reason);
+		}
 		addshiftedg (n, x, xinp);
 		addshiftedg (n, y, yinp);
 		if (xinp->sign < 0) {

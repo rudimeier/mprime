@@ -1,4 +1,4 @@
-; Copyright 2001-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -36,7 +36,7 @@ PREFETCHING = 1
 
 xpass2_entry MACRO complex_start, get_nxt
 	int_prolog 0,0,1
-	MOVOFFSET rax, get_nxt		;; Auxillary thread entry point
+	mov	rax, OFFSET get_nxt	;; Auxillary thread entry point
 	mov	THREAD_WORK_ROUTINE, rax ;; save addr for C code to call
 	c_call	PASS2_WAKE_UP_THREADS	;; C callback routine
 	cmp	ALL_COMPLEX_FFT, 1	;; Test if there is a real-data block
