@@ -62,6 +62,27 @@
 	const char *m_userid, *m_compid;
 	int	update_computer_info = FALSE;
 
+// Annoyingly, we have to force any in-progress editing to end.
+// We do this by changing the first responder.
+
+// Save the current first responder
+
+	id oldFirstResponder = [[self window] firstResponder];
+
+// Gracefully end all editing in our window (from Erik Buck).
+// This will cause the user's changes to be committed.
+	
+	if ([[self window] makeFirstResponder:[self window]]) {
+		// All editing is now ended and delegate messages sent etc.
+	} else {
+		// For some reason the text object being edited will
+		// not resign first responder status so force an
+		/// end to editing anyway
+		[[self window] endEditingFor:nil];
+	}
+
+// Process the dialog box contents
+
 	m_userid = [userID UTF8String];
 	m_compid = [computerName UTF8String];
 	if (m_userid == NULL || m_userid[0] == 0)
@@ -101,6 +122,12 @@
 
 	if (!STARTUP_IN_PROGRESS && USE_PRIMENET)
 		LaunchWorkerThreads (ALL_WORKERS, FALSE);
+
+// If we had a first responder before, restore it
+
+	if (oldFirstResponder != nil) {
+		[[self window] makeFirstResponder:oldFirstResponder];
+	}
 
 /* Close this window */
 

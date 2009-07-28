@@ -187,13 +187,14 @@ void test_it_all (
 	gwhandle gwdata;
 	gwnum	x, x2, x3, x4;
 	giant	g, g2, g3;
-	int	i, ii, res, nth_fft;
+	int	i, ii, res, nth_fft, num_squarings;
 	double	diff, maxdiff;
 	char	buf[200], fft_desc[100];
 
 /* Init */
 
 	g = g2 = g3 = NULL;
+	num_squarings = IniSectionGetInt (INI_FILE, "QA", "NUM_SQUARINGS", 50);
 
 /* Loop over both x87 and SSE2 implementations.  Pass 1 does x87 FFTs */
 /* on SSE2 machines.  Pass 2 does the "natural" FFTs. */
@@ -252,7 +253,7 @@ void test_it_all (
 		gwcopy (&gwdata, x, x2);
 		maxdiff = 0.0;
 		gwsetnormroutine (&gwdata, 0, 1, 0); /* Enable error checking */
-		for (i = 0; i < 50; i++) {
+		for (i = 0; i < num_squarings; i++) {
 			/* Test POSTFFT sometimes */
 			gwstartnextfft (&gwdata, (i & 3) == 2);
 
@@ -412,7 +413,7 @@ void test_it (
 {
 	gwnum	x, x2, x3, x4;
 	giant	g, g2, g3, g4;
-	int	i;
+	int	i, num_squarings, num_inverses, stop_reason;
 	double	diff, maxdiff = 0.0;
 	char	buf[200];
 	int	SQUARE_ONLY, CHECK_OFTEN;
@@ -421,6 +422,8 @@ void test_it (
 
 	SQUARE_ONLY = IniSectionGetInt (INI_FILE, "QA", "SQUARE_ONLY", 0);
 	CHECK_OFTEN = IniSectionGetInt (INI_FILE, "QA", "CHECK_OFTEN", 0);
+	num_squarings = IniSectionGetInt (INI_FILE, "QA", "NUM_SQUARINGS", 50);
+	num_inverses = IniSectionGetInt (INI_FILE, "QA", "NUM_INVERSES", 0);
 
 /* Alloc and init numbers */
 
@@ -435,11 +438,13 @@ void test_it (
 	gen_data (gwdata, x, g);
 	if (CHECK_OFTEN) compare (thread_num, gwdata, x, g);
 	gwcopy (gwdata, x, x2); gtog (g, g2);
+	gwfree (gwdata, x3);  /* Free memory for specialmod and invgi to use */
+	gwfree (gwdata, x4);  /* We will re-allocate it later */
 
 /* Test 50 squarings */	
 
 	gwsetnormroutine (gwdata, 0, 1, 0);	/* Enable error checking */
-	for (i = 0; i < 50; i++) {
+	for (i = 0; i < num_squarings; i++) {
 
 		/* Test POSTFFT sometimes */
 		gwstartnextfft (gwdata, (i & 3) == 2);
@@ -488,6 +493,40 @@ void test_it (
 	else
 		sprintf (buf, "Squares complete. MaxErr=%.10g\n", gw_get_maxerr (gwdata));
 	OutputBoth (thread_num, buf);
+
+/* Test giants' modular inverse code */
+
+	if (num_inverses) {
+		if (gwdata->GENERAL_MOD) gtog (gwdata->GW_MODULUS, g3);
+		else {
+			ultog (gwdata->b, g3);
+			power (g3, gwdata->n);
+			dblmulg (gwdata->k, g3);
+			iaddg (gwdata->c, g3);
+		}
+		for (i = 0; i < num_inverses; i++) {
+			gtog (g, g4);
+			g4->n[g4->sign-2] += i;
+			stop_reason = invgi (&gwdata->gdata, thread_num, g3, g4);
+			if (stop_reason) goto done;
+			if (g4->sign < 0) {  /* Factor - verify it */
+				uint32_t j;
+				j = g3->n[0];
+				negg (g4);
+				divgi (&gwdata->gdata, g4, g3);
+				stop_reason = mulgi (&gwdata->gdata, g4, g3);
+				if (stop_reason) goto done;
+				if (j != g3->n[0]) OutputBoth (thread_num, "Invgi factor validation failed.\n");
+			} else {	/* No factor - verify inverse */
+				stop_reason = invgi (&gwdata->gdata, thread_num, g3, g4);
+				if (stop_reason) goto done;
+				g4->n[g4->sign-2] -= i;
+				if (gcompg (g, g4)) OutputBoth (thread_num, "Invgi inverse validation failed.\n");
+			}
+		}
+	}
+	x3 = gwalloc (gwdata);
+	x4 = gwalloc (gwdata);
 
 /* Test mul by const */
 

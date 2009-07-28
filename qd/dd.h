@@ -51,7 +51,7 @@ public:
   dd_real(double hi, double lo) : hi(hi), lo(lo) {}
 
   /* Constructor(s) */
-  dd_real() {}
+  dd_real():lo(0.0),hi(0.0) {}
   dd_real(double h) : hi(h), lo(0.0) {}
   dd_real(int h) : hi((double) h), lo(0.0) {}
   dd_real (const char *s);

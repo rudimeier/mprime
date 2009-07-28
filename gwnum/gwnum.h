@@ -59,9 +59,9 @@ typedef double *gwnum;
 /* gwsetup verifies that the version numbers match.  This prevents bugs */
 /* from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"25.11"
+#define GWNUM_VERSION		"25.12"
 #define GWNUM_MAJOR_VERSION	25
-#define GWNUM_MINOR_VERSION	11
+#define GWNUM_MINOR_VERSION	12
 
 /* Error codes returned by the three gwsetup routines */
 
@@ -155,6 +155,30 @@ void gwdone (
 /* is too large.  Call this routine prior to calling gwsetup. */
 
 #define gwsetmaxmulbyconst(h,c)		((h)->maxmulbyconst = c)
+
+/* When doing a gwsetup_general_mod, the library prefers to use an */
+/* integral number of bits per word (a rational FFT) because they are */
+/* a little faster than irrational FFTs.  However, some moduli create */
+/* non-random data when using rational FFTs.  For example, if we test */
+/* (10^828809-1)/9 and put exactly 18 bits into each FFT word, then */
+/* every FFT word in GW_MODULUS_FFT will contains the same value! */
+/* Not exactly, the random data the FFTs require for small roundoff errors. */
+/* This routine takes a boolean to force use of the safer irrational FFTs. */
+
+#define gwset_irrational_general_mod(h,b)  ((h)->use_irrational_general_mod = b)
+
+/* Prior to calling one of the gwsetup routines, you can force the library */
+/* to use a larger fft length than normal.  The input argument specifies */
+/* how many FFT sizes larger than normal you would like.  You might use this */
+/* routine if you are having roundoff errors using the normal FFT length. */
+
+#define gwset_larger_fftlen_count(h,n)	((h)->larger_fftlen_count = n)
+
+/* Prior to calling one of the gwsetup routines, you can force the library */
+/* to use a minimum fft length.  You might use this routine if you are */
+/* having roundoff errors using the normal FFT length. */
+
+#define gwset_minimum_fftlen(h,n)	((h)->minimum_fftlen = n)
 
 /* Prior to calling one of the gwsetup routines, you can force the library */
 /* to use a specific fft length.  This should rarely (if ever) be used. */
@@ -728,6 +752,10 @@ struct gwhandle_struct {
 				/* in a base-3 Fermat PRP test. */
 	unsigned long specific_fftlen;
 				/* Specific fft length for gwsetup to use. */
+	unsigned long minimum_fftlen;
+				/* Minimum fft length for gwsetup to use. */
+	int	larger_fftlen_count;
+				/* Force using larger FFT sizes. */
 	double	k;		/* K in K*B^N+C */
 	unsigned long b;	/* B in K*B^N+C */
 	unsigned long n;	/* N in K*B^N+C */
@@ -855,6 +883,10 @@ struct gwhandle_struct {
 	int	qa_picked_nth_fft; /* Internal hack returning which FFT was picked */
 	int	force_general_mod; /* Forces gwsetup_general_mod to not check */
 				/* for a k*2^n+c reduction */
+	int	use_irrational_general_mod; /* Force using an irrational FFT when */
+				/* doing a general mod.  This is slower, but more */
+				/* immune to round off errors from pathological */
+				/* bit patterns in the modulus. */
 	int	square_carefully_count; /* Count of gwsquare calls to convert into */
 				/* gwsquare_carefully calls */
 	int	use_large_pages; /* Try to use 2MB pages */

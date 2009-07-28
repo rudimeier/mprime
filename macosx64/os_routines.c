@@ -411,7 +411,7 @@ void checkPauseListCallback (void)
 			while (len && isspace (buf[len-1])) buf[--len] = 0;
 			isInPauseList (buf);
 		}
-		fclose (fd);
+		pclose (fd);
 	}
 #endif
 }

@@ -21,6 +21,12 @@
 #include "gwutil.h"
 #include "gwdbldbl.h"
 
+/* Include a random number generator.  For reasons we'll discuss later */
+/* we do not want to use the C runtime library's random number generator */
+/* to initialize GW_RANDOM */
+
+#include "mt19937ar.c"
+
 /* Handy macros to improve readability */
 
 #define log2(n)		(log((double)(n)) / log (2.0))
@@ -1500,6 +1506,93 @@ double *build_x87_biglit_table (
 	return ((double *) p);
 }
 
+/* Return true if half of the words would have the same pattern of big */
+/* and little words.  */
+
+int match_pathological_pattern (
+	unsigned long num_big_words,
+	unsigned long total_length,
+	double	pathological_fraction)
+{
+	double	half_length;
+	unsigned long pathological_base, actual_base;
+
+/* Compute the gwfft_base you would get of the word half way into the FFT if */
+/* you had the pathological fraction of big and little words */
+
+	half_length = (double) total_length * 0.5;
+	pathological_base = (unsigned long) ceil (half_length * pathological_fraction);
+
+/* Compute the base you would get given the actual fraction of big words */
+
+	actual_base = (unsigned long) ceil (half_length * (double) num_big_words / (double) total_length);
+
+/* Return pathological (true) if the actual_base is close to the pathological_base */
+
+	return (actual_base >= pathological_base && actual_base <= pathological_base + 1);
+}
+
+/* Here is a particularly nasty routine.  It tries to detect whether the distribution */
+/* of big and little words is "pathological".  We want the distribution to be random. */
+/* If, for example, there are an equal number of big words and little words then the */
+/* every other FFT word consists of big word * big word products, while the other half */
+/* contains big word * small word products.  This greatly increases the round off error */
+/* especially when b is large (big words are much larger than small words).  This */
+/* ugliness was added to handle these cases that where the wrong FFT length was selected: */
+/* 211*210^2047-1, 211*210^2687-1, 211*210^7679-1.  There are undoubtedly many others. */
+
+int is_pathological_distribution (
+	unsigned long num_big_words,
+	unsigned long num_small_words)
+{
+	unsigned long total_length;
+
+/* Handle cases that we really should never see (rational FFTs) */
+
+	if (num_big_words == 0 || num_small_words == 0) return (FALSE);
+
+/* While the remaining number of big words and small words is even, this */
+/* represents a case of a big repeating pattern (the pattern in the upper half *
+/* of the remaining words is the same as the pattern in the lower half). */
+
+	total_length = num_big_words + num_small_words;
+	while ((num_big_words & 1) == 0 && (total_length & 1) == 0) {
+		num_big_words >>= 1;
+		total_length >>= 1;
+	}
+
+/* The bad patterns occur when the number of big words divided by the FFT length */
+/* is close to a small rational number like 1/2, 2/5, 3/4, etc.	 We'll define a */
+/* pathological bit pattern as one where more than half of the FFT repeats the */
+/* same cycle of big words and small words.  This definition may require some */
+/* tweaking over time. */
+
+	if (match_pathological_pattern (num_big_words, total_length, 1.0 / 2.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 1.0 / 3.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 2.0 / 3.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 1.0 / 4.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 3.0 / 4.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 1.0 / 5.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 2.0 / 5.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 3.0 / 5.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 4.0 / 5.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 1.0 / 6.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 5.0 / 6.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 1.0 / 7.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 2.0 / 7.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 3.0 / 7.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 4.0 / 7.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 5.0 / 7.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 6.0 / 7.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 1.0 / 8.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 3.0 / 8.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 5.0 / 8.0)) return (TRUE);
+	if (match_pathological_pattern (num_big_words, total_length, 7.0 / 8.0)) return (TRUE);
+
+/* That's all the cases we test for now */
+
+	return (FALSE);
+}
 
 /* This routine used to be in assembly language.  It scans the assembly */
 /* code arrays looking for the best FFT size to implement our k*b^n+c FFT. */
@@ -1580,7 +1673,7 @@ int gwinfo (			/* Return zero-padded fft flag or error code */
 /* with a zero padded FFT.  If k is 1 and abs (c) is 1 then we can skip this */
 /* loop as we're sure to find an IBDWT that will do the job. */
 
-	zpad_jmptab = NULL;
+again:	zpad_jmptab = NULL;
 	generic_jmptab = NULL;
 	if (gwdata->specific_fftlen == 0 && (k > 1.0 || n < 500 || abs (c) > 1)) {
 
@@ -1617,8 +1710,13 @@ int gwinfo (			/* Return zero-padded fft flag or error code */
 				l2_cache_size = 9999999;
 			}
 
+/* Do a quick check on the suitability of this FFT */
+
+			if ((double) n * log2b / (double) zpad_jmptab->fftlen > 26.0) goto next1;
+			if (zpad_jmptab->fftlen < gwdata->minimum_fftlen) goto next1;
+
 /* Check L2 cache size constraints */
-		
+
 			if (l2_cache_size < ((zpad_jmptab->flags_min_l2_cache_clm >> 16) & 0x3FFF))
 				goto next1;
 
@@ -1693,15 +1791,16 @@ int gwinfo (			/* Return zero-padded fft flag or error code */
 
 			max_weighted_bits_per_output_word =
 				2.0 * max_bits_per_input_word + 0.6 * log2 (zpad_jmptab->fftlen / 2 + 4);
+			weighted_bits_per_output_word =
+				2.0 * ((b_per_input_word + 1.0) * log2b - 1.0) +
+				0.6 * log2 (zpad_jmptab->fftlen / 2 + 4);
 			if ((n + n) % zpad_jmptab->fftlen == 0)
-				weighted_bits_per_output_word = bits_per_output_word;
-			else
-				weighted_bits_per_output_word =
-					2.0 * ((b_per_input_word + 1.0) * log2b - 1.0) +
-					0.6 * log2 (zpad_jmptab->fftlen / 2 + 4) -
-						((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
-						 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
-								  2.0 + (log2b - 6.0) / 6.0);;
+				weighted_bits_per_output_word -= ((log2b <= 4.0) ? log2b : 1.4 * log2b);
+			else if (! is_pathological_distribution (num_big_words, num_small_words))
+				weighted_bits_per_output_word -=
+					((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
+					 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
+							  2.0 + (log2b - 6.0) / 6.0);
 
 /* See if this FFT length might work */
 
@@ -1773,6 +1872,11 @@ next1:			for (longp = &zpad_jmptab->counts[4]; *longp; longp++);
 				goto next2;
 			l2_cache_size = 9999999;
 		}
+
+/* Do a quick check on the suitability of this FFT */
+
+		if ((double) n * log2b / (double) jmptab->fftlen > 26.0) goto next2;
+		if (jmptab->fftlen < gwdata->minimum_fftlen) goto next2;
 
 /* Check if FFT requires prefetch capability */
 
@@ -1902,23 +2006,38 @@ next1:			for (longp = &zpad_jmptab->counts[4]; *longp; longp++);
 /* Unfortunately, the story does not end there.  The weights applied to each FFT word */
 /* range from 1 to b.  These extra bits impact the round off error.  Thus, we calculate */
 /* the weighted_bits_per_output_word for irrational FFTs as using another log2b bits. */
-/* Furthermore, testing shows us that larger b values don't quite need the full log2b */
-/* bits added, probably because there are fewer extra bits generated by adding products */
-/* because the smallest weighted words have fewer bits.  The correction is if log2b is 3 */
-/* you can get 1 more output bit than expected, if log2b is 6 you get about 2 extra */
-/* bits, if log2b is 12 you can get 3 extra bits. */
 
 			max_weighted_bits_per_output_word = 2.0 * max_bits_per_input_word + 0.6 * log2 (jmptab->fftlen);
+			weighted_bits_per_output_word =
+				2.0 * ((b_per_input_word + 1.0) * log2b - 1.0) +
+				0.6 * log2 (jmptab->fftlen) + log2k + 1.7 * log2c;
+
+/* Also, testing shows that for small b an unweighted FFT saves about */
+/* log2b output bits, and for larger b saves about 1.4 * log2b output bits. */
+
 			if (k == 1.0 && n % jmptab->fftlen == 0)
-				weighted_bits_per_output_word = bits_per_output_word;
-			else
-				weighted_bits_per_output_word =
-					2.0 * ((b_per_input_word + 1.0) * log2b - 1.0) +
-					0.6 * log2 (jmptab->fftlen) -
-						((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
-						 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
-								  2.0 + (log2b - 6.0) / 6.0) +
-					log2k + 1.7 * log2c;
+				weighted_bits_per_output_word -= ((log2b <= 4.0) ? log2b : 1.4 * log2b);
+
+/* A pathological case occurs when num_big_words is one and k is greater than one. */
+/* The FFT weights for the small words will not range from 1 to b.  Depending on the */
+/* fractional part of logb(k).  In the worst case scenario, the small word weights */
+/* range from b - epsilon to b.  The example that raised this issue is 28*3^12285-1. */
+
+			else if (num_big_words == 1 && k > 1.0)
+				weighted_bits_per_output_word += log2b;
+				
+/* Furthermore, testing shows us that larger b values don't quite need the full log2b */
+/* bits added (except for some pathological cases), probably because there are fewer */
+/* extra bits generated by adding products because the smallest weighted words have */
+/* fewer bits.  The correction is if log2b is 3 you can get 1 more output bit than */
+/* expected, if log2b is 6 you get about 2 extra bits, if log2b is 12 you can get */
+/* 3 extra bits. */
+
+			else if (! is_pathological_distribution (num_big_words, num_small_words))
+				weighted_bits_per_output_word -=
+					((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
+					 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
+							  2.0 + (log2b - 6.0) / 6.0);
 
 /* If the bits in an output word is less than the maximum allowed, we can */
 /* probably use this FFT length -- though we need to do a few more tests. */
@@ -1944,24 +2063,25 @@ next1:			for (longp = &zpad_jmptab->counts[4]; *longp; longp++);
 
 /* Because of limitations in the top_carry_adjust code, there is a limit */
 /* on the size of k that can be handled.  This isn't a big deal since the */
-/* zero-padded implementation will use the same FFT length.  Check to see */
+/* zero-padded implementation should use the same FFT length.  Check to see */
 /* if this k can be handled.  K must fit in the top three words for */
-/* one-pass FFTs and within the top two words of two-pass FFTs.  Since we */
-/* know the first FFT word is a big word we can use the ceil function in */
-/* deciding how many b's we will be spreading the top carry into. */
+/* one-pass FFTs and within the top two words of two-pass FFTs. */
 
-				if (jmptab->pass2_levels == 0 &&
-				    log2k > ceil (3.0 * b_per_input_word) * log2b) {
-					ASSERTG (zpad_jmptab == NULL ||
-						 jmptab->fftlen >= zpad_jmptab->fftlen);
+				if (jmptab->pass2_levels == 0 && logbk > floor (3.0 * b_per_input_word)) {
+// This assert is designed to find any cases where using 3 or more carray adjust words
+// would use a shorter FFT than using a zero-padded FFT.
+					ASSERTG (zpad_jmptab != NULL && jmptab->fftlen >= zpad_jmptab->fftlen);
 					goto next2;
 				}
-				if (jmptab->pass2_levels != 0 &&
-				    log2k > ceil (2.0 * b_per_input_word) * log2b) {
-					ASSERTG (zpad_jmptab == NULL ||
-						 jmptab->fftlen >= zpad_jmptab->fftlen);
+				if (jmptab->pass2_levels != 0 && logbk > floor (2.0 * b_per_input_word)) {
+// This assert is designed to find any cases where using 3 or more carray adjust words
+// would use a shorter FFT than using a zero-padded FFT.
+					ASSERTG (zpad_jmptab != NULL && jmptab->fftlen >= zpad_jmptab->fftlen);
 					goto next2;
 				}
+
+/* We've found an FFT length to use */
+
 				break;
 			}
 		}
@@ -1993,6 +2113,14 @@ use_zpad:	gwdata->ZERO_PADDED_FFT = TRUE;
 
 	else
 		return (GWERROR_TOO_LARGE);
+
+/* See if the user requested a larger than normal FFT size */
+
+	if (gwdata->larger_fftlen_count) {
+		gwdata->larger_fftlen_count--;
+		gwdata->minimum_fftlen = jmptab->fftlen + 1;
+		goto again;
+	}
 
 /* Remember the FFT length and number of pass 2 levels and the gap */
 /* between 2 blocks.  This is used by addr_offset called from */
@@ -2051,8 +2179,11 @@ void gwinit2 (
 	gwdata->safety_margin = 0.0;
 	gwdata->maxmulbyconst = 3;
 	gwdata->specific_fftlen = 0;
+	gwdata->minimum_fftlen = 0;
+	gwdata->larger_fftlen_count = 0;
 	gwdata->num_threads = 1;
 	gwdata->force_general_mod = 0;
+	gwdata->use_irrational_general_mod = 0;
 	gwdata->use_large_pages = 0;
 
 /* Init structure that allows giants and gwnum code to share */
@@ -2084,6 +2215,8 @@ int gwsetup (
 	signed long c)		/* C in K*B^N+C. */
 {
 	int	gcd, error_code, setup_completed;
+	double	orig_k;
+	unsigned long orig_n;
 
 /* Return delayed errors from gwinit2 */
 
@@ -2097,6 +2230,19 @@ int gwsetup (
 /* Init */
 
 	setup_completed = FALSE;
+	orig_k = k;
+	orig_n = n;
+
+/* Our code fails if k is a power of b.  For example, 3481*59^805-1 which */
+/* equals 59^807-1.  I think this is because gwfft_base(FFTLEN) is off by one */
+/* because even quad-precision floats won't calculate FFTLEN * num_b_per_word */
+/* correctly.  There is an easy fix, if k is divisible by b we divide k by b */
+/* and add one to n. */
+
+	while (k > 1.0 && b > 1 && fmod (k, (double) b) == 0.0) {
+		k = k / (double) b;
+		n = n + 1;
+	}
 
 /* Our code fast code fails if k and c are not relatively prime.  This */
 /* is because we cannot calculate 1/k.  Although the user shouldn't call */
@@ -2135,7 +2281,7 @@ int gwsetup (
 		gwdata->GENERAL_MOD = FALSE;
 	}
 
-/* Emulate b != 2, k not relatively prime to c, small n values, and */
+/* Emulate k not relatively prime to c, small n values, and */
 /* large k or c values with a call to the general purpose modulo setup code. */
 
 	if (!setup_completed) {
@@ -2157,7 +2303,7 @@ int gwsetup (
 
 /* For future messages, format the input number as a string */
 
-	gw_as_string (gwdata->GWSTRING_REP, k, b, n, c);
+	gw_as_string (gwdata->GWSTRING_REP, orig_k, b, orig_n, c);
 
 /* Return success */
 
@@ -2204,7 +2350,9 @@ int gwsetup_general_mod_giant (
 	signed long c;
 	unsigned long d;
 	unsigned long safety_bits;
+	struct gwasm_jmptab *info;
 	int	error_code;
+	unsigned long fftlen, max_exponent, desired_n;
 	giant	tmp;
 
 /* Return delayed errors from gwinit2 */
@@ -2248,19 +2396,89 @@ int gwsetup_general_mod_giant (
 		return (0);
 	}
 
-/* Set flag so that gwsetup_without_mod will try to put more bits in each */
-/* word.  This will give us more spare bits for gwsmallmul to use to avoid */
-/* emulate_mod calls. */
-	
-	gwdata->force_general_mod = TRUE;
+/* We will need twice the number of input bits plus some padding */
 
-/* Setup the FFT code, use an integral number of bits per word if possible. */
-/* We reserve some extra bits for extra precision and to make sure we can */
-/* zero an integral number of words during copy and so that gwsmallmul will */
-/* rarely have to call emulate_mod. */
+	n = bits + bits + 128;
 
-	error_code = gwsetup_without_mod (gwdata, bits + bits + 128);
+/* Setup the FFT code in much the same way that gwsetup_without_mod does. */
+/* Unless the user insists, we try for an integral number of bits per word. */
+/* There are pathological bit patterns that generate huge roundoff errors. */
+/* For example, if we test (10^828809-1)/9 and put exactly 18 bits into */
+/* each FFT word, then every FFT word in GW_MODULUS_FFT will contains the */
+/* same value!  Not exactly, the random data our FFTs require for small */
+/* roundoff errors.  Thus, the caller may need to insist we use an */
+/* irrational FFT on occasion. */
+
+/* Call gwinfo and have it figure out the FFT length we will use. */
+/* Since we zero the upper half of FFT input data, the FFT */
+/* outputs will be smaller.  This lets us get about another 0.3 bits */
+/* per input word. */
+
+	gwdata->safety_margin -= 0.3;
+	error_code = gwinfo (gwdata, 1.0, 2, n, -1);
+	gwdata->safety_margin += 0.3;
 	if (error_code) return (error_code);
+	info = gwdata->jmptab;
+	fftlen = info->fftlen;
+	max_exponent = info->max_exp;
+
+/* Our FFTs don't handle cases where there are few bits per word because */
+/* carries must be propagated over too many words.  Arbitrarily insist */
+/* that n is at least 12 * fftlen.  */
+
+	if (n < 12 * fftlen) n = 12 * fftlen;
+
+/* Let the user request rational FFTs as they are a few percent faster */
+
+	if (!gwdata->use_irrational_general_mod) {
+
+/* If possible, increase n to the next multiple of FFT length.  This is */
+/* because rational FFTs are faster than irrational FFTs (no FFT weights). */
+
+		desired_n = ((n + fftlen - 1) / fftlen) * fftlen;
+		if (desired_n < max_exponent) n = desired_n;
+	}
+
+/* If the user requested irrational FFTs, then make sure the bits */
+/* per FFT word will distribute the big and little words of the modulus */
+/* semi-randomly.  For example, in the (10^828809-1)/9 case above, if */
+/* bits-per-word is 18.5 or 18.25 you will still get non-random patterns */
+/* in the FFT words. */
+
+	else {
+		double	prime_number, bits_per_word;
+
+/* Round bits_per_word up to the next half-multiple of 1/prime_number */
+
+		prime_number = 53.0;
+		bits_per_word = (double) n / (double) fftlen;
+		bits_per_word = (ceil (bits_per_word * prime_number) + 0.5)/ prime_number;
+
+/* If possible, use the n associated with the just-computed bits-per-word */
+
+		desired_n = (unsigned long) ceil (bits_per_word * (double) fftlen);
+		if (desired_n < max_exponent) n = desired_n;
+	}
+
+/* If possible, increase n to the next multiple of FFT length. */
+/* The extra bits allow gwsmallmul to avoid emulate_mod calls more often. */
+/* We hope the 0.3 safety_limit increase above will avoid getting too */
+/* close to the FFT limit as many users of this library turn on error */
+/* checking (slower) when near the FFT limit. */
+/* If that doesn't work, try adding a half FFT length instead. */
+
+	if (n + fftlen < max_exponent)
+		n = n + fftlen;
+	else if (gwdata->use_irrational_general_mod && n + fftlen / 2 < max_exponent)
+		n = n + fftlen / 2;
+
+/* Now setup the assembly code */
+
+	gwdata->safety_margin -= 0.3;
+	error_code = internal_gwsetup (gwdata, 1.0, 2, n, -1);
+	gwdata->safety_margin += 0.3;
+	if (error_code) return (error_code);
+
 // BUG - setting the bit_length to the modulus size will break gwtogiant.
 // we need a better/more-consistent way of dealing with the various 
 // needed bit_lengths.  Also, PFGW should not be reading the bit_length
@@ -2349,7 +2567,6 @@ int gwsetup_general_mod_giant (
 
 /* This setup routine is for operations without a modulo. In essence, */
 /* you are using gwnums as a general-purpose FFT multiply library. */
-/* Only choose a specific FFT size if you know what you are doing!! */
 
 int gwsetup_without_mod (
 	gwhandle *gwdata,	/* Placeholder for gwnum global data */
@@ -2382,12 +2599,6 @@ int gwsetup_without_mod (
 
 	desired_n = ((n + fftlen - 1) / fftlen) * fftlen;
 	if (desired_n < max_exponent) n = desired_n;
-
-/* If requested and possible, increase n to the next multiple of FFT length. */
-/* Right now, the extra bits allow gwsmallmul to avoid emulate_mod calls more often. */
-
-	if (gwdata->force_general_mod && n + fftlen < max_exponent)
-		n = n + fftlen;
 
 /* Our FFTs don't handle cases where there are few bits per word because */
 /* carries must be propagated over too many words.  Arbitrarily insist */
@@ -3279,7 +3490,8 @@ int internal_gwsetup (
 		}
 
 /* In two-pass FFTs, we only support tweaking the top two words. In one-pass FFTs, */
-/* we adjust the top three words.  Make sure this works. */
+/* we adjust the top three words.  Make sure this works.  A test case that fails: */
+/* 489539*3^72778+1.  We should consider supporting tweaking the top 3 words. */
 
 		ASSERTG ((gwdata->PASS2_LEVELS &&
 			  num_b_in_k <= num_b_in_top_word + num_b_in_second_top_word) ||
@@ -5307,19 +5519,18 @@ double virtual_bits_per_word (
 		num_b_in_big_word = (int) ceil (b_per_input_word);
 		num_small_words = (int) ((num_b_in_big_word - b_per_input_word) * (gwdata->FFTLEN / 2 + 4));
 		num_big_words = (gwdata->FFTLEN / 2 + 4) - num_small_words;
-		if (gwdata->RATIONAL_FFT)
-			weighted_bits_per_output_word =
-				2.0 * (num_b_in_big_word * log2b - 1.0) +
-				0.6 * log2 (num_big_words + num_small_words / pow (2.0, log2b / 0.6));
-		else
-			weighted_bits_per_output_word =
-				2.0 * ((b_per_input_word + 1.0) * log2b - 1.0) +
-				0.6 * log2 (gwdata->FFTLEN / 2 + 4) -
-					((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
-					 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
-							  2.0 + (log2b - 6.0) / 6.0);
 		max_weighted_bits_per_output_word =
 			2.0 * gwdata->fft_max_bits_per_word + 0.6 * log2 (gwdata->FFTLEN / 2 + 4);
+		weighted_bits_per_output_word =
+		       2.0 * ((b_per_input_word + 1.0) * log2b - 1.0) +
+		       0.6 * log2 (gwdata->FFTLEN / 2 + 4);
+		if ((gwdata->n + gwdata->n) % gwdata->FFTLEN == 0)
+			weighted_bits_per_output_word -= ((log2b <= 4.0) ? log2b : 1.4 * log2b);
+		else if (! is_pathological_distribution (num_big_words, num_small_words))
+			weighted_bits_per_output_word -=
+				((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
+				 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
+						  2.0 + (log2b - 6.0) / 6.0);
 	}
 
 /* Compute our bits per output word exactly like gwinfo does for a non-zero-padded FFT. */
@@ -5329,21 +5540,21 @@ double virtual_bits_per_word (
 		num_b_in_big_word = (int) ceil (b_per_input_word);
 		num_small_words = (int) ((num_b_in_big_word - b_per_input_word) * gwdata->FFTLEN);
 		num_big_words = gwdata->FFTLEN - num_small_words;
-		if (gwdata->RATIONAL_FFT)
-			weighted_bits_per_output_word =
-				2.0 * (num_b_in_big_word * log2b - 1.0) +
-				0.6 * log2 (num_big_words + num_small_words / pow (2.0, log2b / 0.6)) +
-				log2 (gwdata->k) + 1.7 * log2 (abs (gwdata->c));
-		else
-			weighted_bits_per_output_word =
-				2.0 * ((b_per_input_word + 1.0) * log2b - 1.0) +
-				0.6 * log2 (gwdata->FFTLEN) -
-					((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
-					 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
-							  2.0 + (log2b - 6.0) / 6.0) +
-				log2 (gwdata->k) + 1.7 * log2 (abs (gwdata->c));
 		max_weighted_bits_per_output_word =
 			2.0 * gwdata->fft_max_bits_per_word + 0.6 * log2 (gwdata->FFTLEN);
+		weighted_bits_per_output_word =
+			2.0 * ((b_per_input_word + 1.0) * log2b - 1.0) +
+			0.6 * log2 (gwdata->FFTLEN) +
+			log2 (gwdata->k) + 1.7 * log2 (abs (gwdata->c));
+		if (gwdata->k == 1.0 && gwdata->n % gwdata->FFTLEN == 0)
+			weighted_bits_per_output_word -= ((log2b <= 4.0) ? log2b : 1.4 * log2b);
+		else if (num_big_words == 1 && gwdata->k > 1.0)
+			weighted_bits_per_output_word += log2b;
+		else if (! is_pathological_distribution (num_big_words, num_small_words))
+			weighted_bits_per_output_word -=
+				((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
+				 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
+						  2.0 + (log2b - 6.0) / 6.0);
 	}
 
 /* Now generate a value that can compared to gwdata->fft_max_bits_per_word */
@@ -6782,23 +6993,31 @@ void gwsafemul (		/* Multiply source with dest */
 	gwfree (gwdata, qqq);
 }
 
-/* Generate random FFT data */
+/* Generate random FFT data.  We used to use the C runtime library. */
+/* However, when a caller discovered a bug in gwsquare_carefully it */
+/* very difficult to track down because the bug was no reproducible. */
+/* We could make bugs reproducible by calling srand with a fixed value, */
+/* but it is bad form for a library to do this.  Thus, we found a */
+/* public domain random number generator to use. */
 
 void gw_random_number (
 	gwhandle *gwdata,	/* Handle initialized by gwsetup */
 	gwnum	x)
 {
+	struct mt_state rand_info;
 	giant	g;
 	unsigned long i, len;
+
+/* Init the random generator to a reproducible state */
+
+	init_genrand (&rand_info, 5489);
 
 /* Generate the random number */
 
 	len = (((unsigned long) gwdata->bit_length) >> 5) + 1;
 	g = popg (&gwdata->gdata, len);
 	for (i = 0; i < len; i++) {
-		g->n[i] = ((uint32_t) rand() << 20) +
-			  ((uint32_t) rand() << 10) +
-			  (uint32_t) rand();
+		g->n[i] = genrand_int32 (&rand_info);
 	}
 	g->sign = len;
 	specialmodg (gwdata, g);
@@ -6847,6 +7066,7 @@ void gwsquare_carefully (
 	struct gwasm_data *asm_data;
 	gwnum	tmp1, tmp2;
 	double	saved_addin_value;
+	unsigned long saved_extra_bits;
 
 /* Generate a random number, if we have't already done so */
 
@@ -6861,14 +7081,32 @@ void gwsquare_carefully (
 	saved_addin_value = asm_data->ADDIN_VALUE;
 	asm_data->ADDIN_VALUE = 0.0;
 
+/* Make sure we do not do addquick when computing s+random. */
+/* If we do not do this, then the non-randomness of s can swamp */
+/* the randomness of tmp1.  An example is the first PRP iterations */
+/* of 2*3^599983-1 -- s is all positive values and gwadd3 thinks */
+/* there are enough extra bits to do an add quick.  This generates */
+/* a tmp1 with nearly all positive values -- very bad. */
+
+	saved_extra_bits = gwdata->EXTRA_BITS;
+	gwdata->EXTRA_BITS = 0;
+
 /* Now do the squaring using three multiplies and adds */
+/* Note that during the calculation of s*random we must relax the */
+/* SUMINP != SUMOUT limit.  This is because s may be non-random. */
+/* For example, in the first iterations of 2*3^500327-1, s is mostly */
+/* large positive values.  This means we lose some of the lower bits */
+/* of precision when we calculate SUMINP.  To combate this problem we */
+/* increase MAXDIFF during the s*random calculation. */
 
 	tmp1 = gwalloc (gwdata);
 	tmp2 = gwalloc (gwdata);
 	gwstartnextfft (gwdata, 0);		/* Disable POSTFFT */
 	gwadd3 (gwdata, s, gwdata->GW_RANDOM, tmp1); /* Compute s+random */
 	gwfft (gwdata, gwdata->GW_RANDOM, tmp2);
+	gwdata->MAXDIFF *= 1024.0;
 	gwfftmul (gwdata, tmp2, s);		/* Compute s*random */
+	gwdata->MAXDIFF /= 1024.0;
 	gwfftfftmul (gwdata, tmp2, tmp2, tmp2);	/* Compute random^2 */
 	asm_data->ADDIN_VALUE = saved_addin_value;/* Restore the addin value */
 	gwsquare (gwdata, tmp1);		/* Compute (s+random)^2 */
@@ -6876,8 +7114,9 @@ void gwsquare_carefully (
 	gwaddquick (gwdata, s, s);
 	gwsub3 (gwdata, tmp1, s, s);
 
-/* Free memory and return */
+/* Restore state, free memory and return */
 
+	gwdata->EXTRA_BITS = saved_extra_bits;
 	gwfree (gwdata, tmp1);
 	gwfree (gwdata, tmp2);
 }
