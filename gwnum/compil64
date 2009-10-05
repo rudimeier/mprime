@@ -11,8 +11,8 @@ objconv=c:\objconv\objconv
 # Use the 64-bit C compiler
 
 cl64=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /O2 /c
-cl64d=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Zi /c
-cl64do=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Zi /O2 /c
+cl64d=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Z7 /c
+cl64do=cl /GF /W3 /MT /DX86_64 /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Z7 /O2 /c
 
 # List of all buildables in this makefile
 

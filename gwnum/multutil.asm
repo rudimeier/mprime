@@ -19,7 +19,7 @@ INCLUDE	unravel.mac
 INCLUDE extrn.mac
 INCLUDE xmult.mac
 
-VERSION_NUMBER = 2512		;; Version 25.12
+VERSION_NUMBER = 2513		;; Version 25.13
 
 ;; Make prctabs public.  Linux x86-64 objcopy handles loading offsets of
 ;; variables only if they are public variables in one file and defined

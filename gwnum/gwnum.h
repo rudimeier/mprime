@@ -59,9 +59,9 @@ typedef double *gwnum;
 /* gwsetup verifies that the version numbers match.  This prevents bugs */
 /* from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"25.12"
+#define GWNUM_VERSION		"25.13"
 #define GWNUM_MAJOR_VERSION	25
-#define GWNUM_MINOR_VERSION	12
+#define GWNUM_MINOR_VERSION	13
 
 /* Error codes returned by the three gwsetup routines */
 
@@ -306,12 +306,10 @@ long gwtobinarylongs (
 /* you can perform the forward transform just once.  Furthermore, the */
 /* multiply routines are tuned to allow one unnormalized addition prior */
 /* to a multiply without introducing too much convolution error.  Thus: */
-/* Legal:	gwaddquick (t1, t2); gwmul (t2, x); */
-/* Legal:	gwfft (t1, t1); gwfft (t2, t2); */
-/*		gwfftadd (t1, t2); gwfftmul (t2, x); */
-/* Not Legal:	gwaddquick (t1, t2); gwaddquick (y, x); gwmul (t2, x); */
-/* Not Legal:	gwfft (t1, t1); gwfft (t2, t2); */
-/*		gwfftadd (t1, t2); gwfftfftmul (t2, t2); */
+/* Legal:	gwaddquick (h, t1, t2); gwmul (h, t2, x); */
+/* Legal:	gwfft (h, t1, t1); gwfft (h, t2, t2); gwfftadd (h, t1, t2); gwfftmul (h, t2, x); */
+/* Not Legal:	gwaddquick (h, t1, t2); gwaddquick (h, y, x); gwmul (h, t2, x); */
+/* Not Legal:	gwfft (h, t1, t1); gwfftadd (h, t1, t1); gwfftfftmul (h, t1, t1, t2); */
 
 /* A brief description of each of the "gw" routines: */
 /* gwswap	Quickly swaps two gw numbers */

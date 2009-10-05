@@ -9,8 +9,8 @@ masm=ml /c /coff
 # Use the MSVC 8 C compiler
 
 cl=cl /GF /W3 /MT /D_CRT_SECURE_NO_DEPRECATE /O2 /c
-cld=cl /GF /W3 /MT /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Zi /c
-cldo=cl /GF /W3 /MT /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Zi /O2 /c
+cld=cl /GF /W3 /MT /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Z7 /c
+cldo=cl /GF /W3 /MT /D_CRT_SECURE_NO_DEPRECATE /DGDEBUG /Z7 /O2 /c
 objconv=c:\objconv\objconv
 
 # List of all buildables in this makefile

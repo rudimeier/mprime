@@ -23,7 +23,8 @@
 #include "dd_inline.h"
 #endif
 
-using namespace std;
+// This line commented out because Jean Penne says MSVC6 does not support namespaces
+// using namespace std;
 
 static const char *digits = "0123456789";
 

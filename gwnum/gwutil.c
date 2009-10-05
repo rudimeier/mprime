@@ -81,7 +81,12 @@ void * large_pages_malloc (
 	size_t	size)
 {
 
-#ifdef _WIN32
+// Jean Penne reports that MSVC6 does not define MEM_LARGE_PAGES.
+// Simple fix - we don't support large pages for older compilers.
+// This is fine since we barely support large pages right now - they were
+// added primarily for me to test if they might provide a performance benefit.
+
+#if defined (_WIN32) && defined (MEM_LARGE_PAGES)
 	static int first_call = 1;
 	static size_t large_page_size = 0;
 	LPVOID p;

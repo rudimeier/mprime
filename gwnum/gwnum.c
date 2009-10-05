@@ -32,6 +32,12 @@
 #define log2(n)		(log((double)(n)) / log (2.0))
 #define logb(n)		(log((double)(n)) / log ((double)(b)))
 
+/* MSVC6 has trouble with the pow function using integer arguments. */
+/* For example, "(unsigned long) pow (5.0, 7.0)" returns 78124 instead */
+/* of the correct 78125.  This macro, works around this trouble. */
+
+#define intpow(b,n)	((long) floor (pow ((double)(b), (double)(n)) + 0.1))
+
 /* global variables */
 
 /* When debugging gwnum and giants, I sometimes write code that "cheats" */
@@ -378,18 +384,19 @@ extrn_explode()
 /*	zpck or zpk or zpkc1 or zpkcm1 or zpc or zp or zpc1 or zpcm1 or c or blank */
 /* We also define a macro that will pick the correct entry from the array. */
 
-#define sse2_explode()			sse2_explode1(xr)		sse2_explode1(xi) NULL
-#define sse2_explode1(name)		sse2_explode2(name##1,)		sse2_explode2(name##2,)		sse2_explode2(name##2,AMD)
-#define sse2_explode2(name,suff)	sse2_explode3(name,suff,)	sse2_explode3(name##zp,suff,zp)
+#define sse2_explode()			sse2_explode1(xr)		sse2_explode1(xi)		NULL
+#define sse2_explode1(name)		sse2_explode2(name##1,notAMD)	sse2_explode2(name##2,notAMD)	sse2_explode2(name##2,AMD)
+#define sse2_explode2(name,suff)	sse2_explode3(name,suff,notzp)	sse2_explode3(name##zp,suff,zp)
 #define sse2_explode3(name,suff,zp)	sse2_explode4(name,suff,zp)	sse2_explode4(name##e,suff,zp)
-#define sse2_explode4(name,suff,zp)	sse2_explode5(name,suff,zp,notc) sse2_explode5(name##c,suff,zp,)
-#define sse2_explode5(name,suff,zp,notc) sse2_explode6(name,suff,zp,notc) sse2_explode6(name##b,suff,zp,notc)
-#define sse2_explode6(name,suff,zp,notc) sse2_explode7##zp(name,suff,notc) sse2_explode7##zp(name##s4,suff,notc)
-#define sse2_explode7(name,suff,notc)	sse2_explode8(name,suff)
-#define sse2_explode7zp(name,suff,notc)	sse2_explode8##notc(name,suff)	sse2_explode8##notc(name##k,suff)
-#define sse2_explode8(name,suff)	sse2_explode9(name,suff)
-#define sse2_explode8notc(name,suff)	sse2_explode9(name,suff)	sse2_explode9(name##c1,suff)	sse2_explode9(name##cm1,suff)
-#define sse2_explode9(name,suff)	&name##suff,
+#define sse2_explode4(name,suff,zp)	sse2_explode5(name,suff,zp,notc) sse2_explode5(name##c,suff,zp,c)
+#define sse2_explode5(name,suff,zp,c)	sse2_explode6(name,suff,zp,c)	sse2_explode6(name##b,suff,zp,c)
+#define sse2_explode6(name,suff,zp,c)	sse2_explode7##zp(name,suff,c)	sse2_explode7##zp(name##s4,suff,c)
+#define sse2_explode7notzp(name,suff,c)	sse2_explode9##suff(name)
+#define sse2_explode7zp(name,suff,c)	sse2_explode8##c(name,suff)	sse2_explode8##c(name##k,suff)
+#define sse2_explode8c(name,suff)	sse2_explode9##suff(name)
+#define sse2_explode8notc(name,suff)	sse2_explode9##suff(name)	sse2_explode9##suff(name##c1)	sse2_explode9##suff(name##cm1)
+#define sse2_explode9notAMD(name)	&name,
+#define sse2_explode9AMD(name)		&name##AMD,
 
 void *sse2_prctab[] = { sse2_explode() };
 
@@ -2225,7 +2232,7 @@ int gwsetup (
 /* Sanity check the k value */
 
 	if (k < 1.0) return (GWERROR_K_TOO_SMALL);
-	if (k > 18014398509481983.0) return (GWERROR_K_TOO_LARGE);
+	if (k > 9007199254740991.0) return (GWERROR_K_TOO_LARGE);
 
 /* Init */
 
@@ -2353,7 +2360,7 @@ int gwsetup_general_mod_giant (
 	struct gwasm_jmptab *info;
 	int	error_code;
 	unsigned long fftlen, max_exponent, desired_n;
-	giant	tmp;
+	giant	modified_modulus, tmp;
 
 /* Return delayed errors from gwinit2 */
 
@@ -2364,7 +2371,10 @@ int gwsetup_general_mod_giant (
 	bits = bitlen (g);
 
 /* Examine the giant to see if it a (k*2^n+c)/d value that we can better optimize */
+/* Also detect nasty bit patterns, like Phi (82730,2), where multiplying by a small d */
+/* results in a less nasty bit pattern for the modulus. */
 
+	d = 1;
 	convertible = (!gwdata->force_general_mod &&
 		       bits > 300 &&
 		       convert_giant_to_k2ncd (g, &k, &n, &c, &d));
@@ -2396,6 +2406,21 @@ int gwsetup_general_mod_giant (
 		return (0);
 	}
 
+/* If we need to multiply the modulus by a small d value, do so here */
+
+	if (d != 1) {
+		modified_modulus = allocgiant ((bits >> 5) + 2);
+		if (modified_modulus == NULL) {
+			gwdone (gwdata);
+			return (GWERROR_MALLOC);
+		}
+		gtog (g, modified_modulus);
+		ulmulg (d, modified_modulus);
+		g = modified_modulus;
+		bits = bitlen (g);
+	} else
+		modified_modulus = NULL;
+
 /* We will need twice the number of input bits plus some padding */
 
 	n = bits + bits + 128;
@@ -2404,7 +2429,7 @@ int gwsetup_general_mod_giant (
 /* Unless the user insists, we try for an integral number of bits per word. */
 /* There are pathological bit patterns that generate huge roundoff errors. */
 /* For example, if we test (10^828809-1)/9 and put exactly 18 bits into */
-/* each FFT word, then every FFT word in GW_MODULUS_FFT will contains the */
+/* each FFT word, then every FFT word in GW_MODULUS_FFT will contain the */
 /* same value!  Not exactly, the random data our FFTs require for small */
 /* roundoff errors.  Thus, the caller may need to insist we use an */
 /* irrational FFT on occasion. */
@@ -2492,7 +2517,7 @@ int gwsetup_general_mod_giant (
 		gwdone (gwdata);
 		return (GWERROR_MALLOC);
 	}
-	gianttogw (gwdata, gwdata->GW_MODULUS, gwdata->GW_MODULUS_FFT);
+	gianttogw (gwdata, g, gwdata->GW_MODULUS_FFT);
 	gwfft (gwdata, gwdata->GW_MODULUS_FFT, gwdata->GW_MODULUS_FFT);
 
 /* Calculate number of words to zero during the copy prior to calculating */
@@ -2535,13 +2560,14 @@ int gwsetup_general_mod_giant (
 	}
 	itog (1, tmp);
 	gshiftleft (bits + gwdata->n / 2 - safety_bits, tmp);
-	divg (gwdata->GW_MODULUS, tmp);	/* computes gwdata->n/2-safety_margin+1 bits of reciprocal */
+	divg (g, tmp);		/* computes gwdata->n/2-safety_margin+1 bits of reciprocal */
 	gshiftleft (gwdata->n - (bits + gwdata->n / 2 - safety_bits), tmp);
 				/* shift so gwmul routines wrap */
 				/* quotient to lower end of fft */
 	gianttogw (gwdata, tmp, gwdata->GW_RECIP_FFT);
 	gwfft (gwdata, gwdata->GW_RECIP_FFT, gwdata->GW_RECIP_FFT);
 	free (tmp);
+	free (modified_modulus);
 
 /* Calculate the maximum allowable size of a number used as input */
 /* to gwmul.  We will make sure gwsmallmul does not generate any */
@@ -2555,6 +2581,12 @@ int gwsetup_general_mod_giant (
 
 	gwdata->GENERAL_MOD = TRUE;
 
+/* It appears that when we multiply the modulus by a small d value, we are dealing */
+/* with bit patterns that may generate a larger than usual SUM(INPUTS)/SUM(OUTPUTS) */
+/* difference.  The test case is Phi(109965,2).  Thus we will increase MAXDIFF.	*/
+	
+	if (d != 1) gwdata->MAXDIFF *= 100.0;
+		
 /* Create dummy string representation. Calling gtoc to get the first */
 /* several digits would be better, but it is too slow. */
 
@@ -2637,6 +2669,7 @@ int convert_giant_to_k2ncd (
 	signed long *c,		/* C in (K*2^N+C)/D. */
 	unsigned long *d)	/* D in (K*2^N+C)/D. */
 {
+	unsigned long less_nasty_d;
 	int	i;
 	uint32_t quick_test;
 	giant	test_g, alloc_g;
@@ -2648,6 +2681,7 @@ int convert_giant_to_k2ncd (
 /* the modulus and unexpectedly large round off errors during operations */
 
 	alloc_g = NULL;
+	less_nasty_d = 1;
 	for (*d = 1; *d <= 999; *d += 2) {
 
 /* Do a quick test to see if this is a viable candidate */
@@ -2667,6 +2701,17 @@ int convert_giant_to_k2ncd (
 			ultog (*d, alloc_g);
 			mulg (g, alloc_g);
 			test_g = alloc_g;
+		}
+
+/* See if this d value might result in a less nasty bit pattern for */
+/* emulate_mod.  For example, Phi(82730,2) behaves much better if you */
+/* multiply the modulus by 11. */
+
+		if (*d >= 3 && less_nasty_d == 1) {
+			int	count = 0;
+			for (i = 0; i < test_g->sign; i++)
+				if (test_g->n[i] == 0 || test_g->n[i] == -1) count++;
+			if (count >= (test_g->sign >> 2)) less_nasty_d = *d;
 		}
 
 /* See if low order 2 words are viable for a k*2^n+c candidate */
@@ -2707,6 +2752,7 @@ int convert_giant_to_k2ncd (
 
 /* No luck in finding a (k*2^n+c)/d equivalent for the input value */
 
+	*d = less_nasty_d;
 	free (alloc_g);
 	return (FALSE);
 }
@@ -6269,7 +6315,7 @@ long nonbase2_gianttogw (
 		newg = popg (&gwdata->gdata, a->sign * 2);
 		tmp = popg (&gwdata->gdata, a->sign * 2);
 
-		mask1 = (unsigned long) pow ((double) gwdata->b, gwdata->NUM_B_PER_SMALL_WORD);
+		mask1 = intpow (gwdata->b, gwdata->NUM_B_PER_SMALL_WORD);
 		mask2 = gwdata->b * mask1;
 		for (i = offset; i < offset + limit; i++) {
 			unsigned long mask;
@@ -6419,7 +6465,7 @@ int gwtogiant (
 			int	num_b;
 			num_b = gwdata->NUM_B_PER_SMALL_WORD;
 			if (is_big_word (gwdata, limit-1)) num_b++;
-			prev_val += val * (long) pow ((double) gwdata->b, num_b);
+			prev_val += val * intpow (gwdata->b, num_b);
 			set_fft_value (gwdata, gg, limit, (prev_val < 0) ? -1 : 0);
 			set_fft_value (gwdata, gg, limit-1, prev_val);
 		}
@@ -6524,7 +6570,7 @@ err:				free (array);
 		while (gap + gap < limit) {
 			small_size = gwfft_base (gwdata->dd_data, gap) - 1;
 			if (gap == 1)
-				dbltog (pow ((double) gwdata->b, small_size), small_base);
+				itog (intpow (gwdata->b, small_size), small_base);
 			else if (small_size == last_small_size * 2)
 				squaregi (&gwdata->gdata, small_base);
 			else
@@ -6783,8 +6829,7 @@ void emulate_mod (
 /* Subtract from the original number to get the remainder */
 
 	gwsub (gwdata, tmp, s);
-	ASSERTG (* addr (gwdata, s, gwdata->FFTLEN-1) > -2.0 && * addr (gwdata, s, gwdata->FFTLEN-1) <= 0.0);
-	ASSERTG (* addr (gwdata, s, gwdata->FFTLEN/2-1) > -2.0 && * addr (gwdata, s, gwdata->FFTLEN/2-1) <= 0.0);
+	ASSERTG (* addr (gwdata, s, gwdata->FFTLEN-1) == 0.0);
 	gwfree (gwdata, tmp);
 
 /* Restore the addin value */
@@ -7133,6 +7178,7 @@ void gwmul_carefully (
 	struct gwasm_data *asm_data;
 	gwnum	tmp1, tmp2, tmp3, tmp4;
 	double	saved_addin_value;
+	unsigned long saved_extra_bits;
 
 /* Generate a random number, if we have't already done so */
 
@@ -7147,6 +7193,11 @@ void gwmul_carefully (
 	saved_addin_value = asm_data->ADDIN_VALUE;
 	asm_data->ADDIN_VALUE = 0.0;
 
+/* Make sure we do not do addquick when computing s+random. */
+
+	saved_extra_bits = gwdata->EXTRA_BITS;
+	gwdata->EXTRA_BITS = 0;
+
 /* Now do the multiply using four multiplies and adds */
 
 	tmp1 = gwalloc (gwdata);
@@ -7158,8 +7209,10 @@ void gwmul_carefully (
 	gwadd3 (gwdata, s, gwdata->GW_RANDOM, tmp1); /* Compute s+random */
 	gwadd3 (gwdata, t, gwdata->GW_RANDOM, tmp3); /* Compute t+random */
 	gwfft (gwdata, gwdata->GW_RANDOM, tmp2);
+	gwdata->MAXDIFF *= 1024.0;
 	gwfftmul (gwdata, tmp2, tmp4);		/* Compute s*random */
 	gwfftmul (gwdata, tmp2, t);		/* Compute t*random */
+	gwdata->MAXDIFF /= 1024.0;
 	gwfftfftmul (gwdata, tmp2, tmp2, tmp2);	/* Compute random^2 */
 	asm_data->ADDIN_VALUE = saved_addin_value; /* Restore addin value */
 	gwmul (gwdata, tmp1, tmp3);	/* Compute (s+random)*(t+random) */
@@ -7167,8 +7220,9 @@ void gwmul_carefully (
 	gwsub (gwdata, t, tmp3);
 	gwsub3 (gwdata, tmp3, tmp4, t);
 
-/* Free memory and return */
+/* Restore state, free memory and return */
 
+	gwdata->EXTRA_BITS = saved_extra_bits;
 	gwfree (gwdata, tmp1);
 	gwfree (gwdata, tmp2);
 	gwfree (gwdata, tmp3);
