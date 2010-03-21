@@ -5,7 +5,7 @@
 | in the multi-precision arithmetic routines.  That is, all routines
 | that deal with the gwnum data type.
 | 
-|  Copyright 2002-2009 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2002-2010 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 /* Include files */
@@ -2039,12 +2039,17 @@ next1:			for (longp = &zpad_jmptab->counts[4]; *longp; longp++);
 /* fewer bits.  The correction is if log2b is 3 you can get 1 more output bit than */
 /* expected, if log2b is 6 you get about 2 extra bits, if log2b is 12 you can get */
 /* 3 extra bits. */
+/* Also, some examples such as 19464*19^31895+1 still raise round off errors. */
+/* For added safety we assume an extra 0.25 bits of output are needed when */
+/* base is not 2. */
 
-			else if (! is_pathological_distribution (num_big_words, num_small_words))
+			else if (! is_pathological_distribution (num_big_words, num_small_words)) {
 				weighted_bits_per_output_word -=
 					((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
 					 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
-							  2.0 + (log2b - 6.0) / 6.0);
+					 2.0 + (log2b - 6.0) / 6.0);
+				if (b != 2) weighted_bits_per_output_word += 0.25;
+			}
 
 /* If the bits in an output word is less than the maximum allowed, we can */
 /* probably use this FFT length -- though we need to do a few more tests. */
@@ -2292,20 +2297,29 @@ int gwsetup (
 /* large k or c values with a call to the general purpose modulo setup code. */
 
 	if (!setup_completed) {
-		double	bits;
-		giant	g;
-
-		bits = (double) n * log2 (b);
-		g = allocgiant (((unsigned long) bits >> 5) + 4);
-		if (g == NULL) return (GWERROR_MALLOC);
-		ultog (b, g);
-		power (g, n);
-		dblmulg (k, g);
-		iaddg (c, g);
-		gwdata->force_general_mod = TRUE;
-		error_code = gwsetup_general_mod_giant (gwdata, g);
-		free (g);
-		if (error_code) return (error_code);
+		/* If we've already copied the modulus, use it.  For example, */
+		/* gwsetup_general_mod_giant on (2^313+1)/3 will call this routine */
+		/* to try an IBDWT on 2^313+1.  This number is too small and */
+		/* we need to revert back to a general mod on (2^313+1)/3. */
+		if (gwdata->GW_MODULUS != NULL) {
+			gwdata->force_general_mod = TRUE;
+			error_code = gwsetup_general_mod_giant (gwdata, gwdata->GW_MODULUS);
+			if (error_code) return (error_code);
+		} else {
+			double	bits;
+			giant	g;
+			bits = (double) n * log2 (b);
+			g = allocgiant (((unsigned long) bits >> 5) + 4);
+			if (g == NULL) return (GWERROR_MALLOC);
+			ultog (b, g);
+			power (g, n);
+			dblmulg (k, g);
+			iaddg (c, g);
+			gwdata->force_general_mod = TRUE;
+			error_code = gwsetup_general_mod_giant (gwdata, g);
+			free (g);
+			if (error_code) return (error_code);
+		}
 	}
 
 /* For future messages, format the input number as a string */
@@ -2370,7 +2384,7 @@ int gwsetup_general_mod_giant (
 
 	bits = bitlen (g);
 
-/* Examine the giant to see if it a (k*2^n+c)/d value that we can better optimize */
+/* Examine the giant to see if it a (k*2^n+c)/d value that we can better optimize. */
 /* Also detect nasty bit patterns, like Phi (82730,2), where multiplying by a small d */
 /* results in a less nasty bit pattern for the modulus. */
 
@@ -2382,12 +2396,18 @@ int gwsetup_general_mod_giant (
 /* Copy the modulus except for k*2^n+c values */
 
 	if (!convertible || d != 1) {
-		gwdata->GW_MODULUS = allocgiant ((bits >> 5) + 1);
+		/* Yuk, we may already have saved the modulus.  For example, (2^313+1)/3 */
+		/* will come through here and save the modulus.  But gwsetup of 2^313+1 */
+		/* is too small for IBDWT, so this routine is recalled.  We cannot */
+		/* reallocate because that will cause a memory leak. */
 		if (gwdata->GW_MODULUS == NULL) {
-			gwdone (gwdata);
-			return (GWERROR_MALLOC);
+			gwdata->GW_MODULUS = allocgiant ((bits >> 5) + 1);
+			if (gwdata->GW_MODULUS == NULL) {
+				gwdone (gwdata);
+				return (GWERROR_MALLOC);
+			}
+			gtog (g, gwdata->GW_MODULUS);
 		}
-		gtog (g, gwdata->GW_MODULUS);
 	}
 
 /* Setup for values we are converting to use faster k*2^n+c FFTs. */
@@ -6442,7 +6462,7 @@ int gwtogiant (
 /* FFT, then only convert a little more than half of the FFT data words. */
 /* For a DWT, convert all the FFT data. */
 
-	if (gwdata->GENERAL_MOD) limit = gwdata->GW_GEN_MOD_MAX + 4;
+	if (gwdata->GENERAL_MOD) limit = gwdata->GW_GEN_MOD_MAX + 3;
 	else if (gwdata->ZERO_PADDED_FFT) limit = gwdata->FFTLEN / 2 + 4;
 	else limit = gwdata->FFTLEN;
 
@@ -6452,23 +6472,20 @@ int gwtogiant (
 
 	if (gwdata->GENERAL_MOD) {
 		long	val, prev_val;
-		err_code = get_fft_value (gwdata, gg, limit, &val);
-		if (err_code) return (err_code);
-		ASSERTG (val >= -1 && val <= 0);
+		while (limit < gwdata->FFTLEN) {
+			err_code = get_fft_value (gwdata, gg, limit, &val);
+			if (err_code) return (err_code);
+			if (val == -1 || val == 0) break;
+			limit++;
+			ASSERTG (limit <= gwdata->FFTLEN / 2 + 2);
+		}
 		while (limit > 1) {		/* Find top word */
 			err_code = get_fft_value (gwdata, gg, limit-1, &prev_val);
 			if (err_code) return (err_code);
 			if (val != prev_val || val < -1 || val > 0) break;
 			limit--;
 		}
-		if (val > 0 || val < -1 || (val == -1 && prev_val >= 0)) {
-			int	num_b;
-			num_b = gwdata->NUM_B_PER_SMALL_WORD;
-			if (is_big_word (gwdata, limit-1)) num_b++;
-			prev_val += val * intpow (gwdata->b, num_b);
-			set_fft_value (gwdata, gg, limit, (prev_val < 0) ? -1 : 0);
-			set_fft_value (gwdata, gg, limit-1, prev_val);
-		}
+		limit++;
 	}
 
 /* If base is 2 we can simply copy the bits out of each FFT word */
@@ -7721,7 +7738,7 @@ void gwsmallmul (
 /* weighted -1 or 0) then emulate general mod with 2 multiplies */
 
 	if (gwdata->GENERAL_MOD &&
-	    (* (double *) ((char *) g + gwdata->GW_GEN_MOD_MAX_OFFSET) <= 2.0 ||
+	    (* (double *) ((char *) g + gwdata->GW_GEN_MOD_MAX_OFFSET) <= -2.0 ||
 	     * (double *) ((char *) g + gwdata->GW_GEN_MOD_MAX_OFFSET) > 0.0))
 		emulate_mod (gwdata, g);
 }

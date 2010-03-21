@@ -4,14 +4,14 @@
 ENVP= MACOSX_DEPLOYMENT_TARGET=10.3
 
 CC = gcc
-CFLAGS = -I.. -O2 -march=i686 -malign-double
-CFLAGSD = -I.. -g -DGDEBUG -march=i686 -malign-double
+CFLAGS = -I.. -O2 -m32 -march=i686 -malign-double
+CFLAGSD = -I.. -g -m32 -DGDEBUG -march=i686 -malign-double
 CFLAGS64 = -I.. -O2 -DX86_64 -m64
 CFLAGS64D = -I.. -g -DGDEBUG -DX86_64 -m64
 
 CPP = g++
-CPPFLAGS = -I.. -I../qd -O2 -march=i686 -malign-double
-CPPFLAGSD = -I.. -I../qd -g -DGDEBUG -march=i686 -malign-double
+CPPFLAGS = -I.. -I../qd -O2 -m32 -march=i686 -malign-double
+CPPFLAGSD = -I.. -I../qd -g -DGDEBUG -m32 -march=i686 -malign-double
 CPPFLAGS64 = -I.. -I../qd -O2 -DX86_64 -m64
 CPPFLAGS64D = -I.. -I../qd -g -DGDEBUG -DX86_64 -m64
 

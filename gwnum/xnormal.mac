@@ -1,4 +1,4 @@
-; Copyright 2000-2009 - Mersenne Research, Inc.  All rights reserved.
+; Copyright 2000-2010 - Mersenne Research, Inc.  All rights reserved.
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -962,28 +962,15 @@ const	movsd	xmm4, XMM_K_TIMES_MULCONST_HI
 	jmp	funny1done
 
 funnyaddr1:				;; FFT length = 80 or 112
-	mov	al, [rdi+2]		;; Load big vs. little flags
-	movsd	xmm0, Q [rbx+32]	;; Load values5
-	mulsd	xmm0, Q [rdx+64]	;; Mul values5 by two-to-minus-phi
-	mulsd	xmm0, XMM_NORM012_FF	;; Mul by FFTLEN/2
-	addsd	xmm0, xmm2		;; x5 = values + carry
-no const movlpd	xmm2, XMM_K_LO		;; Calc high FFT carry times k
-const	movlpd	xmm2, XMM_K_TIMES_MULCONST_LO
-	mulsd	xmm2, xmm3		;; high_FFT_carry * k_lo
-	addsd	xmm0, xmm2		;; x5 = x5 + high_FFT_carry * k_lo
-no const movsd	xmm4, XMM_K_HI
-const	movsd	xmm4, XMM_K_TIMES_MULCONST_HI
-	mulsd	xmm4, XMM_LIMIT_INVERSE[rax] ;; shift k_hi
-	mulsd	xmm3, xmm4
-	single_rounding base2, xmm0, xmm2, xmm4, rax
-	addsd	xmm2, xmm3		;; Carry += high_FFT_carry * shifted k_hi
-	mulsd	xmm0, Q [rdx+64+16]	;; new value5 = val * two-to-phi
-	movsd	Q [rbx+32], xmm0	;; Save new value5
-
-	subsd	xmm2, XMM_BIGVAL	;; Remove integer rounding constant
-	mulsd	xmm2, Q [rdx+96+48]	;; carry *= two-to-phi
-	addsd	xmm2, Q [rbx+48+16]	;; value6 = values + carry
-	movsd	Q [rbx+48+16], xmm2	;; Save new value6
+	movsd	xmm0, xmm2		;; Add the carry to the next section's carry
+	subsd	xmm0, XMM_BIGVAL
+	shufpd	xmm2, xmm2, 1
+	addsd	xmm2, xmm0
+	shufpd	xmm2, xmm2, 1
+	movsd	xmm0, xmm3		;; Add the carry to the next section's carry
+	shufpd	xmm3, xmm3, 1
+	addsd	xmm3, xmm0
+	shufpd	xmm3, xmm3, 1
 
 funny1done:
 	shufpd	xmm2, xmm2, 1		;; Rotate carry
