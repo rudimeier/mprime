@@ -1,3 +1,7 @@
+/* Copyright 1995-2010 Mersenne Research, Inc. */
+/* Author:  George Woltman */
+/* Email: woltman@alum.mit.edu */
+
 /* Handy definitions */
 
 #include "common.h"
@@ -12,7 +16,11 @@
 #endif
 #endif
 #ifdef __FreeBSD__
+#ifdef X86_64
+#define PORT	12
+#else
 #define PORT	6
+#endif
 #endif
 #if defined (__EMX__) || defined (__IBMC__) || defined (__OS2__)
 #define PORT	7

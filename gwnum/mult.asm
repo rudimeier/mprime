@@ -16,7 +16,7 @@ ENDIF
 
 INCLUDE	unravel.mac
 
-VERSION_NUMBER = 2602		;; Version 26.2
+VERSION_NUMBER = 2603		;; Version 26.3
 
 ;
 ; Global variables needed by FFT setup code
@@ -142,8 +142,8 @@ X87PRC MACRO procname, mem_needed, p2larg, clmarg
 		pass2_size_over_64 = (1 SHL p2larg) SHR 6
 	ENDIF
 	flags = 0
-	;; Kludge - if mem_needed is below 500000 then pass 2 is in place
-	IF (mem_needed LT 500000 AND pass2_size_over_64 NE 0)
+	;; Kludge - if mem_needed is below 400000 then pass 2 is in place
+	IF (mem_needed LT 400000 AND pass2_size_over_64 NE 0)
 		flags = 1
 	ENDIF
 	DD	80000000h + flags SHL 26 + arch SHL 17 + clm SHL 9 + pass2_size_over_64

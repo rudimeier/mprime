@@ -8000,7 +8000,7 @@ xpass2_3072_real_done:
 
 r4_pass2_3072_levels_complex MACRO
 	LOCAL	b1a0, b1a, b1b, b2b, b3a, b3b, b4b, b5b, b6a, b6b0, b6b, b6c, b6d0, b6d
-	LOCAL	c1b, c2a, c2b, c3b, c4b, c5a, c5b
+	LOCAL	c1b, c2a0, c2a, c2b, c3b, c4b, c5a, c5b
 	LOCAL	xpass2_3072_levels_complex_1, xpass2_3072_levels_complex_2
 	LOCAL	xpass2_3072_levels_complex_3, xpass2_3072_levels_complex_4
 	LOCAL	xpass2_3072_levels_complex_unfft, xpass2_3072_levels_complex_done
@@ -8517,9 +8517,9 @@ ELSE					;; Pentium 4 faster doing merged loops
 	bump	rcx, -74*64		;; Back up prefetch pointer by 74 cache lines
 	loops_init_prefetch 1536, 64, 12, rcx ;; 4 iters of 128, prefetching 128 cache lines each loop
 
-c2a:	xtouch	[rcx+4096-64]		;; Load prefetch TLB
+c2a0:	xtouch	[rcx+4096-64]		;; Load prefetch TLB
 
-	r4_x4cl_2sc_four_complex_djbunfft_preload
+c2a:	r4_x4cl_2sc_four_complex_djbunfft_preload
 c2b:	r4_x4cl_2sc_four_complex_djbunfft rsi, 4*dist128, dist128, 2*dist128, rbp, 128*3*XMM_SCD1, rdx, 128*6*XMM_SCD1
 	loops	3, c2b, 4		;; Test loop counter with non-standard incr
 	bump	rsi, -3*4*dist128	;; Restore source pointer
@@ -8534,7 +8534,7 @@ c1b:	r3_x3cl_three_complex_djbunfft rsi, dist128, 4*dist128, rdi, 512*XMM_SCD1
 	bump	rdi, -4*128*XMM_SCD1+XMM_SCD1 ;; Next sin/cos ptr
 	bump	rbp, 3*XMM_SCD1		;; Next sine/cosine pointer
 	bump	rdx, 6*XMM_SCD1		;; Next sine/cosine pointer
-	loops_touch 32, c2b, 4, c2a	;; Test loop counter
+	loops_touch 32, c2a, 4, c2a0	;; Test loop counter
 	end_timer 13
 
 ENDIF
@@ -14944,7 +14944,7 @@ xpass2_6144_real_done:
 
 r4_pass2_6144_levels_complex MACRO
 	LOCAL	b1a0, b1a, b1b, b2a, b2b, b3a, b3b, b4b, b5b, b6a, b6b0, b6b, b6c, b6d0, b6d
-	LOCAL	c1b, c2a, c2b, c3b, c4b, c5a, c5b
+	LOCAL	c1b, c2a0, c2a, c2b, c3b, c4b, c5a, c5b
 	LOCAL	xpass2_6144_levels_complex_1, xpass2_6144_levels_complex_2
 	LOCAL	xpass2_6144_levels_complex_3, xpass2_6144_levels_complex_4
 	LOCAL	xpass2_6144_levels_complex_unfft, xpass2_6144_levels_complex_done
@@ -15471,14 +15471,16 @@ ELSE					;; Pentium 4 faster doing merged loops
 	bump	rcx, -2*64		;; Back up prefetch pointer by 2 cache lines
 	loops_init_prefetch 3072, 64, 6, rcx ;; 256 iters of 3 or 4
 
-c2a:	xtouch	[rcx+4096-64]		;; Load prefetch TLBs
+c2a0:	xtouch	[rcx+4096-64]		;; Load prefetch TLBs
 
-	r4_x4cl_2sc_four_complex_djbunfft_preload
+	loops_set_prefetch 64, 3072, rcx ;; prefetch 0 cache lines in first loop
+c2a:	r4_x4cl_2sc_four_complex_djbunfft_preload
 c2b:	r4_x4cl_2sc_four_complex_djbunfft rsi, 8*dist128, 2*dist128, 4*dist128, rbp, 256*3*XMM_SCD1, rdx, 256*6*XMM_SCD1
 	loops_no_prefetch 3, c2b, 4	;; Test loop counter with non-standard incr
 	bump	rsi, -3*8*dist128	;; Restore source pointer
 	loops_undo 12
 
+	loops_set_prefetch 64, 6, rcx	;; prefetch 512 cache lines in second loop
 	r3_x3cl_three_complex_djbunfft_preload
 c1b:	r3_x3cl_three_complex_djbunfft rsi, 2*dist128, 8*dist128, rdi, 1024*XMM_SCD1
 	bump	rdi, 256*XMM_SCD1	;; Next sin/cos ptr
@@ -15488,9 +15490,9 @@ c1b:	r3_x3cl_three_complex_djbunfft rsi, 2*dist128, 8*dist128, rdi, 1024*XMM_SCD
 	bump	rdi, -4*256*XMM_SCD1+XMM_SCD1 ;; Next sin/cos ptr
 	bump	rbp, 3*XMM_SCD1		;; Next sine/cosine pointer
 	bump	rdx, 6*XMM_SCD1		;; Next sine/cosine pointer
-	loops_touch 32, c2b, 4, c2a	;; Loop 128 times
+	loops_touch 32, c2a, 4, c2a0	;; Loop 128 times
 	bump	rsi, -128*64+dist128	;; Next source pointer
-	loops	2, c2a			;; Loop 2 times
+	loops	2, c2a0			;; Loop 2 times
 	end_timer 13
 
 ENDIF

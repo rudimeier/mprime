@@ -148,10 +148,10 @@ void gen_data (gwhandle *gwdata, gwnum x, giant g)
 		g->n[i] = ((unsigned long) rand() << 20) +
 			  ((unsigned long) rand() << 10) +
 			  (unsigned long) rand();
-	}  //len = 1; g->n[0] = 1000;
+	}
 	g->sign = len;
 	specialmodg (gwdata, g);
-	gianttogw (gwdata, g, x);  //x[0] = 0.0; for (i=1;i<=1;i++) set_fft_value (gwdata, x, 80*1024-1, 10000); gwtogiant (gwdata, x, g);
+	gianttogw (gwdata, g, x);
 }
 
 /* Set and print random seed */
@@ -192,14 +192,14 @@ void test_it_all (
 	char	buf[200], fft_desc[100];
 
 /* Init */
-	
+
 	g = g2 = g3 = NULL;
 	num_squarings = IniSectionGetInt (INI_FILE, "QA", "NUM_SQUARINGS", 50);
 
 /* Loop over both x87 and SSE2 implementations.  Pass 1 does x87 FFTs */
 /* on SSE2 machines.  Pass 2 does the "natural" FFTs. */
 
-	for (ii = 2; ii <= 2; ii++) {
+	for (ii = 1; ii <= 2; ii++) {
 
 	if (ii == 1) {
 #ifdef X86_64
@@ -213,7 +213,7 @@ void test_it_all (
 
 	    nth_fft = 1;
 	    for ( ; ; ) {
-		    gwinit (&gwdata);
+		gwinit (&gwdata);
 		gwset_num_threads (&gwdata, threads);
 		gwset_thread_callback (&gwdata, SetAuxThreadPriority);
 		gwset_thread_callback_data (&gwdata, sp_info);
@@ -448,27 +448,22 @@ void test_it (
 		gwstartnextfft (gwdata, !CHECK_OFTEN && (i & 3) == 2);
 
 		/* Test gwsetaddin without and with POSTFFT set */
-//		if ((i == 45 || i == 46) && abs (gwdata->c) == 1)
-//			gwsetaddin (gwdata, -31);
+		if ((i == 45 || i == 46) && abs (gwdata->c) == 1)
+			gwsetaddin (gwdata, -31);
 
 		/* Test several different ways to square a number */
-//		if (i % 50 >= 4 && i % 50 <= 7) {
-//			gwfft (gwdata, x, x);
-//			gwfftfftmul (gwdata, x, x, x);
-//		} else if (i % 50 >= 12 && i % 50 <= 15) {
-//			gwfft (gwdata, x, x3);
-//			gwfftmul (gwdata, x3, x);
-//		} else if (i % 50 >= 20 && i % 50 <= 23) {
-//			gwfft (gwdata, x, x3);
-//			gwcopy (gwdata, x3, x4);
-//			gwfftfftmul (gwdata, x3, x4, x);
-//		} else
-gwsetmulbyconst (gwdata, 3);
-gwsetnormroutine (gwdata, 0, 1, 1);
-
-		gwsquare (gwdata, x);
-
-gwsetnormroutine (gwdata, 0, 1, 0);
+		if (i % 50 >= 4 && i % 50 <= 7) {
+			gwfft (gwdata, x, x);
+			gwfftfftmul (gwdata, x, x, x);
+		} else if (i % 50 >= 12 && i % 50 <= 15) {
+			gwfft (gwdata, x, x3);
+			gwfftmul (gwdata, x3, x);
+		} else if (i % 50 >= 20 && i % 50 <= 23) {
+			gwfft (gwdata, x, x3);
+			gwcopy (gwdata, x3, x4);
+			gwfftfftmul (gwdata, x3, x4, x);
+		} else
+			gwsquare (gwdata, x);
 
 		/* Remember maximum difference */
 		diff = fabs (gwsuminp (gwdata, x) - gwsumout (gwdata, x));
@@ -476,11 +471,10 @@ gwsetnormroutine (gwdata, 0, 1, 0);
 
 		/* Square number (and do add-in) using giants code */
 		squaregi (&gwdata->gdata, g);
-ulmulg (3, g);
-//		if ((i == 45 || i == 46) && abs (gwdata->c) == 1) {
-//			iaddg (-31, g);
-//			gwsetaddin (gwdata, 0);
-//		}
+		if ((i == 45 || i == 46) && abs (gwdata->c) == 1) {
+			iaddg (-31, g);
+			gwsetaddin (gwdata, 0);
+		}
 		specialmodg (gwdata, g);
 
 		/* Compare results */
@@ -584,15 +578,11 @@ ulmulg (3, g);
 
 /* Test gwaddsub */
 
-	if (CHECK_OFTEN) {specialmodg (gwdata, g); compare (thread_num, gwdata, x, g);}
-	if (CHECK_OFTEN) {specialmodg (gwdata, g2); compare (thread_num, gwdata, x2, g2);}
 	gwaddsub (gwdata, x, x2);	// compute x+x2 and x-x2
 	subg (g, g2);		// x2-x
 	addg (g, g);		// x+x
 	addg (g2, g);		// x+x2
 	negg (g2);		// x-x2
-	if (CHECK_OFTEN) {specialmodg (gwdata, g); compare (thread_num, gwdata, x, g);}
-	if (CHECK_OFTEN) {specialmodg (gwdata, g2); compare (thread_num, gwdata, x2, g2);}
 	gwaddsub4 (gwdata, x, x2, x3, x4);	// compute x+x2 and x-x2
 	gtog (g, g3); addg (g2, g3);
 	gtog (g, g4); subg (g2, g4);

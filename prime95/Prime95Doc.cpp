@@ -229,7 +229,7 @@ void CPrime95Doc::OnPrimenet()
 	if (dlg.DoModal () == IDOK) {
 		DIAL_UP = dlg.m_dialup;
 		IniWriteInt (INI_FILE, "DialUp", DIAL_UP);
-		strcpy (szProxyHost, dlg.m_proxyhost);
+		strcpy (szProxyHost, (const char *) dlg.m_proxyhost);
 		if (szProxyHost[0] && dlg.m_proxyport != 8080)
 			sprintf (szProxyHost + strlen (szProxyHost), ":%d",
 				 dlg.m_proxyport);
@@ -252,13 +252,13 @@ void CPrime95Doc::OnPrimenet()
 			dlg.m_userid = "ANONYMOUS";
 
 		if (strcmp (USERID, dlg.m_userid) != 0) {
-			strcpy (USERID, dlg.m_userid);
+			strcpy (USERID, (const char *) dlg.m_userid);
 			sanitizeString (USERID);
 			IniWriteString (INI_FILE, "V5UserID", USERID);
 			update_computer_info = TRUE;
 		}
 		if (strcmp (COMPID, dlg.m_compid) != 0) {
-			strcpy (COMPID, dlg.m_compid);
+			strcpy (COMPID, (const char *) dlg.m_compid);
 			sanitizeString (COMPID);
 			IniWriteString (LOCALINI_FILE, "ComputerID", COMPID);
 			update_computer_info = TRUE;

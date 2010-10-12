@@ -22,10 +22,41 @@ INCLUDE xmult.mac
 INCLUDE memory.mac
 INCLUDE xnormal.mac
 
+; Internal routine to add in the two wraparound carries
+; I'd like to make this a subroutine, but it is too difficult
+; to get push_amt correct.
+
+final_carries_3 MACRO
+	LOCAL	b2c, zpc, b2zpc, c3dn
+
+	mov	rbp, norm_grp_mults	; Addr of the group multipliers
+	mov	rbx, norm_col_mults	; Addr of the column multipliers
+	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
+
+	cmp	ZERO_PADDED_FFT, 0	;; Zero-padded FFT?
+	jne	zpc			;; Yes, do special zpad carry
+
+	xnorm_top_carry_cmn rsi, xmm7, 2
+	cmp	B_IS_2, 0		; Is this base 2?
+	jne	b2c			; yes, do simpler rounding
+	xnorm_smallmul_wpn_fft noexec	; Add 2 carries to start of fft
+	jmp	c3dn
+b2c:	xnorm_smallmul_wpn_fft exec	; Add 2 carries to start of fft
+	jmp	c3dn
+
+zpc:	cmp	B_IS_2, 0		; Is this base 2?
+	jne	b2zpc			; yes, do simpler rounding
+	xnorm_smallmul_wpn_fft_zpad noexec ; Do the special zpad carry not base 2
+	jmp	c3dn
+b2zpc:	xnorm_smallmul_wpn_fft_zpad exec ; Do the special zpad carry base 2
+c3dn:
+	ENDM
+
+
 _TEXT SEGMENT
 
 ;;
-;; Add two numbers with carry propogation
+;; Add two numbers with carry propagation
 ;;
 
 saved_blk_start EQU	PPTR [rsp+first_local+0*SZPTR]
@@ -134,18 +165,17 @@ askip3:	sub	loopcount1, 1		; Decrement outer loop counter
 	mov	rbx, norm_grp_mults	; Group ttp ptr
 	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
 	xnorm_op_wpn_sec XMM_TMP1, XMM_TMP2, XMM_TMP3, XMM_TMP4 ; Add 2 carries to start of section
+
 	mov	rsi, DESTARG		; Addr of FFT data
-	xload	xmm7, XMM_TMP3		; Load wraparound carry
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	mov	rbp, norm_grp_mults	; Addr of the group multipliers
 	xload	xmm6, XMM_TMP1		; Load non-wraparound carry
-	xnorm_op_wpn_fft		; Add 2 carries to start of fft
+	xload	xmm7, XMM_TMP3		; Load wraparound carry
+	final_carries_3			; Add the carries back in
 
 	ad_epilog 2*SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 gwxadd3 ENDP
 
 ;;
-;; Subtract two numbers with carry propogation
+;; Subtract two numbers with carry propagation
 ;;
 
 saved_blk_start EQU	PPTR [rsp+first_local+0*SZPTR]
@@ -254,18 +284,17 @@ sskip3:	sub	loopcount1, 1		; Decrement outer loop counter
 	mov	rbx, norm_grp_mults	; Reload group ttp ptr
 	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
 	xnorm_op_wpn_sec XMM_TMP1, XMM_TMP2, XMM_TMP3, XMM_TMP4 ; Add 2 carries to start of section
+
 	mov	rsi, DESTARG		; Addr of FFT data
-	xload	xmm7, XMM_TMP3		; Load wraparound carry
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	mov	rbp, norm_grp_mults	; Addr of the group multipliers
 	xload	xmm6, XMM_TMP1		; Load non-wraparound carry
-	xnorm_op_wpn_fft		; Add 2 carries to start of fft
+	xload	xmm7, XMM_TMP3		; Load wraparound carry
+	final_carries_3			; Add the carries back in
 
 	ad_epilog 2*SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 gwxsub3 ENDP
 
 ;;
-;; Add and subtract two numbers with carry propogation
+;; Add and subtract two numbers with carry propagation
 ;;
 
 saved_blk_start EQU	PPTR [rsp+first_local+0*SZPTR]
@@ -388,23 +417,26 @@ asskip3:sub	loopcount1, 1		; Decrement outer loop counter
 	mov	rax, DEST2ARG		; Reload ptr for dest #2
 	xnorm_op_wpn_sec XMM_TMP5, XMM_TMP6, XMM_TMP7, XMM_TMP8 ; Add 2 carries to start of section
 
+	;; All sections done
+
+	xload	xmm6, XMM_TMP5		; Load non-wraparound carry
+	xstore	XMM_TMP8, xmm6		; Save carry, final_carries_3 destroys XMM1-6
+
 	mov	rsi, DESTARG		; Addr of FFT data
-	xload	xmm7, XMM_TMP3		; Load wraparound carry
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	mov	rbp, norm_grp_mults	; Addr of the group multipliers
 	xload	xmm6, XMM_TMP1		; Load non-wraparound carry
-	xnorm_op_wpn_fft		; Add 2 carries to start of fft
+	xload	xmm7, XMM_TMP3		; Load wraparound carry
+	final_carries_3			; Add the carries back in
 
 	mov	rsi, DEST2ARG		; Addr of FFT data
+	xload	xmm6, XMM_TMP8		; Load non-wraparound carry
 	xload	xmm7, XMM_TMP7		; Load wraparound carry
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	xload	xmm6, XMM_TMP5		; Load non-wraparound carry
-	xnorm_op_wpn_fft		; Add 2 carries to start of fft
+	final_carries_3			; Add the carries back in
+
 	ad_epilog 3*SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 gwxaddsub3 ENDP
 
 ;;
-;; Add in a small number with carry propogation
+;; Add in a small number with carry propagation
 ;;
 
 PROCFL	gwxadds3
@@ -424,7 +456,7 @@ addsmdn:
 gwxadds3 ENDP
 
 ;;
-;; Multiply a number by a small value with carry propogation
+;; Multiply a number by a small value with carry propagation
 ;;
 
 saved_blk_start EQU	PPTR [rsp+first_local+0*SZPTR]
@@ -528,7 +560,7 @@ mskip2:	sub	loopcount2, 1		; Test loop counter
 mskip3:	sub	loopcount1, 1		; Decrement outer loop counter
 	jnz	mblk0 			; Loop til section done
 
-	;; All blocks done
+	;; Section done
 
 	mov	rsi, DESTARG		; Restore data ptr
 	mov	rbp, norm_grp_mults	; Restore group ttp ptr
@@ -540,27 +572,12 @@ mskip3:	sub	loopcount1, 1		; Decrement outer loop counter
 b2msec:	xnorm_smallmul_wpn_sec exec	; Add 2 carries to start of section
 msecdn:
 
+	;; All sections done
+
+	mov	rsi, DESTARG		; Restore data ptr
 	xload	xmm6, XMM_TMP1		; Load non-wraparound carry
 	xload	xmm7, XMM_TMP3		; Load wraparound carry
-
-	cmp	ZERO_PADDED_FFT, 0	;; Zero-padded FFT?
-	jne	mulzp			;; Yes, do special zpad carry
-
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	cmp	B_IS_2, 0		; Is this base 2?
-	jne	b2mfft			; yes, do simpler rounding
-	xnorm_smallmul_wpn_fft noexec	; Add 2 carries to start of fft
-	jmp	muldn
-b2mfft:	xnorm_smallmul_wpn_fft exec	; Add 2 carries to start of fft
-	jmp	muldn
-
-mulzp:	cmp	B_IS_2, 0		; Is this base 2?
-	jne	b2mzpfft		; yes, do simpler rounding
-	xnorm_smallmul_wpn_fft_zpad noexec ; Do the special zpad carry not base 2
-	jmp	muldn
-b2mzpfft:
-	xnorm_smallmul_wpn_fft_zpad exec ; Do the special zpad carry base 2
-muldn:
+	final_carries_3			; Add the carries back in
 
 	ad_epilog 2*SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 gwxmuls3 ENDP

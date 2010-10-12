@@ -2183,9 +2183,9 @@ void OutputStr (
 
 		/* Eliminate date or zero-suppress day */
 		if (TIMESTAMPING >= 3)
-			strcpy (tmpbuf, tmpbuf+7);
+			safe_strcpy (tmpbuf, tmpbuf+7);
 		else if (tmpbuf[4] == '0' || tmpbuf[4] == ' ')
-			strcpy (tmpbuf+4, tmpbuf+5);
+			safe_strcpy (tmpbuf+4, tmpbuf+5);
 
 		sprintf (fmtbuf, "[%s] ", tmpbuf);
 
@@ -2570,7 +2570,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 		(value[2] == 'A' || value[2] == 'a') &&
 		(value[3] == ',')) {
 		w->ra_failed = TRUE;
-		strcpy (value, value+4);
+		safe_strcpy (value, value+4);
 	    }
 	    for (i = 0; ; i++) {
 		if (!(value[i] >= '0' && value[i] <= '9') &&
@@ -2580,7 +2580,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 			if (value[32] != ',') break;
 			value[32] = 0;
 			strcpy (w->assignment_uid, value);
-			strcpy (value, value+33);
+			safe_strcpy (value, value+33);
 			break;
 		}
 	    }
@@ -2609,7 +2609,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 		if (*p == 'K' || *p == 'k') fftlen <<= 10, p++;
 		if (*p == 'M' || *p == 'm') fftlen <<= 20, p++;
 		if (*p == ',') p++;
-		strcpy (value, p);
+		safe_strcpy (value, p);
 		if ((sse2 && (CPU_FLAGS & CPU_SSE2)) ||
 		    (!sse2 && ! (CPU_FLAGS & CPU_SSE2)))
 			w->forced_fftlen = fftlen;
@@ -2630,7 +2630,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 			*comma = 0;
 			if (strlen (p) > 8) p[8] = 0;
 			strcpy (w->extension, p);
-			strcpy (value, comma+1);
+			safe_strcpy (value, comma+1);
 		}
 	    }
 
@@ -3512,7 +3512,7 @@ double work_estimate (
 			unsigned long guess_B1, guess_B2;
 			unsigned long squarings;
 			double	prob;
-			guess_pminus1_bounds (w->k, w->b, w->n, w->c,
+			guess_pminus1_bounds (thread_num, w->k, w->b, w->n, w->c,
 					      w->sieve_depth, w->tests_saved,
 					      &guess_B1, &guess_B2,
 					      &squarings, &prob);
@@ -4749,7 +4749,7 @@ void spoolExistingResultsFile (void)
 			    strstr (line, "completed P-1") == NULL &&
 			    strstr (line, "no factor") == NULL) continue;
 			if (line[0] == 'U' && strchr (line, ',') != NULL)
-				strcpy (line, strchr (line, ',') + 2);
+				safe_strcpy (line, strchr (line, ',') + 2);
 //BUG - what to do with this??? Pass an unknown result type which
 //forces it to be treated like a manual result?  Does v5 understand
 //v4 result strings?
@@ -5057,7 +5057,7 @@ int sendMessage (
 			time (&this_time);
 			this_time += ((struct primenetAssignmentProgress *)pkt)->end_date;
 			strcpy (timebuf, ctime (&this_time)+4);
-			strcpy (timebuf+6, timebuf+15);
+			safe_strcpy (timebuf+6, timebuf+15);
 			aid_to_text (info, ((struct primenetAssignmentProgress *)pkt)->assignment_uid);
 			sprintf (buf, "Sending expected completion date for %s: %s",
 				 info, timebuf);

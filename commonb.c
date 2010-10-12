@@ -283,7 +283,7 @@ static	char	AFFINITY_SCRAMBLE[33] = {0};
 	else
 		mask = -1;
 
-/* Get the optional string used to scramble the affiniity mask bits to */
+/* Get the optional string used to scramble the affinity mask bits to */
 /* new or odd optimizations we had not considered. */
 
 	if (!AFFINITY_SCRAMBLE[0]) {
@@ -340,7 +340,8 @@ static	char	AFFINITY_SCRAMBLE[33] = {0};
 			sprintf (buf + strlen(buf), "logical CPU%s%s\n",
 				 (count == 1) ? " #" : "s ", cpu_list);
 		}
-		OutputStr (info->thread_num, buf);
+		if (info->type != SET_PRIORITY_BENCHMARKING)
+			OutputStr (info->thread_num, buf);
 	}
 
 /* Call OS-specific routine to set the priority and affinity */
@@ -1073,8 +1074,31 @@ int set_memory_usage (
 
 /* Return maximum memory (in MB) that will ever be available for a variable usage thread. */
 
-unsigned int max_mem (void)
+unsigned long max_mem (
+	int	thread_num)
 {
+	char	section_name[32];
+	unsigned long memory;
+	const char *p;
+
+/* Compute the maximum memory setting for this thread.  If not found, return the global max memory. */
+
+	sprintf (section_name, "Worker #%d", thread_num+1);
+	p = IniSectionGetStringRaw (LOCALINI_FILE, section_name, "Memory");
+	if (p == NULL) return (MAX_MEM);
+
+	memory = 0;
+	for ( ; ; ) {
+		unsigned long temp = atol (p);
+		if (temp > memory) memory = temp;
+		p = strstr (p, " else ");
+		if (p == NULL) break;
+		p = p + 6;
+	}
+
+/* Return the lesser of the global max memory and the thread's max memory */
+
+	if (memory < MAX_MEM) return (memory);
 	return (MAX_MEM);
 }
 
@@ -2210,7 +2234,7 @@ void makestr (
 			x[i] >>= 1;
 		}
 	}
-	while (buf[0] == '0') strcpy (buf, buf+1);
+	while (buf[0] == '0') safe_strcpy (buf, buf+1);
 }
 
 /* Sleep five minutes before restarting */
@@ -2629,7 +2653,7 @@ again:	clearThreadHandleArray ();
 
 /* Launch more worker threads if needed */
 
-	delay_amount = IniGetInt (INI_FILE, "StaggerStarts", 8);
+	delay_amount = IniGetInt (INI_FILE, "StaggerStarts", 5);
 	total_delay_amount = 0;
 	for (tnum = 1; tnum < ld->num_threads; tnum++) {
 		ldwork[tnum] = (struct LaunchData *) malloc (sizeof (struct LaunchData));
@@ -4365,52 +4389,90 @@ void inc_error_count (
 
 int make_error_count_message (
 	unsigned long error_count,
+	int	message_type,		/* 1 = very small, 2 = one line, 3 = multi-line */
 	char	*buf,
 	int	buflen)
 {
-	int	count_repeatable, count_suminp, count_roundoff, count_illegal_sumout;
+	int	count_repeatable, count_suminp, count_roundoff, count_illegal_sumout, count_total;
 	int	count_bad_errors;
-	char	local_buf[400], counts_buf[200];
+	char	local_buf[400], counts_buf[200], confidence[25];
+
+/* Parse the error counts variable */
 
 	count_repeatable = (error_count >> 24) & 0x7F;
 	count_illegal_sumout = (error_count >> 16) & 0xFF;
 	count_suminp = (error_count >> 8) & 0xFF;
 	count_roundoff = error_count & 0xFF;
 
-	if (count_illegal_sumout + count_suminp + count_roundoff - count_repeatable == 0) return (FALSE);
+/* Return if no hardware errors have occurred */
+
+	count_total = count_illegal_sumout + count_suminp + count_roundoff;
+	if (count_total - count_repeatable == 0) return (FALSE);
+
+/* Format the error counts */
 
 	counts_buf[0] = 0;
-	if (count_roundoff >= 1) {
-		sprintf (local_buf, "%d ROUNDOFF > 0.4, ", count_roundoff);
-		strcat (counts_buf, local_buf);
-	}
-	if (count_suminp >= 1) {
-		sprintf (local_buf, "%d SUM(INPUTS) != SUM(OUTPUTS), ", count_suminp);
-		strcat (counts_buf, local_buf);
-	}
-	if (count_illegal_sumout >= 1) {
-		sprintf (local_buf, "%d ILLEGAL SUMOUT, ", count_illegal_sumout);
-		strcat (counts_buf, local_buf);
-	}
-	counts_buf[strlen(counts_buf)-2] = 0;
-	if (count_repeatable >= 1) {
-		sprintf (local_buf, "of which %d were repeatable (not hardware errors)", count_repeatable);
-		if (strlen (counts_buf) <= 40) strcat (counts_buf, " ");
-		else strcat (counts_buf, "\n");
-		strcat (counts_buf, local_buf);
-	}
-	strcat (counts_buf, ".\n");
 
-	strcpy (local_buf, "Possible hardware errors have occurred during the test:");
-	if (strlen (counts_buf) <= 25) strcat (local_buf, " ");
-	else strcat (local_buf, "\n");
-	strcat (local_buf, counts_buf);
+	if (message_type == 1) {
+		sprintf (counts_buf, "errors: %d", count_total);
+	}
+
+	if (message_type == 2) {
+		if (count_total == 1)
+			strcpy (counts_buf, "1 error");
+		else
+			sprintf (counts_buf, "%d errors", count_total);
+		if (count_repeatable >= 1)
+			sprintf (local_buf, ", %d were repeatable (not errors)", count_repeatable);
+	}
+
+	if (message_type == 3) {
+		if (count_roundoff >= 1) {
+			sprintf (local_buf, "%d ROUNDOFF > 0.4, ", count_roundoff);
+			strcat (counts_buf, local_buf);
+		}
+		if (count_suminp >= 1) {
+			sprintf (local_buf, "%d SUM(INPUTS) != SUM(OUTPUTS), ", count_suminp);
+			strcat (counts_buf, local_buf);
+		}
+		if (count_illegal_sumout >= 1) {
+			sprintf (local_buf, "%d ILLEGAL SUMOUT, ", count_illegal_sumout);
+			strcat (counts_buf, local_buf);
+		}
+		counts_buf[strlen(counts_buf)-2] = 0;
+		if (count_repeatable >= 1) {
+			sprintf (local_buf, "of which %d were repeatable (not hardware errors)", count_repeatable);
+			if (strlen (counts_buf) <= 40) strcat (counts_buf, " ");
+			else strcat (counts_buf, "\n");
+			strcat (counts_buf, local_buf);
+		}
+		strcat (counts_buf, ".\n");
+	}
+
+/* Guess our confidence in the end result */
 
 	count_bad_errors = count_suminp + count_roundoff - count_repeatable;
-	sprintf (local_buf+strlen(local_buf), "Confidence in final result is %s.\n",
-		 count_bad_errors == 0 ? "excellent" :
-		 count_bad_errors <= 3 ? "fair" :
-		 count_bad_errors <= 6 ? "poor" : "very poor");
+	strcpy (confidence, count_bad_errors == 0 ? "excellent" :
+			    count_bad_errors <= 3 ? "fair" :
+			    count_bad_errors <= 6 ? "poor" : "very poor");
+
+/* Put it all together to form our full message */
+
+	if (message_type == 1) {
+		sprintf (local_buf, ", %s, confidence: %s", counts_buf, confidence);
+	}
+	if (message_type == 2) {
+		sprintf (local_buf, "Possible hardware errors!  %s.  Confidence in end result is %s.\n", counts_buf, confidence);
+	}
+	if (message_type == 3) {
+		strcpy (local_buf, "Possible hardware errors have occurred during the test!");
+		if (strlen (counts_buf) <= 25) strcat (local_buf, " ");
+		else strcat (local_buf, "\n");
+		strcat (local_buf, counts_buf);
+		sprintf (local_buf+strlen(local_buf), "Confidence in final result is %s.\n", confidence);
+	}
+
+/* Copy as much of our result as possible to the caller's buffer */
 
 	if ((int) strlen (local_buf) >= buflen) local_buf[buflen-1] = 0;
 	strcpy (buf, local_buf);
@@ -4674,6 +4736,7 @@ int prime (
 	double	last_suminp = 0.0;
 	double	last_sumout = 0.0;
 	double	last_maxerr = 0.0;
+	int	error_count_messages;
 
 /* Initialize */
 
@@ -4850,6 +4913,7 @@ begin:	gwinit (&lldata.gwdata);
 /* Compute numbers in the lucas series, write out every 30 minutes to a file */
 
 	iters = 0;
+	error_count_messages = IniGetInt (INI_FILE, "ErrorCountMessages", 3);
 	while (counter < p) {
 		int	echk;
 
@@ -5037,6 +5101,12 @@ begin:	gwinit (&lldata.gwdata);
 				 "Iteration: %%ld / %%ld [%%.%df%%%%]",
 				 PRECISION);
 			sprintf (buf, fmt_mask, counter, p, pct);
+			/* Append a short form total errors message */
+			if (error_count_messages == 1)
+				make_error_count_message (error_count, error_count_messages,
+							  buf + strlen (buf),
+							  (int) (sizeof (buf) - strlen (buf)));
+			/* Append optional roundoff message */
 			if (ERRCHK && counter > 30) {
 				sprintf (buf+strlen(buf),
 					 ".  Round off: %10.10f to %10.10f",
@@ -5057,11 +5127,11 @@ begin:	gwinit (&lldata.gwdata);
 			OutputStr (thread_num, buf);
 			first_iter_msg = FALSE;
 
-/* Output a message showing the error counts.  This way a user is likely to */
+/* Output a verbose message showing the error counts.  This way a user is likely to */
 /* notice a problem without reading the results.txt file. */
 
-			if (make_error_count_message (error_count, buf, sizeof (buf)) &&
-			    IniGetInt (INI_FILE, "ErrorCountMessages", 1))
+			if (error_count_messages >= 2 &&
+			    make_error_count_message (error_count, error_count_messages, buf, sizeof (buf)))
 				OutputStr (thread_num, buf);
 		}
 
@@ -6894,7 +6964,9 @@ int primeBench (
 		if (all_bench) lldata.gwdata.bench_pick_nth_fft = ii;
 		stop_reason = lucasSetup (thread_num, fftlen * 17 + 1, fftlen + plus1, &lldata);
 		if (stop_reason) {
-			fftlen = max_FFT_length * 1024;
+			/* An error during all_bench is expected.  Continue on to next FFT length. */
+			/* An error during a norm bench is unexpected.  Sett fftlen so that we stop benching. */
+			if (!all_bench) fftlen = max_FFT_length * 1024;
 			break;
 		}
 		fftlen = gwfftlen (&lldata.gwdata);
@@ -7160,6 +7232,7 @@ int prp (
 	double	last_maxerr = 0.0;
 	char	string_rep[80];
 	int	string_rep_truncated;
+	int	error_count_messages;
 
 /* See if this number needs P-1 factoring.  We treat P-1 factoring */
 /* that is part of a PRP test as priority work done in pass 1 or as */
@@ -7347,6 +7420,7 @@ gwtogiant (&gwdata, x, t1);
 #endif
 	gwsetmulbyconst (&gwdata, prp_base);
 	iters = 0;
+	error_count_messages = IniGetInt (INI_FILE, "ErrorCountMessages", 3);
 	while (counter < Nlen - 1) {
 
 /* On first iteration create a save file so that writeNewErrorCount */
@@ -7515,6 +7589,12 @@ OutputStr (thread_num, "Iteration failed.\n");
 				 "Iteration: %%ld / %%ld [%%.%df%%%%]",
 				 PRECISION);
 			sprintf (buf, fmt_mask, counter, Nlen-1, pct);
+			/* Append a short form total errors message */
+			if (error_count_messages == 1)
+				make_error_count_message (error_count, error_count_messages,
+							  buf + strlen (buf),
+							  (int) (sizeof (buf) - strlen (buf)));
+			/* Append optional roundoff message */
 			if (ERRCHK && counter > 30) {
 				sprintf (buf+strlen(buf),
 					 ".  Round off: %10.10f to %10.10f",
@@ -7535,11 +7615,11 @@ OutputStr (thread_num, "Iteration failed.\n");
 			OutputStr (thread_num, buf);
 			first_iter_msg = FALSE;
 
-/* Output a message showing the error counts.  This way a user is likely to */
+/* Output a verbose message showing the error counts.  This way a user is likely to */
 /* notice a problem without reading the results.txt file. */
 
-			if (make_error_count_message (error_count, buf, sizeof (buf)) &&
-			    IniGetInt (INI_FILE, "ErrorCountMessages", 1))
+			if (error_count_messages >= 2 &&
+			    make_error_count_message (error_count, error_count_messages, buf, sizeof (buf)))
 				OutputStr (thread_num, buf);
 		}
 

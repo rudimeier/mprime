@@ -3,7 +3,7 @@
 |
 | This file contains handy #defines that I use in all my projects
 | 
-|  Copyright 2005 Mersenne Research, Inc.
+|  Copyright 2005-2010 Mersenne Research, Inc.
 |  All Rights Reserved.
 +---------------------------------------------------------------------*/
 
@@ -36,6 +36,15 @@
 #define ASSERTG		assert
 #else
 #define ASSERTG(a)
+#endif
+
+/* Define a "safe" strcpy.  The official C runtime library says that overlapping */
+/* buffers produce undefined results.  This safe strcpy allows overlapping */
+/* buffers by using memmove instead. */
+
+#define safe_strcpy(d,s)	memmove (d, s, strlen (s) + 1)
+#ifdef GDEBUG
+#define strcpy(d,s)	ASSERTG((d) >= ((s)+strlen(s)+1) || (s) >= (d)+strlen(s)+1), safe_strcpy(d,s)
 #endif
 
 #endif

@@ -9,7 +9,7 @@
 // THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
 // PARTICULAR PURPOSE.
 //
-// Copyright (c) 1997-2009 Mersenne Research, Inc. All Rights Reserved.
+// Copyright (c) 1997-2010 Mersenne Research, Inc. All Rights Reserved.
 //
 //  MODULE:   primenet.c
 //
@@ -593,7 +593,7 @@ size_t WriteMemoryCallback (
 int curl_trace (
 	CURL	*handle,
 	curl_infotype type,
-	unsigned char *data,
+	char	*data,
 	size_t	size,
 	void	*userp)
 {

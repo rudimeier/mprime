@@ -59,9 +59,9 @@ typedef double *gwnum;
 /* gwsetup verifies that the version numbers match.  This prevents bugs */
 /* from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"26.2"
+#define GWNUM_VERSION		"26.3"
 #define GWNUM_MAJOR_VERSION	26
-#define GWNUM_MINOR_VERSION	2
+#define GWNUM_MINOR_VERSION	3
 
 /* Error codes returned by the three gwsetup routines */
 
@@ -78,6 +78,10 @@ typedef double *gwnum;
 					/* gwinit call doesn't match size */
 					/* when gwnum.c was compiled.  Check */
 					/* compiler alignment switches. */
+
+/* Error codes returned by gwtobinary, gwtogiant, gwiszero, gwequal, and get_fft_value */
+
+#define GWERROR_BAD_FFT_DATA	-1	/* Nan or inf data encountered */
 
 /* Prior to calling gwsetup, you MUST CALL gwinit. This initializes the */
 /* gwhandle structure. It gives us a place to set rarely used gwsetup */
@@ -529,6 +533,24 @@ void gwsmallmul (gwhandle *gwdata, double mult, gwnum g);
 #define gwmulsmall(h,g,m) gwsmallmul(h,m,g)
 /* Replaced by better named gwsetaddinatpowerofb */
 #define gwsetaddinatbit(h,v,b)	gwsetaddinatpowerofb(h,v,b)
+
+/*-----------------------------------------------------------------+
+|                      GWNUM COMPARISON ROUTINES                   |
++-----------------------------------------------------------------*/
+
+/* Test if a gwnum is zero.  This routine was originally written by Jean Penne. */
+/* It has not been adequately tested and MAY NOT BE BUG-FREE.  Use at your own risk! */
+/* Returns TRUE if number is zero, FALSE if number is not zero, and a negative error */
+/* code if a problem is found. */
+
+int gwiszero (gwhandle *, gwnum);
+
+/* Test two gwnums for equality.  Written by Jean Penne.  Uses the gwiszero routine */
+/* which MAY NOT BE BUG-FREE.  Use this routine at your own risk! */
+/* Returns TRUE if number is zero, FALSE if number is not zero, and a negative error */
+/* code if a problem is found. */
+
+int gwequal (gwhandle *, gwnum, gwnum);
 
 /*---------------------------------------------------------------------+
 |                      GWNUM ERROR-CHECKING ROUTINES                   |

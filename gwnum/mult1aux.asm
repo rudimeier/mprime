@@ -20,7 +20,7 @@ _TEXT SEGMENT
 	flat_distances
 
 ;;
-;; Add two numbers without carry propogation.  Caller can use this for
+;; Add two numbers without carry propagation.  Caller can use this for
 ;; consecutive add or subtract operations.  However, the last operation
 ;; before a multiply must use the routine that will normalize data.
 ;;
@@ -51,7 +51,7 @@ uaddlp:	fld	QWORD PTR [ecx][edi*8-32] ; Load first number
 gwaddq1	ENDP
 
 ;;
-;; Add two numbers with carry propogation
+;; Add two numbers with carry propagation
 ;;
 
 PROCFL	gwadd1
@@ -76,7 +76,7 @@ gwadd1	ENDP
 
 
 ;;
-;; Subtract two numbers without carry propogation.  Caller can use this for
+;; Subtract two numbers without carry propagation.  Caller can use this for
 ;; consecutive add or subtract operations.  However, the last operation
 ;; before a multiply must use the routine that will normalize data.
 ;;
@@ -107,7 +107,7 @@ usublp:	fld	QWORD PTR [edx][edi*8-32] ; Load second number
 gwsubq1	ENDP
 
 ;;
-;; Subtract two numbers with carry propogation
+;; Subtract two numbers with carry propagation
 ;;
 
 PROCFL	gwsub1
@@ -132,7 +132,7 @@ gwsub1	ENDP
 
 
 ;;
-;; Add and subtract two numbers without carry propogation.
+;; Add and subtract two numbers without carry propagation.
 ;;
 
 PROCFL	gwaddsubq1
@@ -178,7 +178,7 @@ uaddsublp:
 gwaddsubq1 ENDP
 
 ;;
-;; Add and subtract two numbers with carry propogation
+;; Add and subtract two numbers with carry propagation
 ;;
 
 loopcount1	EQU	DPTR [rsp+first_local]
@@ -240,7 +240,7 @@ zlp2:	fld	QWORD PTR [esi]		; Copy low word
 gwcopyzero1 ENDP
 
 ;;
-;; Mul by a small value with carry propogation
+;; Mul by a small value with carry propagation
 ;;
 
 PROCFL	gwmuls1

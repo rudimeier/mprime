@@ -24,7 +24,6 @@ INCLUDE xmult.mac
 INCLUDE hg.mac
 INCLUDE r4.mac
 
-
 IFDEF X86_64
 X87_CASES	EQU	0
 ELSE
@@ -308,12 +307,11 @@ lab:	mov	rbx, 0			;; Offset for some sse2 macros (s.b. non-zero for with_mult ma
 ss0a:	mov	rdi, SRCARG		;; Reload work buf addr (sincos data)
 	lea	rsi, [rdi+4096]		;; Source & dest ptr
 	lea	rdx, [rsi+524288+256]	;; Destination for "g" macros
-align 16
 ss0b:	&ops
 IF memused NE 192
-;	lea	rdi, [rdi+2*XMM_SCD]	;; Next sine/cosine pointer
+	lea	rdi, [rdi+2*XMM_SCD]	;; Next sine/cosine pointer
 ELSE
-;	lea	rdi, [rdi+XMM_SCD1]	;; Next sine/cosine pointer
+	lea	rdi, [rdi+XMM_SCD1]	;; Next sine/cosine pointer
 ENDIF
 	dec	ecx
 	jnz	ss0b
@@ -332,7 +330,7 @@ sse2macbx MACRO	lab, memused, memarea, ops:vararg
 	ELSE
 	outer_iters = outer_iters + 1
 	ENDIF
-lab:	mov	rbx, 0;;262144+128		;; Offset for some sse2 macros (s.b. non-zero for with_mult macros)
+lab:	mov	rbx, 262144+128		;; Offset for some sse2 macros (s.b. non-zero for with_mult macros)
 	mov	rbp, 524288+256		;; Offset for mulf sse2 macros
 	mov	eax, outer_iters
 	mov	ecx, odd_iters
@@ -340,12 +338,11 @@ lab:	mov	rbx, 0;;262144+128		;; Offset for some sse2 macros (s.b. non-zero for w
 ss0a:	mov	rdi, SRCARG		;; Reload work buf addr (sincos data)
 	lea	rsi, [rdi+4096]		;; Source & dest ptr
 	lea	rdx, [rsi+524288+256]	;; Destination for "g" macros
-align 16
 ss0b:	&ops
 IF memused NE 192
-;	lea	rdi, [rdi+2*XMM_SCD]	;; Next sine/cosine pointer
+	lea	rdi, [rdi+2*XMM_SCD]	;; Next sine/cosine pointer
 ELSE
-;	lea	rdi, [rdi+XMM_SCD1]	;; Next sine/cosine pointer
+	lea	rdi, [rdi+XMM_SCD1]	;; Next sine/cosine pointer
 ENDIF
 	dec	ecx
 	jnz	ss0b

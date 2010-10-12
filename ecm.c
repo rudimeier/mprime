@@ -2406,6 +2406,88 @@ return 0;
 }
 #endif
 
+//#define TIMING606
+#ifdef TIMING606
+#ifndef GDEBUG			// These timings should only be done with gwnum compiled with -O2
+if (w->n == 606) {
+	gwhandle gwdata;
+	void *workbuf;
+	int	j;
+
+	RDTSC_TIMING = 12;
+	workbuf = (void *) aligned_malloc (40000000, 4096);
+	for (j = 0; j < 8; j++) {
+		double k; unsigned long b, n; signed long c;
+		int	jj, len;
+		gwnum	g;
+
+		if (j == 0) {
+			k = 1.0; b = 2; n = 1000001; c = -1;
+		}
+		if (j == 1) {
+			k = 1234567654321.0; b = 2; n = 1000001; c = -1;
+		}
+		if (j == 2) {
+			k = 1.0; b = 2; n = 1000001; c = 5599;
+		}
+		if (j == 3) {
+			k = 1234567654321.0; b = 2; n = 1000001; c = 5599;
+		}
+
+		if (j == 4) {
+			k = 1.0; b = 29; n = 205001; c = -1;
+		}
+		if (j == 5) {
+			k = 1234567654321.0; b = 29; n = 205001; c = -1;
+		}
+		if (j == 6) {
+			k = 1.0; b = 29; n = 205001; c = 5599;
+		}
+		if (j == 7) {
+			k = 1234567654321.0; b = 29; n = 205001; c = 5599;
+		}
+
+		gwinit (&gwdata);
+		start_timer (timers, 0);
+		gwsetup (&gwdata, k, b, n, c);
+		end_timer (timers, 0);
+		sprintf (buf, "gwsetup %s: ", gwmodulo_as_string (&gwdata));
+		print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+		OutputBoth (thread_num, buf);
+
+		g = gwalloc (&gwdata);
+		start_timer (timers, 0);
+		dbltogw (&gwdata, 55332211.0, g);
+		end_timer (timers, 0);
+		sprintf (buf, "dbltogw: ");
+		print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+		OutputBoth (thread_num, buf);
+
+		for (jj = 0; jj < 50; jj++) gwsquare (&gwdata, g);
+		start_timer (timers, 0);
+		len = gwtobinary (&gwdata, g, (uint32_t *) workbuf, 500000);
+		end_timer (timers, 0);
+		sprintf (buf, "gwtobinary: ");
+		print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+		OutputBoth (thread_num, buf);
+
+		start_timer (timers, 0);
+for ( ; ; ) {
+		binarytogw (&gwdata, (uint32_t *) workbuf, len, g);
+}
+		end_timer (timers, 0);
+		sprintf (buf, "binarytogw: ");
+		print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+		OutputBoth (thread_num, buf);
+
+		gwdone (&gwdata);
+	}
+	aligned_free (workbuf);
+	return 0;
+}
+#endif
+#endif
+
 /* Init filename */
 
 	tempFileName (w, filename);
@@ -2847,7 +2929,7 @@ skip_stage_2:	start_timer (timers, 0);
 
 restart3:
 	min_memory = cvt_gwnums_to_mem (&ecmdata.gwdata, 20);
-	if (max_mem () < min_memory) {
+	if (max_mem (thread_num) < min_memory) {
 		sprintf (buf, "Skipping stage 2 due to insufficient memory -- %ldMB needed.\n", min_memory);
 		OutputStr (thread_num, buf);
 		C = B;
@@ -3981,7 +4063,7 @@ int choose_pminus1_numvals (
 /* execution speed.  We must have a minimum of 5 temporaries. */
 
 	if (use_max_mem)
-		memory =  max_mem ();
+		memory =  max_mem (pm1data->thread_num);
 	else {
 		unsigned int min_memory, desired_memory;
 		min_memory = cvt_gwnums_to_mem (&pm1data->gwdata, 5);
@@ -5907,6 +5989,7 @@ double F (double x)
 /* Analyze how well P-1 factoring will perform */
 
 void guess_pminus1_bounds (
+	int	thread_num,
 	double	k,		/* K in K*B^N+C. Must be a positive integer. */
 	unsigned long b,	/* B in K*B^N+C. Must be two. */
 	unsigned long n,	/* N in K*B^N+C. Exponent to test. */
@@ -5953,7 +6036,7 @@ void guess_pminus1_bounds (
 /* Compute how many temporaries we can use given our memory constraints. */
 /* Allow 1MB for code and data structures. */
 
-	vals = cvt_mem_to_estimated_gwnums (max_mem (), k, b, n, c);
+	vals = cvt_mem_to_estimated_gwnums (max_mem (thread_num), k, b, n, c);
 	if (vals < 1) vals = 1;
 
 /* Find the best B1 */
@@ -6156,8 +6239,8 @@ int pfactor (
 /* Output a message that P-1 factoring is about to begin */
 
 	gw_as_string (testnum, w->k, w->b, w->n, w->c);
-	sprintf (buf, "Optimal P-1 factoring of %s using up to %dMB of memory.\n",
-		 testnum, max_mem ());
+	sprintf (buf, "Optimal P-1 factoring of %s using up to %luMB of memory.\n",
+		 testnum, max_mem (thread_num));
 	OutputStr (thread_num, buf);
 	sprintf (buf, "Assuming no factors below 2^%.2g and %.2g primality test%s saved if a factor is found.\n",
 		 w->sieve_depth, w->tests_saved,
@@ -6166,7 +6249,7 @@ int pfactor (
 
 /* Deduce the proper P-1 bounds */
 
-	guess_pminus1_bounds (w->k, w->b, w->n, w->c, w->sieve_depth,
+	guess_pminus1_bounds (thread_num, w->k, w->b, w->n, w->c, w->sieve_depth,
 			      w->tests_saved, &bound1, &bound2,
 			      &squarings, &prob);
 	if (bound1 == 0) {

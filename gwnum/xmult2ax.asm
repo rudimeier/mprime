@@ -19,10 +19,41 @@ INCLUDE xmult.mac
 INCLUDE memory.mac
 INCLUDE xnormal.mac
 
+; Internal routine to add in the two wraparound carries
+; I'd like to make this a subroutine, but it is too difficult
+; to get push_amt correct.
+
+final_carries_2 MACRO
+	LOCAL	b2c, zpc, b2zpc, c2dn
+
+	mov	rbp, norm_grp_mults	; Addr of the group multipliers
+	mov	rbx, norm_col_mults	; Addr of the column multipliers
+	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
+
+	cmp	ZERO_PADDED_FFT, 0	;; Zero-padded FFT?
+	jne	zpc			;; Yes, do special zpad carry
+
+	xnorm_top_carry_cmn rsi, xmm7, 2
+	sub	rax, rax		; Trashed by xnorm_top_carry_cmn
+	cmp	B_IS_2, 0		; Is this base 2?
+	jne	b2c			; yes, do simpler rounding
+	xnorm_smallmul_2d_fft noexec	; Add 2 carries to start of fft
+	jmp	c2dn
+b2c:	xnorm_smallmul_2d_fft exec	; Add 2 carries to start of fft
+	jmp	c2dn
+
+zpc:	cmp	B_IS_2, 0		; Is this base 2?
+	jne	b2zpc			; yes, do simpler rounding
+	xnorm_smallmul_2d_fft_zpad noexec ; Do the special zpad carry not base 2
+	jmp	c2dn
+b2zpc:	xnorm_smallmul_2d_fft_zpad exec	; Do the special zpad carry base 2
+c2dn:
+	ENDM
+
 _TEXT SEGMENT
 
 ;;
-;; Add two numbers without carry propogation.  Caller can use this for
+;; Add two numbers without carry propagation.  Caller can use this for
 ;; consecutive add or subtract operations.  However, the last operation
 ;; before a multiply must use the routine that will normalize data.
 ;;
@@ -34,18 +65,18 @@ PROCFL	gwxaddq2
 	mov	rsi, DESTARG		; Address of destination
 	mov	ebx, addcount1		; Load blk count
 uadd0:	mov	eax, normval4		; Load count of 8KB chunks in a block
-uaddlp:	movapd	xmm0, [rdx]		; Load second number
+uaddlp:	xload	xmm0, [rdx]		; Load second number
 	addpd	xmm0, [rcx]		; Add in first number
-	movapd	xmm1, [rdx+16]		; Load second number
+	xload	xmm1, [rdx+16]		; Load second number
 	addpd	xmm1, [rcx+16]		; Add in first number
-	movapd	xmm2, [rdx+32]		; Load second number
+	xload	xmm2, [rdx+32]		; Load second number
 	addpd	xmm2, [rcx+32]		; Add in first number
-	movapd	xmm3, [rdx+48]		; Load second number
+	xload	xmm3, [rdx+48]		; Load second number
 	addpd	xmm3, [rcx+48]		; Add in first number
-	movapd	[rsi], xmm0		; Save result
-	movapd	[rsi+16], xmm1		; Save result
-	movapd	[rsi+32], xmm2		; Save result
-	movapd	[rsi+48], xmm3		; Save result
+	xstore	[rsi], xmm0		; Save result
+	xstore	[rsi+16], xmm1		; Save result
+	xstore	[rsi+32], xmm2		; Save result
+	xstore	[rsi+48], xmm3		; Save result
 	bump	rcx, 64			; Next source
 	bump	rdx, 64			; Next source
 	bump	rsi, 64			; Next dest
@@ -65,7 +96,7 @@ uaddlp:	movapd	xmm0, [rdx]		; Load second number
 gwxaddq2 ENDP
 
 ;;
-;; Add two numbers with carry propogation
+;; Add two numbers with carry propagation
 ;;
 
 saved_reg	EQU	PPTR [rsp+first_local]
@@ -82,11 +113,11 @@ PROCFL	gwxadd2
 	mov	rsi, DESTARG		; Address of destination
 	mov	rbp, norm_grp_mults	; Addr of the group multipliers
 	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
-	movapd	xmm7, XMM_BIGVAL	; Init 4 carries
-	movapd	XMM_TMP1, xmm7
-	movapd	XMM_TMP2, xmm7
-	movapd	XMM_TMP3, xmm7
-	movapd	XMM_TMP4, xmm7
+	xload	xmm7, XMM_BIGVAL	; Init 4 carries
+	xstore	XMM_TMP1, xmm7
+	xstore	XMM_TMP2, xmm7
+	xstore	XMM_TMP3, xmm7
+	xstore	XMM_TMP4, xmm7
 	mov	eax, count3		; Load 3 section counts
 
 	;; Do a section
@@ -179,17 +210,15 @@ askip2:	dec	loopcount2		; Decrement outer loop counter
 	;; All sections done
 
 	mov	rsi, DESTARG		; Addr of FFT data
-	movapd	xmm7, XMM_TMP3		; Load wraparound carry
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	mov	rbp, norm_grp_mults	; Addr of the group multipliers
-	movapd	xmm6, XMM_TMP1		; Load non-wraparound carry
-	xnorm_op_2d_fft			; Add 2 carries to start of fft
+	xload	xmm6, XMM_TMP1		; Load non-wraparound carry
+	xload	xmm7, XMM_TMP3		; Load wraparound carry
+	final_carries_2			; Add the carries back in
 
 	ad_epilog SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 gwxadd2 ENDP
 
 ;;
-;; Subtract two numbers without carry propogation.  Caller can use this for
+;; Subtract two numbers without carry propagation.  Caller can use this for
 ;; consecutive add or subtract operations.  However, the last operation
 ;; before a multiply must use the routine that will normalize data.
 ;;
@@ -201,18 +230,18 @@ PROCFL	gwxsubq2
 	mov	rsi, DESTARG		; Address of destination
 	mov	ebx, addcount1		; Load blk count
 usub0:	mov	eax, normval4		; Load count of 8KB chunks in a block
-usublp:	movapd	xmm0, [rdx]		; Load second number
+usublp:	xload	xmm0, [rdx]		; Load second number
 	subpd	xmm0, [rcx]		; Subtract first number
-	movapd	xmm1, [rdx+16]		; Load second number
+	xload	xmm1, [rdx+16]		; Load second number
 	subpd	xmm1, [rcx+16]		; Subtract first number
-	movapd	xmm2, [rdx+32]		; Load second number
+	xload	xmm2, [rdx+32]		; Load second number
 	subpd	xmm2, [rcx+32]		; Subtract first number
-	movapd	xmm3, [rdx+48]		; Load second number
+	xload	xmm3, [rdx+48]		; Load second number
 	subpd	xmm3, [rcx+48]		; Subtract first number
-	movapd	[rsi], xmm0		; Save result
-	movapd	[rsi+16], xmm1		; Save result
-	movapd	[rsi+32], xmm2		; Save result
-	movapd	[rsi+48], xmm3		; Save result
+	xstore	[rsi], xmm0		; Save result
+	xstore	[rsi+16], xmm1		; Save result
+	xstore	[rsi+32], xmm2		; Save result
+	xstore	[rsi+48], xmm3		; Save result
 	bump	rcx, 64			; Next source
 	bump	rdx, 64			; Next source
 	bump	rsi, 64			; Next dest
@@ -232,7 +261,7 @@ usublp:	movapd	xmm0, [rdx]		; Load second number
 gwxsubq2 ENDP
 
 ;;
-;; Subtract two numbers with carry propogation
+;; Subtract two numbers with carry propagation
 ;;
 
 saved_reg	EQU	PPTR [rsp+first_local]
@@ -249,11 +278,11 @@ PROCFL	gwxsub2
 	mov	rsi, DESTARG		; Address of destination
 	mov	rbp, norm_grp_mults	; Addr of the group multipliers
 	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
-	movapd	xmm7, XMM_BIGVAL	; Init 4 carries
-	movapd	XMM_TMP1, xmm7
-	movapd	XMM_TMP2, xmm7
-	movapd	XMM_TMP3, xmm7
-	movapd	XMM_TMP4, xmm7
+	xload	xmm7, XMM_BIGVAL	; Init 4 carries
+	xstore	XMM_TMP1, xmm7
+	xstore	XMM_TMP2, xmm7
+	xstore	XMM_TMP3, xmm7
+	xstore	XMM_TMP4, xmm7
 	mov	eax, count3		; Load 3 section counts
 
 	;; Do a section
@@ -346,17 +375,15 @@ sskip2:	dec	loopcount2		; Decrement outer loop counter
 	;; All sections done
 
 	mov	rsi, DESTARG		; Addr of FFT data
-	movapd	xmm7, XMM_TMP3		; Load wraparound carry
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	mov	rbp, norm_grp_mults	; Addr of the group multipliers
-	movapd	xmm6, XMM_TMP1		; Load non-wraparound carry
-	xnorm_op_2d_fft			; Add 2 carries to start of fft
+	xload	xmm6, XMM_TMP1		; Load non-wraparound carry
+	xload	xmm7, XMM_TMP3		; Load wraparound carry
+	final_carries_2			; Add the carries back in
 
 	ad_epilog SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 gwxsub2 ENDP
 
 ;;
-;; Add and subtract two numbers without carry propogation.
+;; Add and subtract two numbers without carry propagation.
 ;;
 
 PROCFL	gwxaddsubq2
@@ -368,30 +395,30 @@ PROCFL	gwxaddsubq2
 	mov	ebx, addcount1		; Load blk count
 uaddsub0:mov	eax, normval4		; Load count of 8KB chunks in a block
 uaddsublp:
-	movapd	xmm0, [rcx]		; Load first number
-	movapd	xmm1, xmm0		; Dup first number
+	xload	xmm0, [rcx]		; Load first number
+	xcopy	xmm1, xmm0		; Dup first number
 	addpd	xmm0, [rdx]		; Add in second number
 	subpd	xmm1, [rdx]		; Subtract out second number
-	movapd	xmm2, [rcx+16]		; Load first number
-	movapd	xmm3, xmm2		; Dup first number
+	xload	xmm2, [rcx+16]		; Load first number
+	xcopy	xmm3, xmm2		; Dup first number
 	addpd	xmm2, [rdx+16]		; Add in second number
 	subpd	xmm3, [rdx+16]		; Subtract out second number
-	movapd	xmm4, [rcx+32]		; Load first number
-	movapd	xmm5, xmm4		; Dup first number
+	xload	xmm4, [rcx+32]		; Load first number
+	xcopy	xmm5, xmm4		; Dup first number
 	addpd	xmm4, [rdx+32]		; Add in second number
 	subpd	xmm5, [rdx+32]		; Subtract out second number
-	movapd	xmm6, [rcx+48]		; Load first number
-	movapd	xmm7, xmm6		; Dup first number
+	xload	xmm6, [rcx+48]		; Load first number
+	xcopy	xmm7, xmm6		; Dup first number
 	addpd	xmm6, [rdx+48]		; Add in second number
 	subpd	xmm7, [rdx+48]		; Subtract out second number
-	movapd	[rsi], xmm0		; Save result
-	movapd	[rbp], xmm1		; Save result
-	movapd	[rsi+16], xmm2		; Save result
-	movapd	[rbp+16], xmm3		; Save result
-	movapd	[rsi+32], xmm4		; Save result
-	movapd	[rbp+32], xmm5		; Save result
-	movapd	[rsi+48], xmm6		; Save result
-	movapd	[rbp+48], xmm7		; Save result
+	xstore	[rsi], xmm0		; Save result
+	xstore	[rbp], xmm1		; Save result
+	xstore	[rsi+16], xmm2		; Save result
+	xstore	[rbp+16], xmm3		; Save result
+	xstore	[rsi+32], xmm4		; Save result
+	xstore	[rbp+32], xmm5		; Save result
+	xstore	[rsi+48], xmm6		; Save result
+	xstore	[rbp+48], xmm7		; Save result
 	bump	rcx, 64			; Next source
 	bump	rdx, 64			; Next source
 	bump	rsi, 64			; Next dest
@@ -414,7 +441,7 @@ uaddsublp:
 gwxaddsubq2 ENDP
 
 ;;
-;; Add and subtract two numbers with carry propogation
+;; Add and subtract two numbers with carry propagation
 ;;
 
 saved_dest1_ptr	EQU	PPTR [rsp+first_local+0*SZPTR]
@@ -435,15 +462,15 @@ PROCFL	gwxaddsub2
 	mov	rbp, DEST2ARG	  	; Address of destination #2
 	mov	rbx, norm_grp_mults	; Addr of the group multipliers
 	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
-	movapd	xmm7, XMM_BIGVAL	; Init 8 carries
-	movapd	XMM_TMP1, xmm7
-	movapd	XMM_TMP2, xmm7
-	movapd	XMM_TMP3, xmm7
-	movapd	XMM_TMP4, xmm7
-	movapd	XMM_TMP5, xmm7
-	movapd	XMM_TMP6, xmm7
-	movapd	XMM_TMP7, xmm7
-	movapd	XMM_TMP8, xmm7
+	xload	xmm7, XMM_BIGVAL	; Init 8 carries
+	xstore	XMM_TMP1, xmm7
+	xstore	XMM_TMP2, xmm7
+	xstore	XMM_TMP3, xmm7
+	xstore	XMM_TMP4, xmm7
+	xstore	XMM_TMP5, xmm7
+	xstore	XMM_TMP6, xmm7
+	xstore	XMM_TMP7, xmm7
+	xstore	XMM_TMP8, xmm7
 	mov	eax, count3		; Load 3 section counts
 
 	;; Do a section
@@ -554,18 +581,19 @@ asskip2:dec	loopcount2		; Decrement outer loop counter
 
 	;; All sections done
 
+	xload	xmm6, XMM_TMP5		; Load non-wraparound carry
+	xstore	XMM_TMP8, xmm6		; Save carry, final_carries_2 destroys XMM1-6
+
 	mov	rsi, DESTARG		; Addr of FFT data
-	movapd	xmm7, XMM_TMP3		; Load wraparound carry
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	mov	rbp, norm_grp_mults	; Addr of the group multipliers
-	movapd	xmm6, XMM_TMP1		; Load non-wraparound carry
-	xnorm_op_2d_fft			; Add 2 carries to start of fft
+	xload	xmm6, XMM_TMP1		; Load non-wraparound carry
+	xload	xmm7, XMM_TMP3		; Load wraparound carry
+	final_carries_2			; Add the carries back in
 
 	mov	rsi, DEST2ARG		; Addr of FFT data
-	movapd	xmm7, XMM_TMP7		; Load wraparound carry
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	movapd	xmm6, XMM_TMP5		; Load non-wraparound carry
-	xnorm_op_2d_fft			; Add 2 carries to start of fft
+	xload	xmm6, XMM_TMP8		; Load non-wraparound carry
+	xload	xmm7, XMM_TMP7		; Load wraparound carry
+	final_carries_2			; Add the carries back in
+
 	ad_epilog 4*SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 gwxaddsub2 ENDP
 
@@ -600,7 +628,7 @@ cz2:	xcopyzero
 gwxcopyzero2 ENDP
 
 ;;
-;; Add in a small number with carry propogation
+;; Add in a small number with carry propagation
 ;;
 
 PROCFL	gwxadds2
@@ -621,7 +649,7 @@ addsmdn:
 gwxadds2 ENDP
 
 ;;
-;; Multiply a number by a small value with carry propogation
+;; Multiply a number by a small value with carry propagation
 ;;
 
 saved_sec_biglit EQU	PPTR [rsp+first_local+0*SZPTR]
@@ -643,12 +671,12 @@ PROCFL	gwxmuls2
 	cmp	RATIONAL_FFT, 0		; Test for irrational FFTs
 	jne	skip			; No, skip mul by two-to-phi fudge factor
 	mulpd	xmm0, XMM_NORM012_FF	; Mul by FFTLEN/2
-skip:	movapd	XMM_TMP5, xmm0		; Save small value * FFTLEN/2
-	movapd	xmm7, XMM_BIGVAL	; Init 4 carries
-	movapd	XMM_TMP1, xmm7
-	movapd	XMM_TMP2, xmm7
-	movapd	XMM_TMP3, xmm7
-	movapd	XMM_TMP4, xmm7
+skip:	xstore	XMM_TMP5, xmm0		; Save small value * FFTLEN/2
+	xload	xmm7, XMM_BIGVAL	; Init 4 carries
+	xstore	XMM_TMP1, xmm7
+	xstore	XMM_TMP2, xmm7
+	xstore	XMM_TMP3, xmm7
+	xstore	XMM_TMP4, xmm7
 	mov	eax, count3		; Load 3 section counts
 
 	;; Do a section
@@ -754,31 +782,9 @@ msecdn:	mov	rsi, norm_ptr1		; Restore next section start ptr
 	;; All sections done
 
 	mov	rsi, DESTARG		; Addr of FFT data
-	movapd	xmm6, XMM_TMP1		; Load non-wraparound carry
-	movapd	xmm7, XMM_TMP3		; Load wraparound carry
-	mov	rbp, norm_grp_mults	; Addr of the group multipliers
-	mov	rbx, norm_col_mults	; Addr of the column multipliers
-	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
-
-	cmp	ZERO_PADDED_FFT, 0	;; Zero-padded FFT?
-	jne	mulzp			;; Yes, do special zpad carry
-
-	xnorm_top_carry_cmn rsi, xmm7, 2
-	sub	rax, rax		; Trashed by xnorm_top_carry_cmn
-	cmp	B_IS_2, 0		; Is this base 2?
-	jne	b2mfft			; yes, do simpler rounding
-	xnorm_smallmul_2d_fft noexec	; Add 2 carries to start of fft
-	jmp	muldn
-b2mfft:	xnorm_smallmul_2d_fft exec	; Add 2 carries to start of fft
-	jmp	muldn
-
-mulzp:	cmp	B_IS_2, 0		; Is this base 2?
-	jne	b2mzpfft		; yes, do simpler rounding
-	xnorm_smallmul_2d_fft_zpad noexec ; Do the special zpad carry not base 2
-	jmp	muldn
-b2mzpfft:
-	xnorm_smallmul_2d_fft_zpad exec	; Do the special zpad carry base 2
-muldn:
+	xload	xmm6, XMM_TMP1		; Load non-wraparound carry
+	xload	xmm7, XMM_TMP3		; Load wraparound carry
+	final_carries_2			; Add the carries back in
 
 	ad_epilog 3*SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 gwxmuls2 ENDP

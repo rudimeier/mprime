@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved
 +---------------------------------------------------------------------*/
 
 //#define SERVER_TESTING
@@ -118,7 +118,7 @@ void stop_worker_for_abort (int);
 /* Routines dealing with day/night memory settings */
 
 void mem_settings_have_changed (void);
-unsigned int max_mem (void);
+unsigned long max_mem (int);
 int avail_mem (int, unsigned long, unsigned long, unsigned int *);
 int set_memory_usage (int, int, unsigned long);
 
