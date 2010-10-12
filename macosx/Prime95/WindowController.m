@@ -258,7 +258,6 @@ void base_title (
 // Free resources
 
 	[pool drain];
-	[pool release];
 }
 
 /* Put a title on the window */
@@ -311,7 +310,6 @@ void title (
 // Free resources
 
 	[pool drain];
-	[pool release];
 }
 
 void flashWindowAndBeep (void)
@@ -395,7 +393,6 @@ static	int	partial_line_output[MAX_VIEWS] = {FALSE};
 
 done:	gwmutex_unlock (&VIEW_MUTEX);
 	[pool drain];
-	[pool release];
 }
 
 void BlinkIcon (int thread_num, int x)

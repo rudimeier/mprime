@@ -14,7 +14,8 @@
 #define IDH_TIME                        20
 #define IDH_PMINUS1                     21
 #define IDH_ECM                         22
-#define IDH_ERRCHK                      23
+#define IDH_SUMINP_ERRCHK               23
+#define IDH_ERRCHK                      24
 #define IDH_MANUALCOMM                  26
 #define IDH_QUIT                        27
 #define IDH_CPU                         28
@@ -141,7 +142,8 @@
 #define IDM_CONTINUE                    32771
 #define IDM_STOP_SWITCHER               32772
 #define IDM_STOP                        32773
-#define IDM_ERRCHK                      32774
+#define IDM_SUMINP_ERRCHK               32774
+#define IDM_ERRCHK                      32775
 #define IDM_TEST                        32777
 #define IDM_TIME                        32778
 #define IDM_PREFERENCES                 32781

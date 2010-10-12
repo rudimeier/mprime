@@ -329,6 +329,11 @@ int main (
 		linuxContinue ("Another mprime is already running!\n", ALL_WORKERS, TRUE);
 	}
 
+/* Write the worktodo file in case the WELL_BEHAVED_WORK flag caused us */
+/* to delay writing the file. */
+
+	writeWorkToDoFile (TRUE);
+
 /* All done */
 
 	return (0);

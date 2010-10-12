@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/24/09.
-//  Copyright 2009 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2010 Mersenne Research, Inc. All rights reserved.
 //
 
 #import "TestController.h"
@@ -40,6 +40,8 @@
 - (IBAction)ok:(id)sender
 {
 	struct work_unit w;
+
+	[[self window] makeFirstResponder:nil];			// End any active text field edits
 
 	memset (&w, 0, sizeof (w));
 	w.work_type = WORK_ADVANCEDTEST;

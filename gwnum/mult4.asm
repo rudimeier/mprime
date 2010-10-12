@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -39,8 +39,6 @@ _TEXT SEGMENT
 	flat_distances
 
 ;; All the FFT routines for each FFT length
-
-	EXPANDING = 2
 
 ;; Distance between two pass 2 data blocks.  Pass 2 does 12 FFT levels.
 ;; 2^12 complex values = 2^13 doubles = 64KB.

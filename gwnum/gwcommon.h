@@ -3,7 +3,7 @@
 |
 | This file contains handy #defines that I use in all my projects
 | 
-|  Copyright 2005-2007 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2005-2010 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 #ifndef _GWCOMMON_H
@@ -39,11 +39,12 @@ typedef unsigned int		uintptr_t;
 
 /* Define the ASSERT macro I use while debugging */
 
-#ifdef GDEBUG
 #include <assert.h>
+#ifdef GDEBUG
 #define ASSERTG		assert
 #else
 #define ASSERTG(a)
 #endif
+#define GWASSERT  	assert
 
 #endif

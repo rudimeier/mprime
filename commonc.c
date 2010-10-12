@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
@@ -11,7 +11,7 @@
 | Commonc contains information used during setup and execution
 +---------------------------------------------------------------------*/
 
-char JUNK[]="Copyright 1996-2009 Mersenne Research, Inc. All rights reserved";
+char JUNK[]="Copyright 1996-2010 Mersenne Research, Inc. All rights reserved";
 
 char	INI_FILE[80] = {0};
 char	LOCALINI_FILE[80] = {0};
@@ -31,6 +31,7 @@ int	DIAL_UP = 0;
 unsigned int DAYS_OF_WORK = 5;
 int	STRESS_TESTER = 0;
 int volatile ERRCHK = 0;
+int volatile SUM_INPUTS_ERRCHK = 0;	/* 1 to turn on sum(inputs) != sum(outputs) error checking */
 unsigned int PRIORITY = 1;
 unsigned int NUM_WORKER_THREADS = 1; /* Number of work threads to launch */
 unsigned int WORK_PREFERENCE[MAX_NUM_WORKER_THREADS] = {0};
@@ -363,6 +364,10 @@ void getCpuInfo (void)
 		IniGetInt (LOCALINI_FILE, "CpuNumHyperthreads", CPU_HYPERTHREADS);
 	if (CPU_HYPERTHREADS == 0) CPU_HYPERTHREADS = 1;
 
+/* Let user override the CPU architecture */
+
+	CPU_ARCHITECTURE = IniGetInt (LOCALINI_FILE, "CpuArchitecture", CPU_ARCHITECTURE);
+
 /* Now get the CPU speed */
 
 	getCpuSpeed ();
@@ -385,9 +390,9 @@ void getCpuDescription (
 	sprintf (buf, "%s\nCPU speed: %.2f MHz", CPU_BRAND, CPU_SPEED);
 	if (NUM_CPUS > 1 && CPU_HYPERTHREADS > 1)
 		sprintf (buf + strlen (buf),
-			 ", %d hyperthreaded cores", NUM_CPUS);
+			 ", %lu hyperthreaded cores", NUM_CPUS);
 	else if (NUM_CPUS > 1)
-		sprintf (buf + strlen (buf), ", %d cores", NUM_CPUS);
+		sprintf (buf + strlen (buf), ", %lu cores", NUM_CPUS);
 	else if (CPU_HYPERTHREADS > 1)
 		sprintf (buf + strlen (buf), ", with hyperthreading");
 	strcat (buf, "\n");
@@ -585,7 +590,7 @@ int read_memory_settings (
 void nameAndReadIniFiles (
 	int	named_ini_files)
 {
-	char	buf[120];
+	char	buf[513];
 
 /* Initialize mutexes */
 
@@ -669,6 +674,35 @@ void nameAndReadIniFiles (
 		STRESS_TESTER = 0;
 		IniWriteInt (INI_FILE, "StressTester", 0);
 	}
+
+/* Output our calculated CPU architecture and characteristics */
+
+	sprintf (buf, "Optimizing for CPU architecture: %s, ",
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_PRE_SSE2 ? "Pre-SSE2" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_PENTIUM_4 ? "Pentium 4" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_PENTIUM_M ? "Pentium M" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_CORE ? "Core Solo/Duo" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_CORE_2 ? "Core 2" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_CORE_I7 ? "Core i3/i5/i7/i9" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_ATOM ? "Atom" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_INTEL_OTHER ? "Unknown Intel" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_AMD_K8 ? "AMD K8" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_AMD_K10 ? "AMD K10" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_OTHER ? "Not Intel and not AMD" : "Undefined");
+	strcat (buf, "L2 cache size: ");
+	if (CPU_L2_CACHE_SIZE < 0) strcat (buf, "unknown");
+	else if (CPU_L2_CACHE_SIZE & 0x3FF)
+		sprintf (buf + strlen (buf), "%d KB", CPU_L2_CACHE_SIZE);
+	else
+		sprintf (buf + strlen (buf), "%d MB", CPU_L2_CACHE_SIZE >> 10);
+	if (CPU_L3_CACHE_SIZE > 0) {
+		if (CPU_L3_CACHE_SIZE & 0x3FF)
+			sprintf (buf + strlen (buf), ", L3 cache size: %d KB", CPU_L3_CACHE_SIZE);
+		else
+			sprintf (buf + strlen (buf), ", L3 cache size: %d MB", CPU_L3_CACHE_SIZE >> 10);
+	}
+	strcat (buf, "\n");
+	OutputStr (MAIN_THREAD_NUM, buf);
 
 /* Start some initial timers */
 
@@ -788,6 +822,8 @@ int readIniFiles (void)
 	STRESS_TESTER = (int) IniGetInt (INI_FILE, "StressTester", 99);
 	temp = (int) IniGetInt (INI_FILE, "ErrorCheck", 0);
 	ERRCHK = (temp != 0);
+	temp = (int) IniGetInt (INI_FILE, "SumInputsErrorCheck", 0);
+	SUM_INPUTS_ERRCHK = (temp != 0);
 	NUM_WORKER_THREADS = IniGetInt (LOCALINI_FILE, "WorkerThreads", NUM_CPUS);
 	if (NUM_WORKER_THREADS > MAX_NUM_WORKER_THREADS)
 		NUM_WORKER_THREADS = MAX_NUM_WORKER_THREADS;
@@ -1035,7 +1071,7 @@ static	struct IniCache *cache[10] = {0};
 			val = strchr (line, '=');
 			if (val == NULL) {
 				char	buf[1200];
-				sprintf (buf, "Illegal line in INI file: %s\n", line);
+				sprintf (buf, "Illegal line in %s: %s\n", newFileName, line);
 				OutputSomewhere (MAIN_THREAD_NUM, buf);
 				p->lines[i]->keyword = NULL;
 				p->lines[i]->value = (char *) malloc (strlen (line) + 1);
@@ -2606,7 +2642,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 		float	sieve_depth;
 		w->work_type = WORK_TEST;
 		sieve_depth = 0.0;
-		sscanf (value, "%lu,%f,%ld",
+		sscanf (value, "%lu,%f,%d",
 				&w->n, &sieve_depth, &w->pminus1ed);
 		w->sieve_depth = sieve_depth;
 		w->tests_saved = 2.0;
@@ -2615,7 +2651,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 		float	sieve_depth;
 		w->work_type = WORK_DBLCHK;
 		sieve_depth = 0.0;
-		sscanf (value, "%lu,%f,%ld",
+		sscanf (value, "%lu,%f,%d",
 				&w->n, &sieve_depth, &w->pminus1ed);
 		w->sieve_depth = sieve_depth;
 		w->tests_saved = 1.0;
@@ -2666,7 +2702,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 			w->tests_saved = tests_saved;
 		} else {				/* Old style */
 			int	dblchk;
-			sscanf (value, "%lu,%f,%ld",
+			sscanf (value, "%lu,%f,%d",
 				&w->n, &sieve_depth, &dblchk);
 			w->sieve_depth = sieve_depth;
 			w->tests_saved = dblchk ? 1.0 : 2.0;
@@ -3096,12 +3132,12 @@ int writeWorkToDoFile (
 			break;
 
 		case WORK_TEST:
-			sprintf (buf, "Test=%s%lu,%.0f,%ld",
+			sprintf (buf, "Test=%s%lu,%.0f,%d",
 				 idbuf, w->n, w->sieve_depth, w->pminus1ed);
 			break;
 
 		case WORK_DBLCHK:
-			sprintf (buf, "DoubleCheck=%s%lu,%.0f,%ld",
+			sprintf (buf, "DoubleCheck=%s%lu,%.0f,%d",
 				 idbuf, w->n, w->sieve_depth, w->pminus1ed);
 			break;
 
@@ -3944,7 +3980,7 @@ void tempFileName (
 		buf[1] = 0;
 		if (w->k != 1.0) sprintf (buf+strlen(buf), "%g", fmod (w->k, 1000000.0));
 		sprintf (buf+strlen(buf), "_%ld", p);
-		if (abs(w->c) != 1) sprintf (buf+strlen(buf), "_%ld", abs(w->c) % 1000);
+		if (abs(w->c) != 1) sprintf (buf+strlen(buf), "_%d", abs(w->c) % 1000);
 		rename (v258_filename, buf);
 		if (buf[0] == 'p') {
 			v258_filename[0] = buf[0] = 'q';
@@ -4774,7 +4810,7 @@ int unreserve (
 
 	if (!found_one) {
 		char	buf[90];
-		sprintf (buf, "Error unreserving exponent: %d not found in worktodo.txt\n", p);
+		sprintf (buf, "Error unreserving exponent: %lu not found in worktodo.txt\n", p);
 		OutputStr (MAIN_THREAD_NUM, buf);
 	}
 
@@ -5847,7 +5883,7 @@ retry:
 		     pkt1.work_type == PRIMENET_WORK_TYPE_PFACTOR ||
 		     pkt1.work_type == PRIMENET_WORK_TYPE_FIRST_LL ||
 		     pkt1.work_type == PRIMENET_WORK_TYPE_DBLCHK)) {
-			sprintf (buf, "Server sent bad exponent: %ld.\n", pkt1.n);
+			sprintf (buf, "Server sent bad exponent: %lu.\n", (unsigned long) pkt1.n);
 			LogMsg (buf);
 			goto error_exit;
 		}
@@ -5908,8 +5944,8 @@ retry:
 			w.tests_saved = pkt1.tests_saved;
 			break;
 		default:
-			sprintf (buf, "Received unknown work type: %ld.\n",
-				 pkt1.work_type);
+			sprintf (buf, "Received unknown work type: %lu.\n",
+				 (unsigned long) pkt1.work_type);
 			LogMsg (buf);
 			goto error_exit;
 		}

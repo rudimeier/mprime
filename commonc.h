@@ -1,8 +1,8 @@
-/* Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved */
+/* Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved */
 
 /* Constants */
 
-#define VERSION		"25.12"
+#define VERSION		"26.2"
 #define BUILD_NUM	"1"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
@@ -126,7 +126,8 @@ extern unsigned int THREADS_PER_TEST[MAX_NUM_WORKER_THREADS];
 extern unsigned int DAYS_OF_WORK;	/* How much work to retrieve from */
 					/* the primenet server */
 extern int STRESS_TESTER;		/* 1 if stress testing */
-extern int volatile ERRCHK;		/* 1 to turn on error checking */
+extern int volatile ERRCHK;		/* 1 to turn on roundoff error checking */
+extern int volatile SUM_INPUTS_ERRCHK;	/* 1 to turn on sum(inputs) != sum(outputs) error checking */
 extern unsigned int PRIORITY;		/* Desired priority level */
 extern int MANUAL_COMM;			/* Set on if user explicitly starts */
 					/* all communication with the server */

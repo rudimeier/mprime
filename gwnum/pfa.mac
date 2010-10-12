@@ -134,7 +134,7 @@ cp_two_five_reals_first_fft MACRO srcreg, d1, d5, dstreg, e1, e5
 ; producing five real results.
 ; NOTE: Optimal = 40 clocks, Actual = 40 clocks
 
-; Using Hermetian symettry, we really have 5 complex values:
+; Using Hermetian symmetry, we really have 5 complex values:
 ; R1 + 0i, R2 + I2i, R3 + I3i, R3 - I3i, R2 - I2i.
 ; Now, use the standard brute force inverse FFT algorithm to compute the
 ; resulting value of R1.  We get, R1 = 1/5 *

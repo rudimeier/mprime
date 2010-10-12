@@ -2362,8 +2362,7 @@ if (w->n == 600) {
 gwhandle gwdata;
 void *workbuf;
 int j, min_test, max_test, test, cnt, NUM_X87_TESTS, NUM_SSE2_TESTS;
-#define timeit(a,n,w) (((void**)a)[0]=w,((uint32_t*)a)[2]=n,(*timeitptr)(a))
-int (*timeitptr)(void*); /* Ptrs to assembly routine */
+#define timeit(a,n,w) (((void**)a)[0]=w,((uint32_t*)a)[2]=n,gwtimeit(a))
 
 gwinit (&gwdata);
 gwsetup (&gwdata, 1.0, 2, 10000000, -1);
@@ -2372,8 +2371,6 @@ memset (workbuf, 0, 40000000);
 RDTSC_TIMING = 12;
 min_test = IniGetInt (INI_FILE, "MinTest", 0);
 max_test = IniGetInt (INI_FILE, "MaxTest", min_test);
-/* Time either Opteron optimized or P4 optimized SSE2 macros */
-timeitptr = (CPU_FLAGS & CPU_3DNOW) ? gwtimeitAMD : gwtimeit;
 NUM_X87_TESTS = timeit (gwdata.asm_data, -1, NULL);
 NUM_SSE2_TESTS = timeit (gwdata.asm_data, -2, NULL);
 //SetThreadPriority (CURRENT_THREAD, THREAD_PRIORITY_TIME_CRITICAL);
@@ -2443,6 +2440,7 @@ return 0;
 /* Setup the gwnum assembly code */
 
 	gwinit (&ecmdata.gwdata);
+	gwset_sum_inputs_checking (&ecmdata.gwdata, SUM_INPUTS_ERRCHK);
 	gwset_num_threads (&ecmdata.gwdata, THREADS_PER_TEST[thread_num]);
 	gwset_thread_callback (&ecmdata.gwdata, SetAuxThreadPriority);
 	gwset_thread_callback_data (&ecmdata.gwdata, sp_info);
@@ -3231,7 +3229,7 @@ more_curves:
 
 /* Output line to results file indicating the number of curves run */
 
-	sprintf (buf, "%s completed %ld ECM %s, B1=%.0f, B2=%.0f, Wd%d: %08lX\n",
+	sprintf (buf, "%s completed %u ECM %s, B1=%.0f, B2=%.0f, We%d: %08lX\n",
 		 gwmodulo_as_string (&ecmdata.gwdata), w->curves_to_do,
 		 w->curves_to_do == 1 ? "curve" : "curves",
 		 (double) B, (double) C, PORT, SEC5 (w->n, B, C));
@@ -3292,7 +3290,7 @@ bingo:	sprintf (buf, "ECM found a factor in curve #%ld, stage #%d\n",
 /* Allocate memory for the string representation of the factor and for */
 /* a message.  Convert the factor to a string. */ 
 
-	msglen = factor->sign * 10 + 200;
+	msglen = factor->sign * 10 + 400;
 	str = (char *) malloc (msglen);
 	if (str == NULL) goto oom;
 	msg = (char *) malloc (msglen);
@@ -3446,9 +3444,9 @@ int ecm_QA (
 /* Read a line from the file */
 
 		n = 0;
-		fscanf (fd, "%f,%lu,%lu,%ld,%lf,%lu,%lu,%lu,%s\n",
+		fscanf (fd, "%lf,%lu,%lu,%ld,%lf,%lu,%lu,%lu,%s\n",
 			&k, &b, &n, &c, &sigma, &B1, &B2_start, &B2_end,
-			&fac_str);
+			fac_str);
 		if (n == 0) break;
 
 /* If b is 1, set QA_TYPE */
@@ -4560,6 +4558,7 @@ restart:
 /* Setup the assembly code */
 
 	gwinit (&pm1data.gwdata);
+	gwset_sum_inputs_checking (&pm1data.gwdata, SUM_INPUTS_ERRCHK);
 	if (IniGetInt (LOCALINI_FILE, "UseLargePages", 0))
 		gwset_use_large_pages (&pm1data.gwdata);
 	gwset_num_threads (&pm1data.gwdata, THREADS_PER_TEST[thread_num]);
@@ -5164,7 +5163,7 @@ replan:	stop_reason = choose_pminus1_implementation (&pm1data, w, &using_t3);
 	if (set_memory_usage (thread_num, MEM_VARIABLE_USAGE, memused))
 		goto replan;
 	sprintf (buf,
-		 "Using %dMB of memory.  Processing %d relative primes (%d of %d already processed).\n",
+		 "Using %luMB of memory.  Processing %lu relative primes (%lu of %lu already processed).\n",
 		 memused, pm1data.rels_this_pass, pm1data.rels_done, pm1data.numrels);
 	OutputStr (thread_num, buf);
 
@@ -5509,7 +5508,7 @@ msg_and_exit:
 			sprintf (buf+strlen(buf), ", B2=%.0f, E=%lu",
 				 (double) C, pm1data.E);
 	}
-	sprintf (buf+strlen(buf), ", Wd%d: %08lX\n", PORT, SEC5 (w->n, B, C));
+	sprintf (buf+strlen(buf), ", We%d: %08lX\n", PORT, SEC5 (w->n, B, C));
 	OutputStr (thread_num, buf);
 	formatMsgForResultsFile (buf, w);
 	writeResults (buf);
@@ -5593,9 +5592,10 @@ bingo:	if (stage == 1)
 	OutputBoth (thread_num, buf);
 
 /* Allocate memory for the string representation of the factor and for */
-/* a message.  Convert the factor to a string. */ 
+/* a message.  Convert the factor to a string.  Allocate lots of extra space */
+/* as formatMsgForResultsFile can append a lot of text. */	
 
-	msglen = factor->sign * 10 + 80;
+	msglen = factor->sign * 10 + 400;
 	str = (char *) malloc (msglen);
 	if (str == NULL) {
 		stop_reason = OutOfMemory (thread_num);
@@ -5616,8 +5616,8 @@ bingo:	if (stage == 1)
 		OutputBoth (thread_num, msg);
 		unlinkSaveFiles (filename);
 		OutputStr (thread_num, "Restarting P-1 from scratch.\n");
-		stop_reason = 0;	       // Bug - is this how we restart?
-		goto msg_and_exit;
+		stop_reason = 0;
+		goto error_restart;
 	}
 
 /* Output the validated factor */
@@ -5689,11 +5689,18 @@ error:	if (near_fft_limit && gw_get_maxerr (&pm1data.gwdata) >= 0.40625) {
 		if (stop_reason) goto exit;
 	}
 	error_recovery_mode = bit_number ? bit_number : 1;
+error_restart:
 	pm1_cleanup (&pm1data);
 	free (N);
 	N = NULL;
 	free (exp);
 	exp = NULL;
+	free (factor);
+	factor = NULL;
+	free (str);
+	str = NULL;
+	free (msg);
+	msg = NULL;
 	goto restart;
 }
 
@@ -5735,8 +5742,8 @@ int pminus1_QA (
 /* Read a line from the file */
 
 		n = 0;
-		fscanf (fd, "%f,%lu,%lu,%ld,%lu,%lu,%lu,%s\n",
-			&k, &b, &n, &c, &B1, &B2_start, &B2_end, &fac_str);
+		fscanf (fd, "%lf,%lu,%lu,%ld,%lu,%lu,%lu,%s\n",
+			&k, &b, &n, &c, &B1, &B2_start, &B2_end, fac_str);
 		if (n == 0) break;
 
 /* If p is 1, set QA_TYPE */
@@ -5996,9 +6003,10 @@ void guess_pminus1_bounds (
 /* Pass 2 FFT multiplications seem to be at least 20% slower than */
 /* the squarings in pass 1.  This is probably due to several factors. */
 /* These include: better L2 cache usage and no calls to the faster */
-/* gwsquare routine. */
+/* gwsquare routine.  Nov, 2009:  On my Macbook Pro, with exponents */
+/* around 45M and using 800MB memory, pass2 squarings are 40% slower. */	
 
-	pass2_squarings *= 1.285;
+	pass2_squarings *= 1.35;
 
 /* What is the "average" value that must be smooth for P-1 to succeed? */
 /* Ordinarily this is 1.5 * 2^how_far_factored.  However, for Mersenne */

@@ -14,12 +14,12 @@ LIBS   = ../gwnum/amd64/release/gwnum.a -lm -lpthread -lcurl -lIOKit -framework 
 
 FACTOROBJ = ../prime95/macosx64/factor64.o
 OBJS = prime.o menu.o
-EXE      = mprime
+EXE = mprime
 
 #########################################################################
 
 $(EXE): security $(OBJS) $(FACTOROBJ)
-	$(ENVP) $(CC) $(LFLAGS) -o $(EXE) $(OBJS) $(FACTOROBJ) ../gwnum/amd64/release/multutil.o $(LIBS)
+	$(ENVP) $(CC) $(LFLAGS) -o $(EXE) $(OBJS) $(FACTOROBJ) $(LIBS)
 
 security:
 	[ ! -e ../security.h ] && touch ../security.h || true

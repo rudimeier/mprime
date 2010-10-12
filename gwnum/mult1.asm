@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -35,7 +35,6 @@ INCLUDE memory.mac
 
 ;; All the FFT routines for each FFT length
 
-	EXPANDING = 1
 	fft	32
 	fft	32p
 	fft	40

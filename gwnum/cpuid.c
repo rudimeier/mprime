@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved
 | Author:  George Woltman
 | Email: woltman@alum.mit.edu
 |
@@ -59,6 +59,10 @@ int	CPU_L3_SET_ASSOCIATIVE = -1;
 
 unsigned int CPU_SIGNATURE = 0;		/* Vendor-specific family number, */
 					/* model number, stepping ID, etc. */
+
+int	CPU_ARCHITECTURE = 0;		/* Our attempt to derive the CPU */
+					/* architecture. */
+
 
 /* Return the number of CPUs in the system */
 
@@ -418,13 +422,66 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 		else
 			model = model_number;
 
+/* According to "Intel 64 and IA-32 Architectures Optimization Reference */
+/* Manual", only early Pentium 4's require TLB priming during prefetch. */
+
+		if (family_code == 15 && model_number <= 2)
+			CPU_FLAGS |= CPU_TLB_PRIMING;
+
+/* Try to determine the CPU architecture */
+
+		if (! (CPU_FLAGS & CPU_SSE2))
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_PRE_SSE2;
+		else if ((family == 15 && model <= 4) ||
+			 (family == 15 && model == 6))
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_PENTIUM_4;
+		else if ((family == 6 && model == 9) ||
+			 (family == 6 && model == 13))
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_PENTIUM_M;
+		else if (family == 6 && model == 14)
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE;
+		else if ((family == 6 && model == 15) ||
+			 (family == 6 && model == 22) ||
+			 (family == 6 && model == 23))
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE_2;
+		else if ((family == 6 && model == 37) ||		// Core i3/i5 (according to CPU-world)
+			 (family == 6 && model == 26) ||		// Core i7
+			 (family == 6 && model == 30) ||		// Core i5/i7
+			 (family == 6 && model == 44) ||		// Core i9 (according to Wikipedia)
+			 (family == 6 && model == 29))			// ??? I read it somewhere....
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE_I7;
+		else if (family == 6 && model == 28)
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_ATOM;
+		else
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_INTEL_OTHER;
+
 /* Try to determine if hyperthreading is supported.  I think this code */
 /* only tells us if the hardware supports hyperthreading.  If the feature */
 /* is turned off in the BIOS, we don't detect this.  UPDATE: Detect some */
 /* of these situations, by comparing number of cores to number of logical */
 /* processors.  This test fails if the machine has multiple physical CPUs. */
 
-		if (max_cpuid_value >= 1) {
+/* Nfortino has suggested using the new x2apic code below.  It might correct */
+/* some of the rare problems we were seeing on Core i7 machines. */
+
+/* Determine if we should use leaf 11 topology enumeration. */
+/* Otherwise, use leaf 1 + leaf 4 */
+
+		if (max_cpuid_value >= 11) {
+			reg.ECX = 0;
+			Cpuid (11, &reg);
+		}
+		if (max_cpuid_value >= 11 && reg.EBX != 0) {
+			unsigned int i, cores;
+			CPU_HYPERTHREADS = reg.EBX & 0xFFFF;
+			for (i = 1; i < 5; i++) {
+				reg.ECX = i;
+				Cpuid (11, &reg);
+				if ((reg.EBX & 0xFFFF) == 0) break;
+				cores = (reg.EBX & 0xFFFF) / CPU_HYPERTHREADS;
+			}
+			if (num_logical_processors <= cores) CPU_HYPERTHREADS = 1;
+		} else if (max_cpuid_value >= 1) {
 			Cpuid (1, &reg);
 			if ((reg.EDX >> 28) & 0x1) {
 				CPU_HYPERTHREADS = (reg.EBX >> 16) & 0xFF;
@@ -1031,6 +1088,20 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 				CPU_L3_SET_ASSOCIATIVE = 128;
 		}
 
+/* Try to determine the CPU architecture */
+
+		if (! (CPU_FLAGS & CPU_SSE2))
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_PRE_SSE2;
+		else if (max_extended_cpuid_value < 0x8000001A)
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_AMD_K8;
+		else {
+			Cpuid (0x8000001A, &reg);
+			if (! (reg.EAX & 1))
+				CPU_ARCHITECTURE = CPU_ARCHITECTURE_AMD_K8;
+			else
+				CPU_ARCHITECTURE = CPU_ARCHITECTURE_AMD_K10;
+		}
+
 /* If we haven't figured out the brand string, create a default one */
 
 		if (CPU_BRAND[0] == 0)
@@ -1060,6 +1131,13 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			CPU_L2_CACHE_LINE_SIZE = reg.ECX & 0xFF;
 		}
 
+/* Try to determine the CPU architecture */
+
+		if (! (CPU_FLAGS & CPU_SSE2))
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_PRE_SSE2;
+		else
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_OTHER;
+
 /* If we haven't figured out the brand string, create a default one */
 
 		if (CPU_BRAND[0] == 0)
@@ -1071,6 +1149,11 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 +--------------------------------------------------------*/
 
 	else {
+		if (! (CPU_FLAGS & CPU_SSE2))
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_PRE_SSE2;
+		else
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_OTHER;
+
 		if (CPU_BRAND[0] == 0) {
 			strcpy (CPU_BRAND, "Unrecognized CPU vendor: ");
 			strcat (CPU_BRAND, vendor_id);

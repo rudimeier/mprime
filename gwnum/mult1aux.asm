@@ -25,7 +25,7 @@ _TEXT SEGMENT
 ;; before a multiply must use the routine that will normalize data.
 ;;
 
-PROCF	gwaddq1
+PROCFL	gwaddq1
 	ad_prolog 0,0,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -54,7 +54,7 @@ gwaddq1	ENDP
 ;; Add two numbers with carry propogation
 ;;
 
-PROCF	gwadd1
+PROCFL	gwadd1
 	ad_prolog 0,0,rbx,rbp,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -81,7 +81,7 @@ gwadd1	ENDP
 ;; before a multiply must use the routine that will normalize data.
 ;;
 
-PROCF	gwsubq1
+PROCFL	gwsubq1
 	ad_prolog 0,0,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -110,7 +110,7 @@ gwsubq1	ENDP
 ;; Subtract two numbers with carry propogation
 ;;
 
-PROCF	gwsub1
+PROCFL	gwsub1
 	ad_prolog 0,0,rbx,rbp,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -135,7 +135,7 @@ gwsub1	ENDP
 ;; Add and subtract two numbers without carry propogation.
 ;;
 
-PROCF	gwaddsubq1
+PROCFL	gwaddsubq1
 	ad_prolog 0,0,rbp,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -183,7 +183,7 @@ gwaddsubq1 ENDP
 
 loopcount1	EQU	DPTR [rsp+first_local]
 
-PROCF	gwaddsub1
+PROCFL	gwaddsub1
 	ad_prolog 4,0,rbx,rbp,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -213,7 +213,7 @@ gwaddsub1 ENDP
 ;; Copy one number and zero some low order words.
 ;;
 
-PROCF	gwcopyzero1
+PROCFL	gwcopyzero1
 	ad_prolog 0,0,rsi,rdi
 	mov	esi, SRCARG		; Address of first number
 	mov	edi, DESTARG		; Address of destination
@@ -243,7 +243,7 @@ gwcopyzero1 ENDP
 ;; Mul by a small value with carry propogation
 ;;
 
-PROCF	gwmuls1
+PROCFL	gwmuls1
 	ad_prolog 0,0,rbx,rbp,rsi,rdi
 	mov	esi, DESTARG		; Address of destination
 	fld	DBLARG			; Load small value

@@ -1,6 +1,6 @@
 // Prime95Doc.cpp : implementation of the CPrime95Doc class
 //
-// Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+// Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved
 //
 
 #include "stdafx.h"
@@ -50,6 +50,8 @@ BEGIN_MESSAGE_MAP(CPrime95Doc, CDocument)
 	ON_UPDATE_COMMAND_UI(IDM_STOP_SWITCHER, OnUpdateStopSwitcher)
 	ON_COMMAND(IDM_STOP_SWITCHER, OnStopSwitcher)
 	ON_COMMAND(IDM_STOP, OnStop)
+	ON_UPDATE_COMMAND_UI(IDM_SUMINP_ERRCHK, OnUpdateSuminpErrchk)
+	ON_COMMAND(IDM_SUMINP_ERRCHK, OnSuminpErrchk)
 	ON_UPDATE_COMMAND_UI(IDM_ERRCHK, OnUpdateErrchk)
 	ON_COMMAND(IDM_ERRCHK, OnErrchk)
 	ON_COMMAND(IDM_CPU, OnCpu)
@@ -183,6 +185,11 @@ void CPrime95Doc::OnCloseDocument()
 
 	UnloadPrimeNet ();
 	SaveViews();
+
+/* Write the worktodo file in case the WELL_BEHAVED_WORK flag caused us */
+/* to delay writing the file. */
+
+	writeWorkToDoFile (TRUE);
 
 // Finish closing
 
@@ -601,6 +608,18 @@ void CPrime95Doc::OnEcm()
 
 		if (!WORKER_THREADS_ACTIVE) OnContinue ();
 	}
+}
+
+void CPrime95Doc::OnUpdateSuminpErrchk(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck (SUM_INPUTS_ERRCHK);
+	pCmdUI->Enable (1);
+}
+
+void CPrime95Doc::OnSuminpErrchk()
+{
+	SUM_INPUTS_ERRCHK = !SUM_INPUTS_ERRCHK;
+	IniWriteInt (INI_FILE, "SumInputsErrorCheck", SUM_INPUTS_ERRCHK);
 }
 
 void CPrime95Doc::OnUpdateErrchk(CCmdUI* pCmdUI) 

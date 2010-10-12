@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -54,7 +54,6 @@ blkdst	EQU	(4096+64+64)
 ;; All the FFT routines for each FFT length.  We don't implement prefetching
 ;; versions for some of the smaller FFTs.
 
-	EXPANDING = 2
 IFNDEF PFETCH
 	fft	5120
 	fft	6144

@@ -1,4 +1,4 @@
-; Copyright 2001-2009 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2010 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -13,6 +13,8 @@ ENDIF
 
 INCLUDE	unravel.mac
 INCLUDE extrn.mac
+INCLUDE xarch.mac
+INCLUDE xbasics.mac
 INCLUDE xmult.mac
 INCLUDE memory.mac
 INCLUDE xnormal.mac
@@ -25,7 +27,7 @@ _TEXT SEGMENT
 ;; before a multiply must use the routine that will normalize data.
 ;;
 
-PROCF	gwxaddq2
+PROCFL	gwxaddq2
 	ad_prolog 0,0,rbx,rsi,rdi
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -44,14 +46,14 @@ uaddlp:	movapd	xmm0, [rdx]		; Load second number
 	movapd	[rsi+16], xmm1		; Save result
 	movapd	[rsi+32], xmm2		; Save result
 	movapd	[rsi+48], xmm3		; Save result
-	lea	rcx, [rcx+64]		; Next source
-	lea	rdx, [rdx+64]		; Next source
-	lea	rsi, [rsi+64]		; Next dest
+	bump	rcx, 64			; Next source
+	bump	rdx, 64			; Next source
+	bump	rsi, 64			; Next dest
 	add	eax, 80000000h/64	; 128 cache lines in a 8KB chunk
 	jnc	short uaddlp		; Loop if necessary
-	lea	rcx, [rcx+128]		; Skip 128 bytes every 8KB
-	lea	rdx, [rdx+128]		; Skip 128 bytes every 8KB
-	lea	rsi, [rsi+128]		; Skip 128 bytes every 8KB
+	bump	rcx, 128		; Skip 128 bytes every 8KB
+	bump	rdx, 128		; Skip 128 bytes every 8KB
+	bump	rsi, 128		; Skip 128 bytes every 8KB
 	dec	rax			; Check middle loop counter
 	jnz	short uaddlp		; Loop if necessary
 	add	rcx, pass2gapsize	; Next source
@@ -73,7 +75,7 @@ loopcount3	EQU	DPTR [rsp+first_local+SZPTR+8]
 loopcount4	EQU	DPTR [rsp+first_local+SZPTR+12]
 loopcount5	EQU	DPTR [rsp+first_local+SZPTR+16]
 
-PROCF	gwxadd2
+PROCFL	gwxadd2
 	ad_prolog SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -106,7 +108,6 @@ add0:	cmp	B_IS_2, 0		; Is this base 2?
 nb2add0:cmp	RATIONAL_FFT, 0		; Test for irrational FFTs
 	je	nb2iadd0   		; Yes, use two-to-phi multipliers
 	mov	loopcount4, 128		; Cache lines in 8KB chunk
-	sub	rax, rax		; Clear big/lit flag
 nb2radd1:
 	xnorm_op_2d addpd, noexec, noexec, saved_reg ; Add and normalize 8 values
 	dec	loopcount4		; Decrement inner loop counter
@@ -116,7 +117,6 @@ nb2iadd0:mov	eax, normval1		; Load count of clms in 8KB chunk
 	mov	loopcount4, eax
 nb2iadd1:mov	eax, cache_line_multiplier ; Load inner loop count
 	mov	loopcount5, eax	; Save inner loop count
-	sub	rax, rax		; Clear big/lit flag
 nb2iadd2:xnorm_op_2d addpd, exec, noexec, saved_reg ; Add and normalize 8 values
 	dec	loopcount5		; Decrement inner loop counter
 	jnz	nb2iadd2 			; Loop til done
@@ -127,7 +127,6 @@ nb2iadd2:xnorm_op_2d addpd, exec, noexec, saved_reg ; Add and normalize 8 values
 b2add:	cmp	RATIONAL_FFT, 0		; Test for irrational FFTs
 	je	iadd0   		; Yes, use two-to-phi multipliers
 	mov	loopcount4, 128		; Cache lines in 8KB chunk
-	sub	rax, rax		; Clear big/lit flag
 radd1:	xnorm_op_2d addpd, noexec, exec, saved_reg ; Add and normalize 8 values
 	dec	loopcount4		; Decrement inner loop counter
 	jnz	radd1 			; Loop til done
@@ -136,7 +135,6 @@ iadd0:	mov	eax, normval1		; Load count of clms in 8KB chunk
 	mov	loopcount4, eax
 iadd1:	mov	eax, cache_line_multiplier ; Load inner loop count
 	mov	loopcount5, eax	; Save inner loop count
-	sub	rax, rax		; Clear big/lit flag
 iadd2:	xnorm_op_2d addpd, exec, exec, saved_reg ; Add and normalize 8 values
 	dec	loopcount5		; Decrement inner loop counter
 	jnz	iadd2 			; Loop til done
@@ -146,9 +144,9 @@ iadd2:	xnorm_op_2d addpd, exec, exec, saved_reg ; Add and normalize 8 values
 
 	;; Chunk done
 
-achunkdn:lea	rcx, [rcx+128]		; Skip 128 bytes every 8KB
-	lea	rdx, [rdx+128]		; Skip 128 bytes every 8KB
-	lea	rsi, [rsi+128]		; Skip 128 bytes every 8KB
+achunkdn:bump	rcx, 128		; Skip 128 bytes every 8KB
+	bump	rdx, 128		; Skip 128 bytes every 8KB
+	bump	rsi, 128		; Skip 128 bytes every 8KB
 	dec	loopcount3		; Test loop counter
 	jnz	add0
 	add	rcx, pass2gapsize	; Next source
@@ -163,7 +161,7 @@ ablkdn:	sub	rsi, pass1blkdst	; Restore start of block ptr
 	add	rsi, pass1blkdst
 	cmp	RATIONAL_FFT, 0		; Rational FFT?
 	jne	askip2			; Yes, skip bumping ttp/biglit ptrs
-	lea	rbp, [rbp+128]		; Next set of group multipliers
+	bump	rbp, 128		; Next set of group multipliers
 	add	rdi, normval3		; Adjust little/big flags ptr
 askip2:	dec	loopcount2		; Decrement outer loop counter
 	jnz	ablk 			; Loop til done
@@ -196,7 +194,7 @@ gwxadd2 ENDP
 ;; before a multiply must use the routine that will normalize data.
 ;;
 
-PROCF	gwxsubq2
+PROCFL	gwxsubq2
 	ad_prolog 0,0,rbx,rsi,rdi
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -215,14 +213,14 @@ usublp:	movapd	xmm0, [rdx]		; Load second number
 	movapd	[rsi+16], xmm1		; Save result
 	movapd	[rsi+32], xmm2		; Save result
 	movapd	[rsi+48], xmm3		; Save result
-	lea	rcx, [rcx+64]		; Next source
-	lea	rdx, [rdx+64]		; Next source
-	lea	rsi, [rsi+64]		; Next dest
+	bump	rcx, 64			; Next source
+	bump	rdx, 64			; Next source
+	bump	rsi, 64			; Next dest
 	add	eax, 80000000h/64	; 128 cache lines in a 8KB chunk
 	jnc	short usublp		; Loop if necessary
-	lea	rcx, [rcx+128]		; Skip 128 bytes every 8KB
-	lea	rdx, [rdx+128]		; Skip 128 bytes every 8KB
-	lea	rsi, [rsi+128]		; Skip 128 bytes every 8KB
+	bump	rcx, 128		; Skip 128 bytes every 8KB
+	bump	rdx, 128		; Skip 128 bytes every 8KB
+	bump	rsi, 128		; Skip 128 bytes every 8KB
 	dec	rax			; Check middle loop counter
 	jnz	short usublp		; Loop if necessary
 	add	rcx, pass2gapsize	; Next source
@@ -244,7 +242,7 @@ loopcount3	EQU	DPTR [rsp+first_local+SZPTR+8]
 loopcount4	EQU	DPTR [rsp+first_local+SZPTR+12]
 loopcount5	EQU	DPTR [rsp+first_local+SZPTR+16]
 
-PROCF	gwxsub2
+PROCFL	gwxsub2
 	ad_prolog SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -277,7 +275,6 @@ sub0:	cmp	B_IS_2, 0		; Is this base 2?
 	cmp	RATIONAL_FFT, 0		; Test for irrational FFTs
 	je	nb2isub0   		; Yes, use two-to-phi multipliers
 	mov	loopcount4, 128		; Cache lines in 8KB chunk
-	sub	rax, rax		; Clear big/lit flag
 nb2rsub1:
 	xnorm_op_2d subpd, noexec, noexec, saved_reg ; Subtract and normalize 8 values
 	dec	loopcount4		; Decrement inner loop counter
@@ -287,7 +284,6 @@ nb2isub0:mov	eax, normval1		; Load count of clms in 8KB chunk
 	mov	loopcount4, eax
 nb2isub1:mov	eax, cache_line_multiplier ; Load inner loop count
 	mov	loopcount5, eax		; Save inner loop count
-	sub	rax, rax		; Clear big/lit flag
 nb2isub2:xnorm_op_2d subpd, exec, noexec, saved_reg ; Subtract and normalize 8 values
 	dec	loopcount5		; Decrement inner loop counter
 	jnz	nb2isub2		; Loop til done
@@ -298,7 +294,6 @@ nb2isub2:xnorm_op_2d subpd, exec, noexec, saved_reg ; Subtract and normalize 8 v
 b2sub:	cmp	RATIONAL_FFT, 0		; Test for irrational FFTs
 	je	isub0   		; Yes, use two-to-phi multipliers
 	mov	loopcount4, 128		; Cache lines in 8KB chunk
-	sub	rax, rax		; Clear big/lit flag
 rsub1:	xnorm_op_2d subpd, noexec, exec, saved_reg ; Subtract and normalize 8 values
 	dec	loopcount4		; Decrement inner loop counter
 	jnz	rsub1 			; Loop til done
@@ -307,7 +302,6 @@ isub0:	mov	eax, normval1		; Load count of clms in 8KB chunk
 	mov	loopcount4, eax
 isub1:	mov	eax, cache_line_multiplier ; Load inner loop count
 	mov	loopcount5, eax		; Save inner loop count
-	sub	rax, rax		; Clear big/lit flag
 isub2:	xnorm_op_2d subpd, exec, exec, saved_reg ; Subtract and normalize 8 values
 	dec	loopcount5		; Decrement inner loop counter
 	jnz	isub2 			; Loop til done
@@ -317,9 +311,9 @@ isub2:	xnorm_op_2d subpd, exec, exec, saved_reg ; Subtract and normalize 8 value
 
 	;; Chunk done
 
-schunkdn:lea	rcx, [rcx+128]		; Skip 128 bytes every 8KB
-	lea	rdx, [rdx+128]		; Skip 128 bytes every 8KB
-	lea	rsi, [rsi+128]		; Skip 128 bytes every 8KB
+schunkdn:bump	rcx, 128		; Skip 128 bytes every 8KB
+	bump	rdx, 128		; Skip 128 bytes every 8KB
+	bump	rsi, 128		; Skip 128 bytes every 8KB
 	dec	loopcount3		; Test loop counter
 	jnz	sub0
 	add	rcx, pass2gapsize	; Next source
@@ -334,7 +328,7 @@ sblkdn:	sub	rsi, pass1blkdst	; Restore start of block ptr
 	add	rsi, pass1blkdst
 	cmp	RATIONAL_FFT, 0		; Rational FFT?
 	jne	sskip2			; Yes, skip bumping ttp/biglit ptrs
-	lea	rbp, [rbp+128]		; Next set of group multipliers
+	bump	rbp, 128		; Next set of group multipliers
 	add	rdi, normval3		; Adjust little/big flags ptr
 sskip2:	dec	loopcount2		; Decrement outer loop counter
 	jnz	sblk 			; Loop til done
@@ -365,7 +359,7 @@ gwxsub2 ENDP
 ;; Add and subtract two numbers without carry propogation.
 ;;
 
-PROCF	gwxaddsubq2
+PROCFL	gwxaddsubq2
 	ad_prolog 0,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -398,16 +392,16 @@ uaddsublp:
 	movapd	[rbp+32], xmm5		; Save result
 	movapd	[rsi+48], xmm6		; Save result
 	movapd	[rbp+48], xmm7		; Save result
-	lea	rcx, [rcx+64]		; Next source
-	lea	rdx, [rdx+64]		; Next source
-	lea	rsi, [rsi+64]		; Next dest
-	lea	rbp, [rbp+64]		; Next dest
+	bump	rcx, 64			; Next source
+	bump	rdx, 64			; Next source
+	bump	rsi, 64			; Next dest
+	bump	rbp, 64			; Next dest
 	add	eax, 80000000h/64	; 128 cache lines in a 8KB chunk
 	jnc	uaddsublp		; Loop if necessary
-	lea	rcx, [rcx+128]		; Skip 128 bytes every 8KB
-	lea	rdx, [rdx+128]		; Skip 128 bytes every 8KB
-	lea	rsi, [rsi+128]		; Skip 128 bytes every 8KB
-	lea	rbp, [rbp+128]		; Skip 128 bytes every 8KB
+	bump	rcx, 128		; Skip 128 bytes every 8KB
+	bump	rdx, 128		; Skip 128 bytes every 8KB
+	bump	rsi, 128		; Skip 128 bytes every 8KB
+	bump	rbp, 128		; Skip 128 bytes every 8KB
 	dec	rax			; Check middle loop counter
 	jnz	uaddsublp		; Loop if necessary
 	add	rcx, pass2gapsize	; Next source
@@ -433,7 +427,7 @@ loopcount3	EQU	DPTR [rsp+first_local+4*SZPTR+8]
 loopcount4	EQU	DPTR [rsp+first_local+4*SZPTR+12]
 loopcount5	EQU	DPTR [rsp+first_local+4*SZPTR+16]
 
-PROCF	gwxaddsub2
+PROCFL	gwxaddsub2
 	ad_prolog 4*SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -472,7 +466,6 @@ as0:	cmp	B_IS_2, 0		; Is this base 2?
 	cmp	RATIONAL_FFT, 0		; Test for irrational FFTs
 	je	nb2ias0	   		; Yes, use two-to-phi multipliers
 	mov	loopcount4, 128		; Cache lines in an 8KB chunk
-	sub	rax, rax		; Clear big/lit flag
 nb2ras1: xnorm_addsub_2d noexec, noexec, saved_reg ; Add & sub and normalize 8 values
 	dec	loopcount4		; Decrement inner loop counter
 	jnz	nb2ras1			; Loop til done
@@ -495,7 +488,6 @@ nb2ias2:xnorm_addsub_2d exec, noexec, saved_reg	; Add & subtract and normalize 8
 b2as:	cmp	RATIONAL_FFT, 0		; Test for irrational FFTs
 	je	ias0	   		; Yes, use two-to-phi multipliers
 	mov	loopcount4, 128		; Cache lines in an 8KB chunk
-	sub	rax, rax		; Clear big/lit flag
 ras1:	xnorm_addsub_2d noexec, exec, saved_reg ; Add & sub and normalize 8 values
 	dec	loopcount4		; Decrement inner loop counter
 	jnz	ras1 			; Loop til done
@@ -517,10 +509,10 @@ ias2:	xnorm_addsub_2d exec, exec, saved_reg ; Add & subtract and normalize 8 val
 
 	;; Chunk done
 
-aschunkdn:lea	rcx, [rcx+128]		; Skip 128 bytes every 8KB
-	lea	rdx, [rdx+128]		; Skip 128 bytes every 8KB
-	lea	rsi, [rsi+128]		; Skip 128 bytes every 8KB
-	lea	rbp, [rbp+128]		; Skip 128 bytes every 8KB
+aschunkdn:bump	rcx, 128		; Skip 128 bytes every 8KB
+	bump	rdx, 128		; Skip 128 bytes every 8KB
+	bump	rsi, 128		; Skip 128 bytes every 8KB
+	bump	rbp, 128		; Skip 128 bytes every 8KB
 	dec	loopcount3		; Test loop counter
 	jnz	as0
 	add	rcx, pass2gapsize	; Next source
@@ -540,7 +532,7 @@ asblkdn:sub	rsi, pass1blkdst	; Restore start of block ptr
 	add	rbp, pass1blkdst
 	cmp	RATIONAL_FFT, 0		; Rational FFT?
 	jne	asskip2			; Yes, skip bumping ttp/biglit ptrs
-	lea	rbx, [rbx+128]		; Next set of group multipliers
+	bump	rbx, 128		; Next set of group multipliers
 	add	rdi, normval3		; Adjust little/big flags ptr
 asskip2:dec	loopcount2		; Decrement outer loop counter
 	jnz	asblk 			; Loop til done
@@ -581,7 +573,7 @@ gwxaddsub2 ENDP
 ;; Copy one number and zero some low order words.
 ;;
 
-PROCF	gwxcopyzero2
+PROCFL	gwxcopyzero2
 	ad_prolog 0,0,rbx,rsi,rdi
 	mov	rsi, SRCARG		; Address of first number
 	mov	rdi, DESTARG		; Address of destination
@@ -589,14 +581,14 @@ PROCF	gwxcopyzero2
 	mov	ebx, addcount1		; Get number of blocks
 cz1:	mov	eax, normval4		; Load count of 8KB chunks in a block
 cz2:	xcopyzero
-	lea	rsi, [rsi+64]		; Next source
-	lea	rdi, [rdi+64]		; Next dest
-	lea	rcx, [rcx+64]		; Next compare offset
+	bump	rsi, 64			; Next source
+	bump	rdi, 64			; Next dest
+	bump	rcx, 64			; Next compare offset
 	add	eax, 80000000h/64	; 128 cache lines in a 8KB chunk
 	jnc	short cz2		; Loop if necessary
-	lea	rsi, [rsi+128]		; Skip 128 bytes every 8KB
-	lea	rdi, [rdi+128]		; Skip 128 bytes every 8KB
-	lea	rcx, [rcx+128]		; Skip 128 bytes every 8KB
+	bump	rsi, 128		; Skip 128 bytes every 8KB
+	bump	rdi, 128		; Skip 128 bytes every 8KB
+	bump	rcx, 128		; Skip 128 bytes every 8KB
 	dec	rax			; Test loop counter
 	jnz	cz2			; Loop if necessary
 	add	rsi, pass2gapsize
@@ -611,7 +603,7 @@ gwxcopyzero2 ENDP
 ;; Add in a small number with carry propogation
 ;;
 
-PROCF	gwxadds2
+PROCFL	gwxadds2
 	ad_prolog 0,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rsi, DESTARG		; Address of destination
 	movsd	xmm7, DBLARG		; Small addin value
@@ -619,7 +611,6 @@ PROCF	gwxadds2
 	mov	rbp, norm_grp_mults	; Addr of the group multipliers
 	mov	rbx, norm_col_mults	; Addr of the column multipliers
 	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
-	sub	rax, rax		; Clear biglit flag
 	cmp	B_IS_2, 0		; Is this base 2?
 	jne	b2addsm			; yes, do simpler rounding
 	xnorm_smalladd_2d noexec	; Similar to add last carry code
@@ -642,7 +633,7 @@ loopcount3	EQU	DPTR [rsp+first_local+3*SZPTR+8]
 loopcount4	EQU	DPTR [rsp+first_local+3*SZPTR+12]
 loopcount5	EQU	DPTR [rsp+first_local+3*SZPTR+16]
 
-PROCF	gwxmuls2
+PROCFL	gwxmuls2
 	ad_prolog 3*SZPTR+20,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rsi, DESTARG		; Address of destination
 	mov	rbp, norm_grp_mults	; Addr of the group multipliers
@@ -682,8 +673,6 @@ mul0:	cmp	B_IS_2, 0		; Is this base 2?
 	cmp	RATIONAL_FFT, 0		; Test for irrational FFTs
 	je	nb2imul0   		; Yes, use two-to-phi multipliers
 	mov	loopcount4, 128		; Cache lines in 8KB chunk
-	sub	rax, rax		; Clear big/lit flags
-	sub	rcx, rcx
 nb2rmul1:xnorm_smallmul_2d noexec, noexec ; Mul and normalize 8 values
 	dec	loopcount4		; Decrement inner loop counter
 	jnz	nb2rmul1		; Loop til done
@@ -692,8 +681,6 @@ nb2imul0:mov	eax, normval1		; Load count of clms in 8KB chunk
 	mov	loopcount4, eax
 nb2imul1:mov	eax, cache_line_multiplier ; Load inner loop count
 	mov	loopcount5, eax		; Save inner loop count
-	sub	rax, rax		; Clear big/lit flags
-	sub	rcx, rcx
 nb2imul2:xnorm_smallmul_2d exec, noexec ; Mul and normalize 8 values
 	dec	loopcount5		; Decrement inner loop counter
 	jnz	nb2imul2		; Loop til done
@@ -705,8 +692,6 @@ nb2imul2:xnorm_smallmul_2d exec, noexec ; Mul and normalize 8 values
 b2mul:	cmp	RATIONAL_FFT, 0		; Test for irrational FFTs
 	je	imul0   		; Yes, use two-to-phi multipliers
 	mov	loopcount4, 128		; Cache lines in 8KB chunk
-	sub	rax, rax		; Clear big/lit flags
-	sub	rcx, rcx
 rmul1:	xnorm_smallmul_2d noexec, exec	; Mul and normalize 8 values
 	dec	loopcount4		; Decrement inner loop counter
 	jnz	rmul1 			; Loop til done
@@ -715,8 +700,6 @@ imul0:	mov	eax, normval1		; Load count of clms in 8KB chunk
 	mov	loopcount4, eax
 imul1:	mov	eax, cache_line_multiplier ; Load inner loop count
 	mov	loopcount5, eax		; Save inner loop count
-	sub	rax, rax		; Clear big/lit flags
-	sub	rcx, rcx
 imul2:	xnorm_smallmul_2d exec, exec	; Mul and normalize 8 values
 	dec	loopcount5		; Decrement inner loop counter
 	jnz	imul2 			; Loop til done
@@ -726,7 +709,7 @@ imul2:	xnorm_smallmul_2d exec, exec	; Mul and normalize 8 values
 
 	;; Chunk done
 
-mchunkdn:lea	rsi, [rsi+128]		; Skip 128 bytes every 8KB
+mchunkdn:bump	rsi, 128		; Skip 128 bytes every 8KB
 	dec	loopcount3		; Test loop counter
 	jnz	mul0
 
@@ -746,7 +729,7 @@ mblkdn:	mov	rsi, saved_blk_start	; Restore start ptr
 	cmp	RATIONAL_FFT, 0		; Rational FFT?
 	jne	mskip2			; Yes, skip bumping ttp/biglit ptrs
 	add	rdi, normval3		; Adjust little/big flags ptr
-	lea	rbp, [rbp+128]		; Next set of group multipliers
+	bump	rbp, 128		; Next set of group multipliers
 mskip2:	dec	loopcount2		; Decrement outer loop counter
 	jnz	mblk 			; Loop til section done
 

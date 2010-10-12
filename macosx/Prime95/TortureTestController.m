@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/25/09.
-//  Copyright 2009 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2010 Mersenne Research, Inc. All rights reserved.
 //
 
 #import "TortureTestController.h"
@@ -124,6 +124,8 @@
 - (IBAction)ok:(id)sender
 {
 	int	mem;
+	
+	[[self window] makeFirstResponder:nil];			// End any active text field edits
 
 	IniWriteInt (INI_FILE, "MinTortureFFT", minFFTSize);
 	IniWriteInt (INI_FILE, "MaxTortureFFT", maxFFTSize);

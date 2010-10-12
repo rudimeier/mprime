@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/24/09.
-//  Copyright 2009 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2010 Mersenne Research, Inc. All rights reserved.
 //
 
 #import "UnreserveController.h"
@@ -31,6 +31,8 @@
 
 - (IBAction)ok:(id)sender
 {
+	[[self window] makeFirstResponder:nil];			// End any active text field edits
+
 	unreserve (exponent);
 	[[self window] performClose:self];
 }

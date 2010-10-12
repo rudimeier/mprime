@@ -1,4 +1,4 @@
-; Copyright 2001-2009 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2010 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -13,7 +13,8 @@ ENDIF
 
 INCLUDE	unravel.mac
 INCLUDE extrn.mac
-INCLUDE xmult.mac
+INCLUDE xarch.mac
+INCLUDE xbasics.mac
 INCLUDE memory.mac
 INCLUDE xnormal.mac
 
@@ -25,7 +26,7 @@ _TEXT SEGMENT
 ;; before a multiply must use the routine that will normalize data.
 ;;
 
-PROCF	gwxaddq1
+PROCFL	gwxaddq1
 	ad_prolog 0,0,rsi
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -43,9 +44,9 @@ uaddlp:	movapd	xmm0, [rdx]		; Load second number
 	movapd	[rsi+16], xmm1		; Save result
 	movapd	[rsi+32], xmm2		; Save result
 	movapd	[rsi+48], xmm3		; Save result
-	lea	rcx, [rcx+64]		; Next source
-	lea	rdx, [rdx+64]		; Next source
-	lea	rsi, [rsi+64]		; Next dest
+	bump	rcx, 64			; Next source
+	bump	rdx, 64			; Next source
+	bump	rsi, 64			; Next dest
 	sub	eax, 1			; Check loop counter
 	jnz	short uaddlp		; Loop if necessary
 	ad_epilog 0,0,rsi
@@ -60,7 +61,7 @@ saved_col_ptr	EQU	PPTR [rsp+first_local+1*SZPTR]
 loopcount1	EQU	DPTR [rsp+first_local+2*SZPTR+0]
 loopcount2	EQU	DPTR [rsp+first_local+2*SZPTR+4]
 
-PROCF	gwxadd1
+PROCFL	gwxadd1
 	ad_prolog 2*SZPTR+8,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -120,7 +121,7 @@ gwxadd1 ENDP
 ;; before a multiply must use the routine that will normalize data.
 ;;
 
-PROCF	gwxsubq1
+PROCFL	gwxsubq1
 	ad_prolog 0,0,rsi
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -138,9 +139,9 @@ usublp:	movapd	xmm0, [rdx]		; Load second number
 	movapd	[rsi+16], xmm1		; Save result
 	movapd	[rsi+32], xmm2		; Save result
 	movapd	[rsi+48], xmm3		; Save result
-	lea	rcx, [rcx+64]		; Next source
-	lea	rdx, [rdx+64]		; Next source
-	lea	rsi, [rsi+64]		; Next dest
+	bump	rcx, 64			; Next source
+	bump	rdx, 64			; Next source
+	bump	rsi, 64			; Next dest
 	sub	eax, 1			; Check loop counter
 	jnz	short usublp		; Loop if necessary
 	ad_epilog 0,0,rsi
@@ -155,7 +156,7 @@ saved_col_ptr	EQU	PPTR [rsp+first_local+1*SZPTR]
 loopcount1	EQU	DPTR [rsp+first_local+2*SZPTR+0]
 loopcount2	EQU	DPTR [rsp+first_local+2*SZPTR+4]
 
-PROCF	gwxsub1
+PROCFL	gwxsub1
 	ad_prolog 2*SZPTR+8,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -213,7 +214,7 @@ gwxsub1 ENDP
 ;; Add and subtract two numbers without carry propogation.
 ;;
 
-PROCF	gwxaddsubq1
+PROCFL	gwxaddsubq1
 	ad_prolog 0,0,rbp,rsi,xmm6,xmm7
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -245,10 +246,10 @@ uaddsublp:
 	movapd	[rbp+32], xmm5		; Save result
 	movapd	[rsi+48], xmm6		; Save result
 	movapd	[rbp+48], xmm7		; Save result
-	lea	rcx, [rcx+64]		; Next source
-	lea	rdx, [rdx+64]		; Next source
-	lea	rsi, [rsi+64]		; Next dest
-	lea	rbp, [rbp+64]		; Next dest
+	bump	rcx, 64			; Next source
+	bump	rdx, 64			; Next source
+	bump	rsi, 64			; Next dest
+	bump	rbp, 64			; Next dest
 	sub	eax, 1			; Check loop counter
 	jnz	uaddsublp		; Loop if necessary
 	ad_epilog 0,0,rbp,rsi,xmm6,xmm7
@@ -264,7 +265,7 @@ saved_col_ptr	EQU	PPTR [rsp+first_local+2*SZPTR]
 loopcount1	EQU	DPTR [rsp+first_local+3*SZPTR+0]
 loopcount2	EQU	DPTR [rsp+first_local+3*SZPTR+4]
 
-PROCF	gwxaddsub1
+PROCFL	gwxaddsub1
 	ad_prolog 3*SZPTR+8,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rcx, SRCARG		; Address of first number
 	mov	rdx, SRC2ARG		; Address of second number
@@ -333,16 +334,16 @@ gwxaddsub1 ENDP
 ;; Copy one number and zero some low order words.
 ;;
 
-PROCF	gwxcopyzero1
+PROCFL	gwxcopyzero1
 	ad_prolog 0,0,rsi,rdi
 	mov	rsi, SRCARG		; Address of first number
 	mov	rdi, DESTARG		; Address of destination
 	sub	ecx, ecx		; Offset to compare to COPYZERO
 	mov	eax, addcount1		; Load loop counter
 cz1:	xcopyzero			; Copy/zero 8 values
-	lea	rsi, [rsi+64]		; Next source
-	lea	rdi, [rdi+64]		; Next dest
-	lea	rcx, [rcx+64]		; Next compare offset
+	bump	rsi, 64			; Next source
+	bump	rdi, 64			; Next dest
+	bump	rcx, 64			; Next compare offset
 	sub	eax, 1			; Test loop counter
 	jnz	cz1			; Loop if necessary
 	ad_epilog 0,0,rsi,rdi
@@ -352,7 +353,7 @@ gwxcopyzero1 ENDP
 ;; Add in a small number with carry propogation
 ;;
 
-PROCF	gwxadds1
+PROCFL	gwxadds1
 	ad_prolog 0,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rsi, DESTARG		; Address of destination
 	movsd	xmm7, DBLARG		; Small addin value
@@ -377,7 +378,7 @@ saved_dest_ptr	EQU	PPTR [rsp+first_local+0*SZPTR]
 saved_col_ptr	EQU	PPTR [rsp+first_local+1*SZPTR]
 saved_biglit_ptr EQU	PPTR [rsp+first_local+2*SZPTR]
 
-PROCF	gwxmuls1
+PROCFL	gwxmuls1
 	ad_prolog 3*SZPTR,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 	mov	rsi, DESTARG		; Address of destination
 	movlpd	xmm7, DBLARG		; Small multiplier value
@@ -470,7 +471,7 @@ saved_reg3	EQU	PPTR [rsp+first_local+2*SZPTR]
 
 inorm	MACRO	lab, ttp, zero, echk, const, base2, sse4
 	LOCAL	ilp0, ilp1
-	PROCFL	lab
+	PROCFLP	lab
 	int_prolog 3*SZPTR,0,0
 	mov	rsi, DESTARG		;; Addr of multiplied number
 no zero	mov	edi, ADDIN_OFFSET	;; Get address to add value into
@@ -494,9 +495,9 @@ ttp	mov	saved_reg1, rbp		;; remember ebp for xnorm012_1d_mid
 ilp0:	mov	ebx, edx		;; Load loop counter
 	and	ebx, 07FFh		;; Grab 11 bits of the counter
 ilp1:	xnorm_1d ttp, zero, echk, const, base2, sse4 ;; Normalize 8 values
-	lea	rsi, [rsi+64]		;; Next cache line
-ttp	lea	rbp, [rbp+128]		;; Next set of 8 multipliers
-ttp	lea	rdi, [rdi+4]		;; Next big/little flags
+	bump	rsi, 64			;; Next cache line
+ttp	bump	rbp, 128		;; Next set of 8 multipliers
+ttp	bump	rdi, 4			;; Next big/little flags
 	sub	ebx, 1			;; Test loop counter
 	jnz	ilp1			;; Loop til done
 
@@ -513,12 +514,12 @@ ttp	mov	rbp, saved_reg1		;; Restore ttp pointer
 no base2 jmp	non2dn			;; Go to non-base2 end code
 zero	jmp	zdn			;; Go to zero upper half end code
 base2 no zero jmp idn			;; Go to normal end code
-&lab	ENDP
+	ENDPP lab
 	ENDM
 
 zpnorm	MACRO	lab, ttp, echk, const, base2, sse4, khi, c1, cm1
 	LOCAL	ilp0, ilp1
-	PROCFL	lab
+	PROCFLP	lab
 	int_prolog 3*SZPTR,0,0
 	mov	rsi, DESTARG		;; Addr of multiplied number
 	movapd	xmm2, XMM_BIGVAL	;; Start process with no carry
@@ -535,9 +536,9 @@ ilp0:	mov	saved_reg1, rbx		;; Save loop counter
 	mov	saved_reg3, rsi		;; remember esi for xnorm012_1d_mid
 	mov	rdx, rbp		;; remember ebp for xnorm012_1d_mid
 ilp1:	xnorm_1d_zpad ttp, echk, const, base2, sse4, khi, c1, cm1 ;; Normalize 8 values
-	lea	rsi, [rsi+64]		;; Next cache line
-ttp	lea	rbp, [rbp+128]		;; Next set of 8 multipliers
-ttp	lea	rdi, [rdi+4]		;; Next big/little flags
+	bump	rsi, 64			;; Next cache line
+ttp	bump	rbp, 128		;; Next set of 8 multipliers
+ttp	bump	rdi, 4			;; Next big/little flags
 	sub	ebx, 1			;; Test loop counter
 	jnz	ilp1			;; Loop til done
 	mov	rbx, saved_reg3		;; Restore FFT data addr
@@ -551,7 +552,7 @@ no base2 const jmp non2zpcdn		;; Go to zero padded FFT end code
 no base2 no const jmp non2zpdn		;; Go to non-base2 end code
 base2 const jmp	zpcdn			;; Go to zero padded FFT end code
 base2 no const jmp zpdn			;; Go to zero padded FFT end code
-&lab	ENDP
+	ENDPP lab
 	ENDM
 
 ; The many different normalization routines.  One for each valid combination of

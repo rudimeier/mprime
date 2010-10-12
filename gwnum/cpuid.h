@@ -48,6 +48,8 @@ extern double CPU_SPEED;		/* Actual CPU Speed in MHz */
 #define CPU_SSSE3	0x0100		/* Supplemental SSE3 */
 #define CPU_SSE41	0x0200
 #define CPU_SSE42	0x0400
+#define CPU_TLB_PRIMING	0x0800		/* Prefetching requires TLB priming. */
+					/* Early Pentium 4's require priming. */
 extern unsigned int CPU_FLAGS;		/* Cpu capabilities */
 extern unsigned int CPU_CORES;		/* Number CPU cores */
 extern unsigned int CPU_HYPERTHREADS;	/* Number of virtual processors */
@@ -69,6 +71,21 @@ extern int CPU_L3_SET_ASSOCIATIVE;
 
 extern unsigned int CPU_SIGNATURE;	/* Vendor-specific family number, */
 					/* model number, stepping ID, etc. */
+
+#define CPU_ARCHITECTURE_PRE_SSE2	0
+#define CPU_ARCHITECTURE_PENTIUM_4	1
+#define CPU_ARCHITECTURE_PENTIUM_M	2
+#define CPU_ARCHITECTURE_CORE		3		/* Core Solo and Core Duo */
+#define CPU_ARCHITECTURE_CORE_2		4
+#define CPU_ARCHITECTURE_CORE_I7	5		/* Core i3/i5/i7/i9 */
+#define CPU_ARCHITECTURE_ATOM		6
+#define CPU_ARCHITECTURE_INTEL_OTHER	99
+#define CPU_ARCHITECTURE_AMD_K8		100
+#define CPU_ARCHITECTURE_AMD_K10	101
+#define CPU_ARCHITECTURE_AMD_OTHER	199
+#define CPU_ARCHITECTURE_OTHER		999
+extern int CPU_ARCHITECTURE;		/* Our attempt to derive the CPU */
+					/* architecture. */
 
 /* Assembly language structures and routines */
 

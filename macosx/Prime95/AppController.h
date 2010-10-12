@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/17/09.
-//  Copyright 2009 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2010 Mersenne Research, Inc. All rights reserved.
 //
 
 #import <Cocoa/Cocoa.h>
@@ -61,6 +61,7 @@
 - (IBAction)advancedECM:(id)sender;
 - (IBAction)advancedPRP:(id)sender;
 - (IBAction)advancedManualCommunication:(id)sender;
+- (IBAction)toggleSuminpErrorChecking:(id)sender;
 - (IBAction)toggleErrorChecking:(id)sender;
 - (IBAction)advancedUnreserve:(id)sender;
 - (IBAction)advancedQuitGIMPS:(id)sender;

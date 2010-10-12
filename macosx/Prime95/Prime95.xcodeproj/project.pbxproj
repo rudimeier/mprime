@@ -63,7 +63,6 @@
 		29B97324FDCFA39411CA2CEA /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = /System/Library/Frameworks/AppKit.framework; sourceTree = "<absolute>"; };
 		29B97325FDCFA39411CA2CEA /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = /System/Library/Frameworks/Foundation.framework; sourceTree = "<absolute>"; };
 		32CA4F630368D1EE00C91783 /* Prime95_Prefix.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Prime95_Prefix.pch; sourceTree = "<group>"; };
-		5E5CB6CC0FBFD1BF001A35DB /* multutil.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; name = multutil.o; path = ../../gwnum/release/multutil.o; sourceTree = SOURCE_ROOT; };
 		5EBA78AF0F96D6B900F79624 /* Mersenne.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = Mersenne.icns; sourceTree = "<group>"; };
 		5ED7E7F50F98F7CB00BC5767 /* AppController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AppController.h; sourceTree = "<group>"; };
 		5ED7E7F60F98F7CB00BC5767 /* AppController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AppController.m; sourceTree = "<group>"; };
@@ -220,7 +219,6 @@
 		29B97314FDCFA39411CA2CEA /* Prime95 */ = {
 			isa = PBXGroup;
 			children = (
-				5E5CB6CC0FBFD1BF001A35DB /* multutil.o */,
 				080E96DDFE201D6D7F000001 /* Classes */,
 				29B97315FDCFA39411CA2CEA /* Other Sources */,
 				29B97317FDCFA39411CA2CEA /* Resources */,
@@ -415,7 +413,11 @@
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = Prime95_Prefix.pch;
-				"GCC_PREPROCESSOR_DEFINITIONS[arch=x86_64]" = X86_64;
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=i386]" = GDEBUG;
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=x86_64]" = (
+					X86_64,
+					GDEBUG,
+				);
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/../../gwnum",
 					"$(SRCROOT)/../..",
@@ -429,14 +431,12 @@
 				OTHER_LDFLAGS = "";
 				"OTHER_LDFLAGS[arch=i386]" = (
 					../../prime95/macosx/factor32.o,
-					../../gwnum/debug/multutil.o,
 					../../gwnum/debug/gwnum.a,
 					"-lcurl",
 					"-lstdc++",
 				);
 				"OTHER_LDFLAGS[arch=x86_64]" = (
 					../../prime95/macosx64/factor64.o,
-					../../gwnum/amd64/debug/multutil.o,
 					../../gwnum/amd64/debug/gwnum.a,
 					"-lcurl",
 					"-lstdc++",
@@ -457,11 +457,15 @@
 				FRAMEWORK_SEARCH_PATHS = "";
 				"GCC_MODEL_PPC64[arch=i386]" = NO;
 				"GCC_MODEL_PPC64[arch=x86_64]" = YES;
-				GCC_MODEL_TUNING = G5;
+				GCC_MODEL_TUNING = "";
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = Prime95_Prefix.pch;
-				GCC_PREPROCESSOR_DEFINITIONS = NS_BLOCK_ASSERTIONS;
-				"GCC_PREPROCESSOR_DEFINITIONS[arch=x86_64]" = X86_64;
+				GCC_PREPROCESSOR_DEFINITIONS = "";
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=i386]" = NS_BLOCK_ASSERTIONS;
+				"GCC_PREPROCESSOR_DEFINITIONS[arch=x86_64]" = (
+					X86_64,
+					NS_BLOCK_ASSERTIONS,
+				);
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/../../gwnum",
 					"$(SRCROOT)/../..",
@@ -473,13 +477,11 @@
 				OTHER_LDFLAGS = "";
 				"OTHER_LDFLAGS[arch=i386]" = (
 					../../prime95/macosx/factor32.o,
-					../../gwnum/release/multutil.o,
 					../../gwnum/release/gwnum.a,
 					"-lcurl",
 				);
 				"OTHER_LDFLAGS[arch=x86_64]" = (
 					../../prime95/macosx64/factor64.o,
-					../../gwnum/amd64/release/multutil.o,
 					../../gwnum/amd64/release/gwnum.a,
 					"-lcurl",
 					"-lstdc++",
@@ -501,6 +503,7 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = "";
 				PREBINDING = NO;
 				SDKROOT = macosx10.5;
 				VALID_ARCHS = "i386 x86_64";

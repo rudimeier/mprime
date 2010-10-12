@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/19/09.
-//  Copyright 2009 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2010 Mersenne Research, Inc. All rights reserved.
 //
 
 #import "StopController.h"
@@ -35,6 +35,8 @@
 
 - (IBAction)ok:(id)sender
 {
+	[[self window] makeFirstResponder:nil];			// End any active text field edits
+
 	if (stopAllWorkers)
 		stop_workers_for_escape ();
 	else

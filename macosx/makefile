@@ -4,22 +4,22 @@
 ENVP= MACOSX_DEPLOYMENT_TARGET=10.3
 
 CC = gcc
-CFLAGS = -I.. -I../gwnum -I../linux -O2 -march=i686 -malign-double
+CFLAGS = -I.. -I../gwnum -I../linux -O2 -m32 -march=i686 -malign-double
 
 CPP = g++
-CPPFLAGS = -I.. -I../gwnum -I../linux -O2 -march=i686 -malign-double
+CPPFLAGS = -I.. -I../gwnum -I../linux -O2 -m32 -march=i686 -malign-double
 
 LFLAGS = 
 LIBS   = ../gwnum/release/gwnum.a -lm -lpthread -lcurl -lIOKit -framework CoreFoundation -lstdc++
 
 FACTOROBJ = ../prime95/macosx/factor32.o
 OBJS = prime.o menu.o
-EXE      = mprime
+EXE = mprime
 
 #########################################################################
 
 $(EXE): security $(OBJS) $(FACTOROBJ)
-	$(ENVP) $(CC) $(LFLAGS) -o $(EXE) $(OBJS) $(FACTOROBJ) ../gwnum/release/multutil.o $(LIBS)
+	$(ENVP) $(CC) $(LFLAGS) -o $(EXE) $(OBJS) $(FACTOROBJ) $(LIBS)
 
 security:
 	[ ! -e ../security.h ] && touch ../security.h || true

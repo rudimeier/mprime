@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -43,7 +43,6 @@ blkdst = (4*(4096+64)+64)
 
 ;; All the FFT routines for each FFT length.
 
-	EXPANDING = 2
 IFNDEF PFETCH
 ;	fft	20K
 ;	fft	24K

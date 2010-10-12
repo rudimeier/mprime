@@ -6,7 +6,8 @@
 #define HIDM_CONTINUE                           0x18003
 #define HIDM_STOP_SWITCHER                      0x18004
 #define HIDM_STOP                               0x18005
-#define HIDM_ERRCHK                             0x18006
+#define HIDM_SUMINP_ERRCHK                      0x18006
+#define HIDM_ERRCHK                             0x18007
 #define HIDM_TEST                               0x18009
 #define HIDM_TIME                               0x1800A
 #define HIDM_PREFERENCES                        0x1800D

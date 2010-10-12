@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/26/09.
-//  Copyright 2009 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2010 Mersenne Research, Inc. All rights reserved.
 //
 
 #import "WorkerWindowsController.h"
@@ -213,6 +213,8 @@ int AreAllTheSame (
 	int	num_cpus[MAX_NUM_WORKER_THREADS];
 	int	restart = FALSE;
 	int	new_options = FALSE;
+
+	[[self window] makeFirstResponder:nil];			// End any active text field edits
 
 /* If user is changing the number of worker threads, then make the */
 /* necessary changes.  Restart worker threads so that we are running */

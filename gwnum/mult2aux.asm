@@ -25,7 +25,7 @@ _TEXT SEGMENT
 ;; before a multiply must use the routine that will normalize data.
 ;;
 
-PROCF	gwaddq2
+PROCFL	gwaddq2
 	ad_prolog 0,0,rbx,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -74,7 +74,7 @@ loopcount2	EQU	DPTR [rsp+first_local+8]
 loopcount3	EQU	DPTR [rsp+first_local+4]
 loopcount4	EQU	DPTR [rsp+first_local]
 
-PROCF	gwadd2
+PROCFL	gwadd2
 	ad_prolog 16,0,rbx,rbp,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -128,7 +128,7 @@ gwadd2	ENDP
 ;; before a multiply must use the routine that will normalize data.
 ;;
 
-PROCF	gwsubq2
+PROCFL	gwsubq2
 	ad_prolog 0,0,rbx,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -176,7 +176,7 @@ loopcount2	EQU	DPTR [rsp+first_local+8]
 loopcount3	EQU	DPTR [rsp+first_local+4]
 loopcount4	EQU	DPTR [rsp+first_local]
 
-PROCF	gwsub2
+PROCFL	gwsub2
 	ad_prolog 16,0,rbx,rbp,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -228,7 +228,7 @@ gwsub2	ENDP
 ;; Add and subtract two numbers without carry propogation.
 ;;
 
-PROCF	gwaddsubq2
+PROCFL	gwaddsubq2
 	ad_prolog 0,0,rbx,rbp,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -298,7 +298,7 @@ loopcount3	EQU	DPTR [rsp+first_local+8]
 loopcount4	EQU	DPTR [rsp+first_local+12]
 save_reg	EQU	DPTR [rsp+first_local+16]
 
-PROCF	gwaddsub2
+PROCFL	gwaddsub2
 	ad_prolog 20,0,rbx,rbp,rsi,rdi
 	mov	ecx, SRCARG		; Address of first number
 	mov	edx, SRC2ARG		; Address of second number
@@ -358,7 +358,7 @@ gwaddsub2 ENDP
 ;; Copy one number and zero some low order words.
 ;;
 
-PROCF	gwcopyzero2
+PROCFL	gwcopyzero2
 	ad_prolog 0,0,rbx,rsi,rdi
 	mov	esi, SRCARG		; Address of first number
 	mov	edi, DESTARG		; Address of destination
@@ -405,7 +405,7 @@ loopcount2	EQU	DPTR [rsp+first_local+8]
 loopcount3	EQU	DPTR [rsp+first_local+4]
 loopcount4	EQU	DPTR [rsp+first_local]
 
-PROCF	gwmuls2
+PROCFL	gwmuls2
 	ad_prolog 16,0,rbx,rbp,rsi,rdi
 	mov	esi, DESTARG		; Address of destination
 	fld	DBLARG			; Load small value

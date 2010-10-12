@@ -4,16 +4,16 @@
 ENVP= MACOSX_DEPLOYMENT_TARGET=10.3
 
 CC = gcc
-CFLAGS = -I.. -O2 -m32 -march=i686 -malign-double
-CFLAGSD = -I.. -g -m32 -DGDEBUG -march=i686 -malign-double
-CFLAGS64 = -I.. -O2 -DX86_64 -m64
-CFLAGS64D = -I.. -g -DGDEBUG -DX86_64 -m64
+CFLAGS = -I.. -O2 -m32 -march=i686 -malign-double -fno-exceptions
+CFLAGSD = -I.. -g -DGDEBUG -m32 -march=i686 -malign-double -fno-exceptions
+CFLAGS64 = -I.. -O2 -DX86_64 -m64 -fno-exceptions
+CFLAGS64D = -I.. -g -DGDEBUG -DX86_64 -m64 -fno-exceptions
 
 CPP = g++
-CPPFLAGS = -I.. -I../qd -O2 -m32 -march=i686 -malign-double
-CPPFLAGSD = -I.. -I../qd -g -DGDEBUG -m32 -march=i686 -malign-double
-CPPFLAGS64 = -I.. -I../qd -O2 -DX86_64 -m64
-CPPFLAGS64D = -I.. -I../qd -g -DGDEBUG -DX86_64 -m64
+CPPFLAGS = -I.. -I../qd -O2 -m32 -march=i686 -malign-double -fno-exceptions -fno-rtti
+CPPFLAGSD = -I.. -I../qd -g -DGDEBUG -m32 -march=i686 -malign-double -fno-exceptions -fno-rtti
+CPPFLAGS64 = -I.. -I../qd -O2 -DX86_64 -m64 -fno-exceptions -fno-rtti
+CPPFLAGS64D = -I.. -I../qd -g -DGDEBUG -DX86_64 -m64 -fno-exceptions -fno-rtti
 
 OBJS = release/cpuid.o release/gwnum.o release/gwthread.o release/gwutil.o release/gwdbldbl.o release/giants.o release/ecmstag1.o
 OBJSD = debug/cpuid.o debug/gwnum.o debug/gwthread.o debug/gwutil.o debug/gwdbldbl.o debug/giants.o debug/ecmstag1.o
@@ -36,25 +36,21 @@ $(LIB): $(OBJS)
 	cp macosx/gwnum.a release
 	ar -rs $(LIB) $(OBJS)
 	rm -f release/*.o
-	ar -x release/gwnum.a release/multutil.o
 
 $(LIBD): $(OBJSD)
 	cp macosx/gwnum.a debug
 	ar -rs $(LIBD) $(OBJSD)
 	rm -f debug/*.o
-	ar -x debug/gwnum.a debug/multutil.o
 
 $(LIB64): $(OBJS64)
 	cp macosx64/gwnum.a amd64/release
 	ar -rs $(LIB64) $(OBJS64)
 	rm -f amd64/release/*.o
-	ar -x amd64/release/gwnum.a amd64/release/multutil.o
 
 $(LIB64D): $(OBJS64D)
 	cp macosx64/gwnum.a amd64/debug
 	ar -rs $(LIB64D) $(OBJS64D)
 	rm -f amd64/debug/*.o
-	ar -x amd64/debug/gwnum.a amd64/debug/multutil.o
 
 release/cpuid.o:
 	$(ENVP) $(CC) $(CFLAGS) -c -o release/cpuid.o cpuid.c

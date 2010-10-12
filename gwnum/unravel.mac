@@ -1,4 +1,4 @@
-; Copyright 1995-2009 - Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2010 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -53,7 +53,7 @@ y:
 ;; stack space.
 
 ah_prolog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
-	LOCAL	xmm_loc, xmm_space, stack_space
+	;;LOCAL	xmm_loc, xmm_space, stack_space
 
 ;; In 32-bit mode, save registers and set push_amt.  The caller needs to
 ;; know how much data was pushed so that it can access the C arguments
@@ -323,7 +323,7 @@ ah_prolog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
 ;; Epilog macro that restores the requested registers and the stack pointer
 
 ah_epilog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
-	LOCAL	xmm_loc, xmm_space, stack_space
+	;;LOCAL	xmm_loc, xmm_space, stack_space
 
 ;; In 32-bit mode, deallocate stack space and restore registers
 
@@ -613,7 +613,7 @@ ah_epilog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
 ;;	Parameter gwdata_asm_area = rdi
 
 ad_prolog MACRO space_needed, calls_C_code, regs:vararg
-	LOCAL	stack_space
+	;;LOCAL	stack_space
 
 ;; In 32-bit mode, save registers and switch the stack pointer
 
@@ -753,7 +753,7 @@ ad_epilog MACRO space_needed, calls_C_code, regs:vararg
 ;; push the same amount of data on the stack.
 
 int_prolog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
-	LOCAL	xmm_loc, xmm_space, stack_space
+	;;LOCAL	xmm_loc, xmm_space, stack_space
 
 ;; In 32-bit mode, save registers and set new push_amt.
 
@@ -1082,7 +1082,7 @@ int_prolog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
 ;; Epilog macro that reverses our internal prolog routine
 
 int_epilog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
-	LOCAL	xmm_loc, xmm_space, stack_space
+	;;LOCAL	xmm_loc, xmm_space, stack_space
 
 ;; In 32-bit mode, deallocate stack space and restore registers
 
@@ -1456,7 +1456,7 @@ opt_save_reg MACRO reg, offset
 ; Call a C callback routine
 
 c_call MACRO routine
-	LOCAL	pad_bytes
+	;;LOCAL	pad_bytes
 
 	;; Push argument to call C code
 
@@ -1550,16 +1550,14 @@ nonoexec MACRO ops:vararg
 	&ops
 	ENDM
 
-; Macro to execute a statement only if we are including every possible
-; FFT implementation.  We do this when benchmarking all FFTs on a new machine
-; architecture to find the fastest FFT implementation.
+; Macros to implement all possible implementations of an FFT.  We do this
+; to find the fastest implementation to include in the final release.
 
-;;ENABLE_ALLFFT EQU  1
-allfft	MACRO ops:vararg
-	IFDEF ENABLE_ALLFFT
-	&ops
-	ENDIF
-	ENDM
+;IMPL_ALL_CORE = 1
+;IMPL_ALL_P4 = 1
+;IMPL_ALL_P4TP = 1
+;IMPL_ALL_K8 = 1
+;IMPL_ALL_K10 = 1
 
 ; Handy macro to only include statement if we are prefetching
 
@@ -1574,10 +1572,382 @@ pfing MACRO stmt:vararg
 Q	EQU	<QWORD PTR>
 
 ;; Bump a pointer by an amount - generates no code if amount is zero
+;; On Core 2 architecture, use add or sub as that can be dispatched to
+;; ports 0, 1, or 5 whereas lea can only be dispatched to port 0.  Both
+;; instructions use the same number of bytes.  Also, handle distance 128
+;; as a subtraction so that a one byte displacement can be used.
+;; Caller must be aware that condition codes may be changed.
 
 bump	MACRO	reg, amt
-	IF amt NE 0
-	lea	reg, [reg+amt]
+	IFNB <reg>
+	IF amt EQ 128
+	sub	reg, -99		;; Workaround MASM bug.  It won't
+					;; generate one byte immediates
+	org	$-1			;; for -128.
+	DB	80h			;; Replace -99 with -128
+	ELSEIF amt EQ -128
+	add	reg, -99		;; Workaround MASM bug.  It won't
+					;; generate one byte immediates
+	org	$-1			;; for -128.
+	DB	80h			;; Replace -99 with -128
+	ELSEIF amt NE 0
+	add	reg, amt
+	ENDIF
+	ENDIF
+	ENDM
+
+; 
+; Macros used in FFT looping
+;
+; The FFT code generally loops through a build block by powers-of-two.
+; For example, loop twice, inc a ptr, loop 4 times, prefetch, loop 8 times, etc.
+; These macros use the eax register to implement the loops.  We choose the
+; best/shortest instructions for each architecture.  For example, we use
+; test/jnz which generates a fused-op internally on Core 2 machines.
+;
+
+loops_init MACRO count, first_completed, first_iters
+	loops_init_common count, first_completed, first_iters
+	loops_pffreq = 0
+	loops_touchfreq = 0
+	ENDM
+
+loops_init_prefetch_touch MACRO count, pfamt, pffreq, pfreg, touch_amt, touch_label, first_completed, first_iters
+	loops_init_prefetch count, pfamt, pffreq, pfreg, first_completed, first_iters
+	loops_touchfreq = touch_amt / pfamt * pffreq
+	loops_touchlabel EQU touch_label
+	ENDM
+
+loops_init_prefetch MACRO count, pfamt, pffreq, pfreg, first_completed, first_iters
+	IF PREFETCHING EQ 0
+	  loops_init count, first_completed, first_iters
+	ELSE
+	  loops_double_prefetching = 0
+	  loops_set_prefetch pfamt, pffreq, pfreg
+	  IFB <first_iters>
+	    loops_init_common count, first_completed, first_iters
+	  ELSEIF loops_pffreq NE 1 AND loops_pffreq LT first_iters
+	    loops_init_common count, first_completed, loops_pffreq
+	  ELSE
+	    loops_init_common count, first_completed, first_iters
+	  ENDIF
+	ENDIF
+	loops_touchfreq = 0
+	ENDM
+
+loops_init_common MACRO count, first_completed, first_iters
+	;;LOCAL	local_first_completed, local_first_iters
+	LOCAL	x
+	IFB <first_completed>
+	  local_first_completed = 0
+	  local_first_iters = 1
+	ELSE
+	  local_first_completed = first_completed
+	  local_first_iters = first_iters
+	ENDIF
+
+	loops_count = count
+	loops_completed = 1
+	loops_count_is_power_of_two = 1
+	loops_np2_initial_value_adjust = 0
+	loops_np2_first_initial_value_adjust = 0
+	loops_np2_loops_completed = 0
+
+	;; Compute the initial value
+
+	IF local_first_completed EQ 0
+	  loops_initial_value = 0
+	ELSEIF (count LE 256 AND local_first_iters EQ count)
+	  loops_initial_value = local_first_completed * 256/local_first_iters
+	ELSEIF (count LE 128 AND local_first_iters * count LE 256)
+	  loops_initial_value = local_first_completed * (256/local_first_iters+1)
+	ELSE
+	  loops_initial_value = local_first_completed * (80000000h/local_first_iters*2+1)
+	ENDIF
+
+	;; Always output non-power-of-2 counts as 4 bytes as the initial value
+	;; will need to be adjusted later.
+	IF (loops_count AND (loops_count-1)) NE 0
+	  loops_count_is_power_of_two = 0
+	  mov	eax, 9999
+x:	  org	x-4
+	  DD	loops_initial_value
+	  loops_initial_value_label = (OFFSET x) - 4
+
+	;; Otherwise output the initial value using the shortest instruction possible
+	ELSEIF loops_initial_value EQ 0
+	  sub	eax, eax
+	ELSEIF loops_initial_value GT 0 AND loops_initial_value LT 256
+	  mov	al, loops_initial_value
+	ELSE
+	  mov	eax, loops_initial_value
+	ENDIF
+
+	;; Clear funky xprefetch variable
+	loops_undo_called = 0
+
+	;; Save values for a loops_reset
+	loops_original_count = loops_count
+	loops_original_initial_value = loops_initial_value
+	ENDM
+
+loops_set_prefetch MACRO pfamt, pffreq, pfreg
+	IF PREFETCHING NE 0
+	  IF loops_double_prefetching EQ 1
+	    cant_set_prefetch_with_delayed_double_prefetch_pending
+	  ENDIF
+	  IF pfamt NE 64 AND pfamt NE 128
+	    bad_pfamt_in_loops_init_prefetch
+          ELSEIF PREFETCHING EQ 128
+	    IF pfamt EQ 64
+	      loops_pffreq = pffreq * 2
+	      loops_pfamt = 1
+	    ELSE
+	      loops_pffreq = pffreq
+	      loops_pfamt = 1
+	    ENDIF
+	  ELSE
+	    IF pfamt EQ 64
+	      loops_pffreq = pffreq
+	      loops_pfamt = 1
+	    ELSE
+	      loops_pffreq = pffreq
+	      loops_pfamt = 2
+	    ENDIF
+	  ENDIF
+	  loops_pfreg EQU pfreg
+	  loops_orig_pffreq = pffreq
+	ENDIF
+	ENDM
+
+loops	MACRO iters, dest, incr
+	;;LOCAL	small_count, local_incr, local_iters
+	;; Make local copies of params
+	local_iters = iters
+	IFB <incr>
+	  local_incr = 1
+	ELSE
+	  local_incr = incr
+	ENDIF
+	;; If necessary, split loop issue prefetch instruction(s)
+	IF loops_pffreq GE loops_completed AND loops_pffreq LT loops_completed * local_iters * local_incr
+	  small_count = loops_pffreq / loops_completed / local_incr
+	  IF (local_iters MOD small_count) NE 0
+	    error_with_non_power_of_2_and_prefetching
+	  ENDIF
+	  loops_common small_count, dest, local_incr
+	  IF loops_pfamt EQ 1
+	    prefetcht1 [loops_pfreg]
+	    bump loops_pfreg, PREFETCHING
+	  ELSE
+	    prefetcht1 [loops_pfreg]
+	    prefetcht1 [loops_pfreg+PREFETCHING]
+	    bump loops_pfreg, 2*PREFETCHING
+	  ENDIF
+	  IF loops_double_prefetching EQ 1
+	    loops_double_prefetching = 0
+	    loops_pffreq = loops_pffreq * 2
+	  ENDIF
+	  local_iters = local_iters/small_count
+	ENDIF
+	;; If necessary, split loop for jumping to touch label
+	IF loops_touchfreq GT loops_completed AND loops_touchfreq LT loops_completed * local_iters * local_incr
+	  small_count = loops_touchfreq / loops_completed / local_incr
+	  IF (local_iters MOD small_count) NE 0
+	    error_with_non_power_of_2_and_prefetch_touching
+	  ENDIF
+	  loops_common small_count, dest, local_incr
+	  local_iters = local_iters/small_count
+	ENDIF
+	;; Jump to passed in dest or to touch label
+	IF loops_touchfreq EQ 0 OR loops_completed LT loops_touchfreq
+	  loops_common local_iters, dest, local_incr
+	ELSE
+	  loops_common local_iters, loops_touchlabel, local_incr
+	ENDIF
+	ENDM
+
+loops_no_prefetch MACRO iters, dest, incr			;; Like loops macro except it won't prefetch
+	;;LOCAL	local_incr, local_iters
+	;; Make local copies of params
+	local_iters = iters
+	IFB <incr>
+	  local_incr = 1
+	ELSE
+	  local_incr = incr
+	ENDIF
+	;; Jump to passed in dest or to touch label
+	IF loops_touchfreq EQ 0 OR loops_completed LT loops_touchfreq
+	  loops_common local_iters, dest, local_incr
+	ELSE
+	  loops_common local_iters, loops_touchlabel, local_incr
+	ENDIF
+	ENDM
+
+loops_common MACRO iters, dest, incr
+	;;LOCAL next_power_2, non_power_2_adjustment
+	LOCAL local_iters
+	LOCAL x
+	local_iters = iters
+	IF local_iters GT 1
+	  non_power_2_adjustment = 0
+	  IF loops_np2_first_initial_value_adjust NE 0 AND loops_np2_loops_completed EQ loops_completed
+		add	eax, loops_np2_first_initial_value_adjust - loops_np2_initial_value_adjust ;; restore first non-power-of-2 initial value
+	  ENDIF
+	  IF loops_completed NE 1
+	    incr = 1
+	  ENDIF
+	  IF loops_completed EQ 1 AND (local_iters AND (local_iters-1)) EQ 0 AND (incr AND (incr-1)) EQ 0
+	    IF (loops_count LE 256 AND local_iters * incr EQ loops_count)
+	      add al, 256/(local_iters)
+	    ELSE
+	      IF (loops_count LE 128 AND (local_iters) * loops_count * (incr) LE 256)
+	        add al, 80h/(local_iters)*2+(incr)
+	      ELSE
+	        add eax, 80000000h/(local_iters)*2+(incr)
+	      ENDIF
+	    ENDIF
+	    jnc	dest
+	    loops_completed = incr
+	  ELSE
+	    ;; Handle non-power-of-2 iteration counts
+	    IF (local_iters AND (local_iters-1)) NE 0 OR (incr AND (incr-1)) NE 0
+	      IF loops_completed EQ 1
+	        IF loops_count LT 256
+		  add al, incr
+		ELSE
+		  add eax, incr
+		ENDIF
+	        loops_completed = incr
+	      ENDIF
+	      IF (loops_count AND (loops_count-1)) NE 0
+	        next_power_2 = local_iters * loops_completed
+	        next_power_2 = next_power_2 OR (next_power_2 SHR 1)
+	        next_power_2 = next_power_2 OR (next_power_2 SHR 2)
+	        next_power_2 = next_power_2 OR (next_power_2 SHR 4)
+	        next_power_2 = next_power_2 OR (next_power_2 SHR 8)
+	        next_power_2 = (next_power_2 OR (next_power_2 SHR 16)) + 1
+		non_power_2_adjustment = next_power_2 - local_iters * loops_completed
+x:
+		loops_np2_initial_value_adjust = loops_np2_initial_value_adjust + non_power_2_adjustment
+	        org loops_initial_value_label
+		DD	loops_initial_value + loops_np2_initial_value_adjust
+		org x
+		;; Adjust loops_count and local_iters so that this looks like a power-of-two
+		loops_count = loops_count / (local_iters * loops_completed) * next_power_2
+		loops_pffreq = loops_pffreq / (local_iters * loops_completed) * next_power_2
+		IF (loops_completed AND (loops_completed-1)) EQ 0
+			local_iters = next_power_2 / loops_completed
+		ELSE
+			local_iters = next_power_2
+			loops_completed = 1
+		ENDIF
+	      ELSE
+	        loops_non_power2_problem
+	      ENDIF
+	    ENDIF
+	    IF local_iters * loops_completed LE 128
+	      test al, (local_iters-1)*loops_completed
+	      jnz dest
+	    ENDIF
+	    IF local_iters * loops_completed EQ 256
+	      IF loops_count_is_power_of_two NE 0
+	        test al, al	;; Save one byte if loop count is a power of two
+	        jnz dest
+	      ELSE
+		test al, (local_iters-1)*loops_completed
+		jnz dest
+	      ENDIF
+	    ENDIF
+	    IF local_iters * loops_completed GT 256
+	      test eax, (local_iters-1)*loops_completed
+	      jnz dest
+	    ENDIF
+	  ENDIF
+	  loops_completed = local_iters * loops_completed
+	  IF loops_completed GT loops_count
+	    error_looped_more_than_loop_count
+	  ENDIF
+	  IF non_power_2_adjustment NE 0 AND loops_completed LT loops_count
+	    bump eax, non_power_2_adjustment
+	  ENDIF
+	ENDIF
+	ENDM
+
+loops_undo MACRO iters
+	LOCAL	x
+
+	IF loops_pffreq EQ loops_completed
+	  IF loops_pfamt EQ 1
+	    prefetcht1 [loops_pfreg]
+	    bump loops_pfreg, PREFETCHING
+	  ELSE
+	    prefetcht1 [loops_pfreg]
+	    prefetcht1 [loops_pfreg+PREFETCHING]
+	    bump loops_pfreg, 2*PREFETCHING
+	  ENDIF
+	  IF loops_double_prefetching EQ 1
+	    loops_double_prefetching = 0
+	    loops_pffreq = loops_pffreq * 2
+	  ENDIF
+	ELSEIF loops_orig_pffreq EQ loops_completed
+	  loops_double_prefetching = 1
+	  loops_pffreq = loops_pffreq / 2
+	ENDIF
+
+	IF (iters AND (iters-1)) EQ 0
+	  loops_completed = loops_completed / (iters)
+	  IF loops_count LE 128
+	    sub	al, (iters) * loops_completed
+	  ELSE
+	    sub	eax, (iters) * loops_completed
+	  ENDIF
+	ELSE
+	  next_power_2 = iters OR (iters SHR 1)
+	  next_power_2 = next_power_2 OR (next_power_2 SHR 2)
+	  next_power_2 = next_power_2 OR (next_power_2 SHR 4)
+	  next_power_2 = next_power_2 OR (next_power_2 SHR 8)
+	  next_power_2 = (next_power_2 OR (next_power_2 SHR 16)) + 1
+
+	  ;; We have to be careful when rolling back initial values in the
+	  ;; non-power-of-two case.  For example, a "loops 3,2" followed by a "loops 3"
+	  ;; has an initial value of 10.  If we "loops_undo 18" this to execute a
+	  ;; "loops 6,3" which needs an initial value of 14, then we must make
+	  ;; suitable adjustments here.
+	  IF loops_np2_first_initial_value_adjust EQ 0
+		loops_np2_first_initial_value_adjust = loops_np2_initial_value_adjust	;; remember first non-power-of-2 initial value adjustment
+		loops_np2_loops_completed = loops_completed				;; remember loops completed (to later restore first initial value)
+	  ENDIF
+	  loops_completed = loops_completed / next_power_2
+	  loops_initial_value = loops_original_initial_value - loops_np2_initial_value_adjust - next_power_2 * loops_completed
+	  loops_np2_initial_value_adjust = 0
+	  add	eax, 9999
+x:	  org	x-4
+	  DD	loops_initial_value
+	  loops_initial_value_label = (OFFSET x) - 4
+
+	  loops_count = loops_count / next_power_2 * iters
+	  loops_pffreq = loops_pffreq / next_power_2 * iters
+	ENDIF
+
+	;; Set funky xprefetch variable
+	loops_undo_called = 1
+
+	ENDM
+
+loops_reset MACRO
+	loops_completed = 1
+	loops_count = loops_original_count
+	loops_initial_value = loops_original_initial_value
+	loops_np2_initial_value_adjust = 0
+	ENDM
+
+loops_touch MACRO iters1, dest1, iters2, dest2
+	IF OFFSET dest1 NE OFFSET dest2
+	loops	iters1, dest1
+	loops	iters2, dest2
+	ELSE
+	loops	iters1*iters2, dest1
 	ENDIF
 	ENDM
 
@@ -1634,8 +2004,8 @@ ENDIF
 	ENDM
 
 PROCFP	MACRO x
-IFDEF AMD
-	PROCF	&x&AMD
+IFDEF xarch
+	PROCF	@CATSTR(&x,%xarch)
 ELSE
 IFDEF PFETCH
 	PROCF	&x&P3
@@ -1651,8 +2021,8 @@ ENDIF
 
 
 PROCFLP	MACRO x
-IFDEF AMD
-	PROCFL	&x&AMD
+IFDEF xarch
+	PROCFL	@CATSTR(&x,%xarch)
 ELSE
 IFDEF PFETCH
 	PROCFL	&x&P3
@@ -1673,8 +2043,8 @@ ENDIF
 ;
 
 EXTRNP	MACRO x
-IFDEF AMD
-EXTRN	&x&AMD:PROC
+IFDEF xarch
+EXTRN	@CATSTR(&x,%xarch):PROC
 ELSE
 IFDEF PFETCH
 EXTRN	&x&P3:PROC
@@ -1688,33 +2058,9 @@ ENDIF
 ENDIF
 	ENDM
 
-PROCP	MACRO x
-IFDEF X86_64
-IFDEF AMD
-&x&AMD	PROC
-ELSE
-&x	PROC
-ENDIF
-ELSE
-IFDEF AMD
-&x&AMD	PROC NEAR
-ELSE
-IFDEF PFETCH
-&x&P3	PROC NEAR
-ELSE
-IFDEF PPRO
-&x&PPRO	PROC NEAR
-ELSE
-&x	PROC NEAR
-ENDIF
-ENDIF
-ENDIF
-ENDIF
-	ENDM
-
 ENDPP	MACRO x
-IFDEF AMD
-&x&AMD	ENDP
+IFDEF xarch
+@CATSTR(&x,%xarch) ENDP
 ELSE
 IFDEF PFETCH
 &x&P3	ENDP
@@ -1729,9 +2075,6 @@ ENDIF
 	ENDM
 
 CALLP	MACRO x
-IFDEF AMD
-	call	&x&AMD
-ELSE
 IFDEF PFETCH
 	call	&x&P3
 ELSE
@@ -1741,24 +2084,8 @@ ELSE
 	call	&x
 ENDIF
 ENDIF
-ENDIF
 	ENDM
 
-JMPP	MACRO x
-IFDEF AMD
-	jmp	&x&AMD
-ELSE
-IFDEF PFETCH
-	jmp	&x&P3
-ELSE
-IFDEF PPRO
-	jmp	&x&PPRO
-ELSE
-	jmp	&x
-ENDIF
-ENDIF
-ENDIF
-	ENDM
 
 ;
 ; Macros to manage 32 timer values (only used when optimizing code)
