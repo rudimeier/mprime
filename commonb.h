@@ -177,7 +177,7 @@ void implementThrottle (int thread_num);
 /* Routines called by common routines */
 
 void clearThreadHandleArray (void);
-void setThreadPriorityAndAffinity (int, int);
+void setThreadPriorityAndAffinity (int, int *);
 void registerThreadTermination (void);
 void raiseAllWorkerThreadPriority (void);
 void flashWindowAndBeep (void);

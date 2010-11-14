@@ -1,4 +1,4 @@
-# Makefile for Linux gwnum library
+# Makefile for Linux and FreeBSD 32-bit gwnum library
 #
 
 CC = gcc
@@ -7,18 +7,18 @@ CFLAGS = -I.. -O2 -march=i486 -malign-double
 CPP = g++
 CPPFLAGS = -I.. -I../qd -O2 -march=i486 -malign-double
 
-LINUXOBJS = cpuid.o gwnum.o gwthread.o gwutil.o gwdbldbl.o giants.o ecmstag1.o
+OBJS = cpuid.o gwnum.o gwthread.o gwutil.o gwdbldbl.o giants.o ecmstag1.o
 
 LIB = gwnum.a
 
 #########################################################################
 
-$(LIB): $(LINUXOBJS)
+$(LIB): $(OBJS)
 	cp linux/gwnum.a .
-	ar -rs $(LIB) $(LINUXOBJS)
+	ar -rs $(LIB) $(OBJS)
 
 clean:
-	rm -f $(LINUXOBJS)
+	rm -f $(OBJS)
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

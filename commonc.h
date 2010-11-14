@@ -2,8 +2,8 @@
 
 /* Constants */
 
-#define VERSION		"26.3"
-#define BUILD_NUM	"2"
+#define VERSION		"26.4"
+#define BUILD_NUM	"1"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
 /* Linux (mprime)  #2 */
@@ -20,8 +20,17 @@
 
 #define MIN_PRIME	5L		/* Smallest testable prime */
 #define MAX_FACTOR	2000000000	/* Largest factorable Mersenne number*/
-#define MAX_NUM_WORKER_THREADS 32	/* Number of launchable work threads */
 #define ERROR_RATE	0.018		/* Estimated error rate on clean run */
+
+/* We want to increase the max number of worker threads to 64, but 32-bit Windows */
+/* SetThreadAffinityMask only supports 32-bit masks.  So we'll assume any user that */
+/* has a machine powerful enough to need more than 32 workers will run a 64-bit OS. */
+
+#ifdef X86_64
+#define MAX_NUM_WORKER_THREADS 64	/* Number of launchable work threads */
+#else
+#define MAX_NUM_WORKER_THREADS 32	/* Number of launchable work threads */
+#endif
 
 /* Factoring limits based on complex formulas given the speed of the */
 /* factoring code vs. the speed of the Lucas-Lehmer code */

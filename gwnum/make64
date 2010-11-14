@@ -1,4 +1,4 @@
-# Makefile for Linux x86-64 gwnum library
+# Makefile for Linux and FreeBSD 64-bit gwnum library
 #
 
 CC = gcc

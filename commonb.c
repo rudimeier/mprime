@@ -196,15 +196,19 @@ gwmutex	MEM_MUTEX;		/* Lock for accessing mem globals */
 void SetPriority (
 	struct PriorityInfo *info)
 {
-static	char	AFFINITY_SCRAMBLE[33] = {0};
+static	char	AFFINITY_SCRAMBLE[MAX_NUM_WORKER_THREADS+1] = {0};
+static	char	AFFINITY_SCRAMBLE_STATE = 0;	/* 0 = not read in, 1 = read in and valid, 2 = no scramble string in local.txt */
 	unsigned int i;
-	int	mask;
+	int	mask[MAX_NUM_WORKER_THREADS/32];
+#define maskset(x)	mask[(x)/32] |= (1 << ((x) & 31))
+#define maskget(m,x)	(m[(x)/32] & (1 << ((x) & 31)))
 
 /* Benchmarking affinity.  For hyperthreaded CPUs, we put auxillary */
 /* threads onto the logical CPUs before moving onto the next physical CPU. */  
 
 	if (info->type == SET_PRIORITY_BENCHMARKING) {
-		mask = 1 << (info->aux_thread_num);
+		memset (mask, 0, sizeof (mask));
+		maskset (info->aux_thread_num);
 	}
 
 /* Torture test affinity.  If we're running the same number of torture */
@@ -213,18 +217,19 @@ static	char	AFFINITY_SCRAMBLE[33] = {0};
 
 	else if (info->type == SET_PRIORITY_TORTURE) {
 		if (info->num_threads == NUM_CPUS * CPU_HYPERTHREADS) {
-			mask = 1 << info->thread_num;
+			memset (mask, 0, sizeof (mask));
+			maskset (info->thread_num);
 		} else if (info->num_threads == NUM_CPUS) {
-			mask = 1 << (info->thread_num * CPU_HYPERTHREADS);
-			for (i = 1; i < CPU_HYPERTHREADS; i++) mask |= (mask << 1);
+			memset (mask, 0, sizeof (mask));
+			for (i = 0; i < CPU_HYPERTHREADS; i++) maskset (info->thread_num * CPU_HYPERTHREADS + i);
 		} else
-			mask = -1;
+			memset (mask, 0xFF, sizeof (mask));
 	}
 
 /* QA affinity.  Just let the threads run on any CPU. */
 
 	else if (info->type == SET_PRIORITY_QA) {
-		mask = -1;
+		memset (mask, 0xFF, sizeof (mask));
 	}
 
 /* Normal worker threads.  Pay attention to the affinity option set */
@@ -233,7 +238,7 @@ static	char	AFFINITY_SCRAMBLE[33] = {0};
 /* A CPU_AFFINITY setting of 99 means "run on any CPU". */
 
 	else if (CPU_AFFINITY[info->thread_num] == 99) {
- 		mask = -1;
+		memset (mask, 0xFF, sizeof (mask));
 	}
 
 /* A small CPU_AFFINITY setting means run only on that CPU.  Since there is */
@@ -242,9 +247,11 @@ static	char	AFFINITY_SCRAMBLE[33] = {0};
 
 	else if (CPU_AFFINITY[info->thread_num] < 100) {
 		if (CPU_AFFINITY[info->thread_num] + info->aux_thread_num >= NUM_CPUS * CPU_HYPERTHREADS)
-			mask = -1;
-		else
-			mask = 1 << (CPU_AFFINITY[info->thread_num] + info->aux_thread_num);
+			memset (mask, 0xFF, sizeof (mask));
+		else {
+			memset (mask, 0, sizeof (mask));
+			maskset (CPU_AFFINITY[info->thread_num] + info->aux_thread_num);
+		}
 	}
 
 /* A CPU_AFFINITY setting of 100 means "smart affinity assignments". */
@@ -255,7 +262,7 @@ static	char	AFFINITY_SCRAMBLE[33] = {0};
 /* threads on any CPU. */
 
 	else if (! PTOIsGlobalOption (CPU_AFFINITY))
-	 	mask = -1;
+		memset (mask, 0xFF, sizeof (mask));
 
 /* If number of worker threads equals number of logical cpus then run each */
 /* worker thread on its own logical CPU.  If the user also has us running */
@@ -263,8 +270,9 @@ static	char	AFFINITY_SCRAMBLE[33] = {0};
 /* performance hit will occur. */
 
 	else if (NUM_WORKER_THREADS == NUM_CPUS * CPU_HYPERTHREADS) {
-		mask = 1 << info->thread_num;
-		if (info->aux_thread_num) mask = -1;
+		memset (mask, 0, sizeof (mask));
+		maskset (info->thread_num);
+		if (info->aux_thread_num) memset (mask, 0xFF, sizeof (mask));
 	}
 
 /* If number of worker threads equals number of physical cpus then run each */
@@ -274,47 +282,51 @@ static	char	AFFINITY_SCRAMBLE[33] = {0};
 /* logical CPUs created by hyperthreading. */ 
 
 	else if (NUM_WORKER_THREADS == NUM_CPUS) {
-		mask = 1 << (info->thread_num * CPU_HYPERTHREADS);
-		for (i = 1; i < CPU_HYPERTHREADS; i++) mask |= (mask << 1);
+		memset (mask, 0, sizeof (mask));
+		for (i = 0; i < CPU_HYPERTHREADS; i++) maskset (info->thread_num * CPU_HYPERTHREADS + i);
 	}
 
 /* Otherwise, just run on any CPU. */
 
 	else
-		mask = -1;
+		memset (mask, 0xFF, sizeof (mask));
 
 /* Get the optional string used to scramble the affinity mask bits to */
 /* new or odd optimizations we had not considered. */
 
-	if (!AFFINITY_SCRAMBLE[0]) {
-		IniGetString (LOCALINI_FILE, "AffinityScramble", AFFINITY_SCRAMBLE, sizeof (AFFINITY_SCRAMBLE), "x");
-		if (AFFINITY_SCRAMBLE[0] != 'x') {
-			for (i = 0; i < 32; i++) {
+	if (AFFINITY_SCRAMBLE_STATE == 0) {
+		IniGetString (LOCALINI_FILE, "AffinityScramble", AFFINITY_SCRAMBLE, sizeof (AFFINITY_SCRAMBLE), "*");
+		if (AFFINITY_SCRAMBLE[0] == '*') {
+			AFFINITY_SCRAMBLE_STATE = 2;
+		} else {
+			AFFINITY_SCRAMBLE_STATE = 1;
+			for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
 				if (AFFINITY_SCRAMBLE[i] >= '0' && AFFINITY_SCRAMBLE[i] <= '9')
 					AFFINITY_SCRAMBLE[i] -= '0';
 				else if (AFFINITY_SCRAMBLE[i] >= 'A' && AFFINITY_SCRAMBLE[i] <= 'Z')
 					AFFINITY_SCRAMBLE[i] = AFFINITY_SCRAMBLE[i] - 'A' + 10;
+				else if (AFFINITY_SCRAMBLE[i] >= 'a' && AFFINITY_SCRAMBLE[i] <= 'z')
+					AFFINITY_SCRAMBLE[i] = AFFINITY_SCRAMBLE[i] - 'A' + 36;
+				else if (AFFINITY_SCRAMBLE[i] == '(')
+					AFFINITY_SCRAMBLE[i] = 62;
+				else if (AFFINITY_SCRAMBLE[i] == ')')
+					AFFINITY_SCRAMBLE[i] = 63;
 				else
-					AFFINITY_SCRAMBLE[i] = -1;
+					AFFINITY_SCRAMBLE[i] = i;  /* Illegal entry = no mapping */
 			}
 		}
 	}
 
 /* Apply the optional affinity mask scrambling */
 
-	if (AFFINITY_SCRAMBLE[0] != 'x' && mask != -1) {
-		int	new_mask;
-		new_mask = 0;
-		for (i = 0; i < 32; i++) {
-			if (mask & (1L << i)) {
-				if (AFFINITY_SCRAMBLE[i] < 0 ||
-				    AFFINITY_SCRAMBLE[i] >= (char) (NUM_CPUS * CPU_HYPERTHREADS))
-					new_mask = -1;
-				else
-					new_mask |= (1L << AFFINITY_SCRAMBLE[i]);
-			}
+	if (AFFINITY_SCRAMBLE_STATE == 1) {
+		int	old_mask[MAX_NUM_WORKER_THREADS/32];
+		memcpy (old_mask, mask, sizeof (mask));
+		memset (mask, 0, sizeof (mask));
+		for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
+			if (maskget (old_mask, i) && AFFINITY_SCRAMBLE[i] < MAX_NUM_WORKER_THREADS)
+				maskset (AFFINITY_SCRAMBLE[i]);
 		}
-		mask = new_mask;
 	}
 
 /* Output an informative message */
@@ -326,13 +338,13 @@ static	char	AFFINITY_SCRAMBLE[33] = {0};
 			strcpy (buf, "Setting affinity to run worker on ");
 		else
 			sprintf (buf, "Setting affinity to run helper thread %d on ", info->aux_thread_num);
-		if (mask == -1) {
+		if (mask[0] == -1) {
 			strcat (buf, "any logical CPU.\n");
 		} else {
 			int	i, count;
 			char	cpu_list[80];
-			for (i = count = 0; i < 32; i++) {
-				if (! (mask & (1 << i))) continue;
+			for (i = count = 0; i < MAX_NUM_WORKER_THREADS; i++) {
+				if (! maskget (mask, i)) continue;
 				count++;
 				if (count == 1) sprintf (cpu_list, "%d", i);
 				else sprintf (cpu_list + strlen(cpu_list), ",%d", i);
@@ -4096,9 +4108,9 @@ int lucasSetup (
 	lldata->units_bit = 0;
 
 /* Init the FFT code for squaring modulo 1.0*2^p-1.  NOTE: As a kludge for */
-/* the benchmarking code, an odd FFTlen sets up the 1.0*2^p+1 FFT code. */
+/* the benchmarking and timing code, an odd FFTlen sets up the 1.0*2^p+1 FFT code. */
 
-	gwset_minimum_fftlen (&lldata->gwdata, fftlen & ~1);
+	gwset_specific_fftlen (&lldata->gwdata, fftlen & ~1);
 	if (fftlen & 1)
 		res = gwsetup (&lldata->gwdata, 1.0, 2, p, 1);
 	else
@@ -5941,7 +5953,7 @@ int selfTestInternal (
 	time_t	start_time, current_time;
 	struct self_test_info *test_data;
 	unsigned int test_data_count;
-	int	cpu_supports_3dnow, stop_reason;
+	int	stop_reason;
 
 /* Set the title */
 
@@ -6014,13 +6026,6 @@ int selfTestInternal (
 			break;
 		}
 
-/* Anecdotal evidence suggests that some AMD chips struggle with FFTs */
-/* that do not use the prefetchw instruction (they would fail a version */
-/* 23.8 torture test, but pass a version 24.11 torture test).  Thus, I've */
-/* made the torture test use both the prefetchw and non-prefetchw FFTs. */
-
-		cpu_supports_3dnow = (CPU_FLAGS & CPU_3DNOW) ? TRUE : FALSE;
-
 /* Now run Lucas setup, for extra safety double the maximum allowable */
 /* sum(inputs) vs. sum(outputs) difference.  For faster detection of unstable */
 /* systems, enable SUM(INPUTS) != SUM(OUTPUTS) checking on the first test. */
@@ -6031,14 +6036,7 @@ int selfTestInternal (
 		gwset_num_threads (&lldata.gwdata, num_threads);
 		lldata.gwdata.GW_BIGBUF = (char *) bigbuf;
 		lldata.gwdata.GW_BIGBUF_SIZE = (bigbuf != NULL) ? (size_t) memory * (size_t) 1048576 : 0;
-		if (cpu_supports_3dnow && p > 5000000 &&
-		    torture_index != NULL &&
-		    (test_data[i].reshi & 1) &&
-		    IniGetInt (INI_FILE, "Special3DNowTorture", 1))
-			CPU_FLAGS &= ~CPU_3DNOW;
 		stop_reason = lucasSetup (thread_num, p, fftlen, &lldata);
-		if (cpu_supports_3dnow)
-			CPU_FLAGS |= CPU_3DNOW;
 		if (stop_reason) return (stop_reason);
 		lldata.gwdata.MAXDIFF *= 2.0;
 
@@ -6961,8 +6959,9 @@ int primeBench (
 		gwset_num_threads (&lldata.gwdata, threads);
 		gwset_thread_callback (&lldata.gwdata, SetAuxThreadPriority);
 		gwset_thread_callback_data (&lldata.gwdata, &sp_info);
+		gwset_minimum_fftlen (&lldata.gwdata, fftlen);
 		if (all_bench) lldata.gwdata.bench_pick_nth_fft = ii;
-		stop_reason = lucasSetup (thread_num, fftlen * 17 + 1, fftlen + plus1, &lldata);
+		stop_reason = lucasSetup (thread_num, fftlen * 17 + 1, plus1, &lldata);
 		if (stop_reason) {
 			/* An error during all_bench is expected.  Continue on to next FFT length. */
 			/* An error during a norm bench is unexpected.  Sett fftlen so that we stop benching. */
@@ -7004,7 +7003,7 @@ int primeBench (
 
 /* Output start message for this FFT length */
 
-		sprintf (buf, "Timing %lu iterations at %luK%s FFT length%s.  ",
+		sprintf (buf, "Timing %lu iterations of %luK%s FFT length%s.  ",
 			 iterations, fftlen / 1024,
 			 plus1 ? " all-complex" : "",
 			 gw_using_large_pages (&lldata.gwdata) ? " using large pages" : "");

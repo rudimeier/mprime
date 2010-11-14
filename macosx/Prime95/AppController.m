@@ -45,14 +45,20 @@ AppController *myAppController;			// Global variable to allow access to this obj
 /* editor (we write the default there so it is easy to find and overwrite by the user) */
 /* or by specifying -WorkingDirectory "some_path" as a command line argument. */
 
-	workingDir = [[NSUserDefaults standardUserDefaults] stringForKey:@"WorkingDirectory"];
-	if (workingDir == nil) {
-		workingDir = @"~/Prime95";
-		[[NSUserDefaults standardUserDefaults] setObject:workingDir forKey:@"WorkingDirectory"];
+/* However, SoB doesn't like this approach as it makes it hard for them to package up */
+/* an executable with a default prime.txt to contact their server using the MersenneIP= option. */
+/* So, if prime.txt exists in the default working directory we won't change the working directory. */
+
+	if (! fileExists ("prime.txt")) {
+		workingDir = [[NSUserDefaults standardUserDefaults] stringForKey:@"WorkingDirectory"];
+		if (workingDir == nil) {
+			workingDir = @"~/Prime95";
+			[[NSUserDefaults standardUserDefaults] setObject:workingDir forKey:@"WorkingDirectory"];
+		}
+		workingDir = [workingDir stringByExpandingTildeInPath];
+		[[NSFileManager defaultManager] createDirectoryAtPath:workingDir attributes:nil];
+		[[NSFileManager defaultManager] changeCurrentDirectoryPath:workingDir];
 	}
-	workingDir = [workingDir stringByExpandingTildeInPath];
-	[[NSFileManager defaultManager] createDirectoryAtPath:workingDir attributes:nil];
-	[[NSFileManager defaultManager] changeCurrentDirectoryPath:workingDir];
 
 /* Initialize gwnum call back routines.  Using callback routines lets the */
 /* gwnum library have a nice clean interface for users that do not need */

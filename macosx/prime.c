@@ -1,4 +1,4 @@
-/* Copyright 1995-2009 Mersenne Research, Inc. */
+/* Copyright 1995-2010 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -20,6 +20,8 @@
 #include <unistd.h>
 #include <linux/unistd.h>
 #include <asm/unistd.h>
+#define __USE_GNU
+#include <sched.h>
 #include <sys/resource.h>
 #include <sys/sysinfo.h>
 #include <sys/time.h>
@@ -48,6 +50,8 @@
 #include <pthread.h>
 #include <sched.h>
 #include <unistd.h>
+#include <sys/param.h>
+#include <sys/cpuset.h>
 #include <sys/resource.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
@@ -89,12 +93,6 @@ typedef int pid_t;
 #endif
 
 /* Globals */
-
-#ifndef __WATCOMC__
-#ifndef __APPLE__
-#define OPEN_MAX 20
-#endif
-#endif
 
 int volatile THREAD_KILL = 0;
 int NO_GUI = 1;
@@ -264,17 +262,13 @@ int main (
 /* to see a CPU intensive program not running at nice priority when */
 /* executing a ps command. */
 
+#if defined (__linux__) || defined (__APPLE__) || defined (__FreeBSD__)
+	/* Linux/FreeBSD ranges from -20 to +19, lower values give more favorable scheduling */
 	nice_level = IniGetInt (INI_FILE, "Nice", 10);
 	if (!torture_test && nice_level) {
-/* Linux ranges from -20 to +19, lower values give more favorable scheduling */
-#if defined (__linux__) || defined (__HAIKU__)
 		setpriority (PRIO_PROCESS, 0, nice_level);
-#endif
-/* FreeBSD ranges from -20 to +20, lower values give more favorable scheduling */
-#if defined (__APPLE__) || defined (__FreeBSD__)
-		setpriority (PRIO_PROCESS, 0, nice_level);
-#endif
 	}
+#endif
 
 /* If running the torture test, do so now. */
 

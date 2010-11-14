@@ -16,7 +16,7 @@ ENDIF
 
 INCLUDE	unravel.mac
 
-VERSION_NUMBER = 2603		;; Version 26.3
+VERSION_NUMBER = 2604		;; Version 26.4
 
 ;
 ; Global variables needed by FFT setup code
@@ -80,7 +80,7 @@ IFDEF APPLE
 	P4TP_512 = 0
 	P4TP_256 = 0
 	P4TP_128 = 0
-IFNDEF X86_64
+IFDEF X86_64
 	P4_1024	= 0
 ENDIF
 ENDIF

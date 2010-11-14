@@ -3494,12 +3494,21 @@ int calculate_bif (
 	gwhandle *gwdata,	/* Gwnum global data */
 	unsigned long fftlen)
 {
-	int	retval;
+	int	cpu_arch, retval;
+
+/* If the architecture and CPU flags are inconsistent, correct the architecture.  This shouldn't */
+/* ever happen unless the results from CPUID are overridden. */
+
+	cpu_arch = CPU_ARCHITECTURE;
+	if (cpu_arch == CPU_ARCHITECTURE_AMD_K8 && ! (gwdata->cpu_flags & CPU_3DNOW))
+		cpu_arch = CPU_ARCHITECTURE_CORE_2;
+	if (cpu_arch == CPU_ARCHITECTURE_AMD_K10 && ! (gwdata->cpu_flags & CPU_3DNOW))
+		cpu_arch = CPU_ARCHITECTURE_CORE_2;
 
 /* Map the CPU architecture as determined by CPUID to one of the CPU architectures */
 /* that the FFT assembly code is optimized for. */
 
-	switch (CPU_ARCHITECTURE) {
+	switch (cpu_arch) {
 	case CPU_ARCHITECTURE_PENTIUM_M:	/* Not sure what is best for these three architectures */
 	case CPU_ARCHITECTURE_CORE:
 	case CPU_ARCHITECTURE_ATOM:

@@ -153,24 +153,24 @@ xsub_7_words MACRO dist4
 	cmp	ZERO_PADDED_FFT, 0	;; Is this a zero-padded FFT?
 	je	nozpad			;; No, skip 7 word subtract
 	mov	rsi, DESTARG
-	movapd	xmm0, [rsi]		;; Subtract 1st, 2nd word
-	movapd	xmm1, ZPAD0		;; Load ZPAD data
+	xload	xmm0, [rsi]		;; Subtract 1st, 2nd word
+	xload	xmm1, ZPAD0		;; Load ZPAD data
 	mulpd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
 	subpd	xmm0, xmm1
 	addpd	xmm7, xmm1		;; Adjust sumout
-	movapd	[rsi], xmm0
-	movapd	xmm0, [rsi+64]		;; Subtract 3rd, 4th word
-	movapd	xmm1, ZPAD2		;; Load ZPAD data
+	xstore	[rsi], xmm0
+	xload	xmm0, [rsi+64]		;; Subtract 3rd, 4th word
+	xload	xmm1, ZPAD2		;; Load ZPAD data
 	mulpd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
 	subpd	xmm0, xmm1
 	addpd	xmm7, xmm1		;; Adjust sumout
-	movapd	[rsi+64], xmm0
-	movapd	xmm0, [rsi+dist4]	;; Subtract 5th, 6th word
-	movapd	xmm1, ZPAD4		;; Load ZPAD data
+	xstore	[rsi+64], xmm0
+	xload	xmm0, [rsi+dist4]	;; Subtract 5th, 6th word
+	xload	xmm1, ZPAD4		;; Load ZPAD data
 	mulpd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
 	subpd	xmm0, xmm1
 	addpd	xmm7, xmm1		;; Adjust sumout
-	movapd	[rsi+dist4], xmm0
+	xstore	[rsi+dist4], xmm0
 	movsd	xmm0, Q [rsi+dist4+64]	;; Subtract 7th word
 	movsd	xmm1, ZPAD6		;; Load ZPAD data
 	mulsd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
@@ -397,17 +397,18 @@ done:	end_timer 1
 
 copy_scratch_data_to_fft MACRO cachelines
 	LOCAL	a0b
+	start_timer 30
 	mov	rsi, scratch_area	;; Get address of scratch area
 	mov	rcx, DATA_ADDR		;; Load source address
 	mov	eax, cachelines/8*65536	;; Load counter
-a0b:	movapd	xmm0, [rsi]		;; Copy a cache line
-	movapd	xmm1, [rsi+16]
-	movapd	xmm2, [rsi+32]
-	movapd	xmm3, [rsi+48]
-	movapd	[rcx], xmm0
-	movapd	[rcx+16], xmm1
-	movapd	[rcx+32], xmm2
-	movapd	[rcx+48], xmm3
+a0b:	xload	xmm0, [rsi]		;; Copy a cache line
+	xload	xmm1, [rsi+16]
+	xload	xmm2, [rsi+32]
+	xload	xmm3, [rsi+48]
+	xstore	[rcx], xmm0
+	xstore	[rcx+16], xmm1
+	xstore	[rcx+32], xmm2
+	xstore	[rcx+48], xmm3
 	bump	rsi, 64			;; Next source pointer
 	bump	rcx, 64			;; Next dest pointer
 	add	al, 256/2/clm		;; Test loop counter
@@ -419,21 +420,23 @@ a0b:	movapd	xmm0, [rsi]		;; Copy a cache line
 	bump	rsi, -8*clmblkdst+clmblkdst8
 	sub	eax, 65536		;; Test loop counter
 	jnz	short a0b		;; Iterate if necessary
+	end_timer 30
 	ENDM
 
 copy_scratch_no_pad_data_to_fft MACRO cachelines
 	LOCAL	a0b
+	start_timer 30
 	mov	rsi, scratch_area	;; Get address of scratch area
 	mov	rcx, DATA_ADDR		;; Load source address
 	mov	eax, cachelines*65536	;; Load counter
-a0b:	movapd	xmm0, [rsi]		;; Copy a cache line
-	movapd	xmm1, [rsi+16]
-	movapd	xmm2, [rsi+32]
-	movapd	xmm3, [rsi+48]
-	movapd	[rcx], xmm0
-	movapd	[rcx+16], xmm1
-	movapd	[rcx+32], xmm2
-	movapd	[rcx+48], xmm3
+a0b:	xload	xmm0, [rsi]		;; Copy a cache line
+	xload	xmm1, [rsi+16]
+	xload	xmm2, [rsi+32]
+	xload	xmm3, [rsi+48]
+	xstore	[rcx], xmm0
+	xstore	[rcx+16], xmm1
+	xstore	[rcx+32], xmm2
+	xstore	[rcx+48], xmm3
 	bump	rsi, 64			;; Next source pointer
 	bump	rcx, 64			;; Next dest pointer
 	add	al, 256/2/clm		;; Test loop counter
@@ -442,22 +445,24 @@ a0b:	movapd	xmm0, [rsi]		;; Copy a cache line
 	bump	rcx, -2*clm*64+blkdst	;; Next dest pointer
 	sub	eax, 65536		;; Test loop counter
 	jnz	short a0b		;; Iterate if necessary
+	end_timer 30
 	ENDM
 
 copy_fft_data_to_scratch MACRO cachelines
 	LOCAL	a0b
+	start_timer 31
 	mov	rsi, DATA_ADDR		;; Load source address
 	add	rsi, DIST_TO_FFTSRCARG
 	mov	rcx, scratch_area	;; Get address of scratch area
 	mov	eax, cachelines/8*65536	;; Load counter
-a0b:	movapd	xmm0, [rsi]		;; Copy a cache line
-	movapd	xmm1, [rsi+16]
-	movapd	xmm2, [rsi+32]
-	movapd	xmm3, [rsi+48]
-	movapd	[rcx], xmm0
-	movapd	[rcx+16], xmm1
-	movapd	[rcx+32], xmm2
-	movapd	[rcx+48], xmm3
+a0b:	xload	xmm0, [rsi]		;; Copy a cache line
+	xload	xmm1, [rsi+16]
+	xload	xmm2, [rsi+32]
+	xload	xmm3, [rsi+48]
+	xstore	[rcx], xmm0
+	xstore	[rcx+16], xmm1
+	xstore	[rcx+32], xmm2
+	xstore	[rcx+48], xmm3
 	bump	rsi, 64			;; Next source pointer
 	bump	rcx, 64			;; Next dest pointer
 	add	al, 256/2/clm		;; Test loop counter
@@ -469,22 +474,24 @@ a0b:	movapd	xmm0, [rsi]		;; Copy a cache line
 	bump	rcx, -8*clmblkdst+clmblkdst8
 	sub	eax, 65536		;; Test loop counter
 	jnz	short a0b		;; Iterate if necessary
+	end_timer 31
 	ENDM
 
 copy_fft_data_to_scratch_no_pad MACRO cachelines
 	LOCAL	a0b
+	start_timer 31
 	mov	rsi, DATA_ADDR		;; Load source address
 	add	rsi, DIST_TO_FFTSRCARG
 	mov	rcx, scratch_area	;; Get address of scratch area
 	mov	eax, cachelines*65536	;; Load counter
-a0b:	movapd	xmm0, [rsi]		;; Copy a cache line
-	movapd	xmm1, [rsi+16]
-	movapd	xmm2, [rsi+32]
-	movapd	xmm3, [rsi+48]
-	movapd	[rcx], xmm0
-	movapd	[rcx+16], xmm1
-	movapd	[rcx+32], xmm2
-	movapd	[rcx+48], xmm3
+a0b:	xload	xmm0, [rsi]		;; Copy a cache line
+	xload	xmm1, [rsi+16]
+	xload	xmm2, [rsi+32]
+	xload	xmm3, [rsi+48]
+	xstore	[rcx], xmm0
+	xstore	[rcx+16], xmm1
+	xstore	[rcx+32], xmm2
+	xstore	[rcx+48], xmm3
 	bump	rsi, 64			;; Next source pointer
 	bump	rcx, 64			;; Next dest pointer
 	add	al, 256/2/clm		;; Test loop counter
@@ -493,6 +500,7 @@ a0b:	movapd	xmm0, [rsi]		;; Copy a cache line
 	bump	rcx, -2*clm*64+clmblkdst;; Next dest pointer
 	sub	eax, 65536		;; Test loop counter
 	jnz	short a0b		;; Iterate if necessary
+	end_timer 31
 	ENDM
 
 ;; This macro sets the prefetch pointers needed by the newxloop macros

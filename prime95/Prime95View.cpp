@@ -16,8 +16,13 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+#ifdef X86_64
+#define MAX_VIEWS	66	/* 66 MDI windows: Main_thread, comm_thread */
+				/* and 64 worker threads. */
+#else
 #define MAX_VIEWS	34	/* 34 MDI windows: Main_thread, comm_thread */
 				/* and 32 worker threads. */
+#endif
 
 CPrime95View *Views[MAX_VIEWS] = {0};
 char	ThreadTitles[MAX_VIEWS][80] = {0};
@@ -54,7 +59,7 @@ CPrime95View::CPrime95View()
 
 	BaseTitle[0] = 0;
 	Title[0] = 0;
-	for (i = 0; i < 100; i++) Lines[i] = LineData[i];
+	for (i = 0; i < MAX_VIEW_LINES; i++) Lines[i] = LineData[i];
 	NumLines = 0;
 	MaxLineSize = 0;
 	Lines[0][0] = 0;
@@ -116,25 +121,31 @@ void CPrime95View::OnUpdate(CView* pSender, LPARAM lHint, CObject* pHint)
 void CPrime95View::OnDraw(CDC* pDC)
 {
 	RECT	r;
+	CPoint	scroll_offset;
 	int	ypos;
-	int	i, j;
+	int	first_line, skip_lines, i, j;
 
 	pDC->SetBkMode (TRANSPARENT);
 	pDC->SetTextColor (GetSysColor (COLOR_WINDOWTEXT));
 
 	GetClientRect (&r);
+	scroll_offset = GetScrollPosition ();
+
+/* If Lines[0] is empty, then output lines NumLines to 1 */
+/* If Lines[0] has text, then output lines NumLines-1 to 0 */
 
 	gwmutex_lock (&VIEW_LINES_MUTEX);
-	ypos = (r.bottom - r.top) - NumLines * charHeight;
-	if (ypos < r.top) ypos = r.top;
-
-/* If Lines[0] is empty, then output lines 1 to NumLines */
-/* If Lines[0] has text, then output lines 0 to NumLines-1 */
-
-	i = Lines[0][0] ? NumLines - 1 : NumLines;
-	for (j = NumLines; j; i--, j--) {
-		pDC->TextOut (0, ypos, Lines[i], (int) strlen (Lines[i]));
-		ypos += charHeight;
+	first_line = Lines[0][0] ? NumLines - 1 : NumLines;
+	skip_lines = (r.top + scroll_offset.y) / charHeight;
+	if (skip_lines < NumLines) {
+		i = first_line - skip_lines;
+		j = NumLines - skip_lines;
+		ypos = skip_lines * charHeight;
+		for ( ; j; i--, j--) {
+			pDC->TextOut (0, ypos, Lines[i], (int) strlen (Lines[i]));
+			ypos += charHeight;
+			if (ypos > r.bottom + scroll_offset.y) break;
+		}
 	}
 	gwmutex_unlock (&VIEW_LINES_MUTEX);
 }
@@ -701,7 +712,7 @@ void CPrime95View::LineFeed ()
 // see if we need to test every line to determine a new MaxLineSize.
 	
 	lines_to_size = 1;
-	if (NumLines == 100) {
+	if (NumLines == MAX_VIEW_LINES) {
 		NumLines--;
 		if (MaxLineSize == strlen (Lines[NumLines])) {
 			MaxLineSize = 0;

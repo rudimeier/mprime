@@ -8,13 +8,13 @@ CPP = g++
 CPPFLAGS = -I.. -I../gwnum -O2 -march=i586 -malign-double
 
 LFLAGS = -Wl,-M
-LIBS   = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lnetwork -lcurl -lstdc++.r4
+LIBS   = -L/boot/common/lib ../gwnum/gwnum.a ../gwnum/gwnum.ld -lnetwork -lcurl -lstdc++.r4
 
 FACTOROBJ = factor32.o
 HAIKUOBJS = prime.o menu.o
 EXE      = mprime
 
-+#########################################################################
+#########################################################################
 
 $(EXE): security $(HAIKUOBJS) $(FACTOROBJ)
 	$(CC) $(LFLAGS) -o $(EXE) $(HAIKUOBJS) $(FACTOROBJ) $(LIBS)

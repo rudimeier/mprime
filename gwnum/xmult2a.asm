@@ -178,9 +178,9 @@ ttp	mov	norm_ptr2, rbx		;; Save column multipliers ptr
 	mov	eax, addcount1		;; Load loop counter
 	mov	loopcount2z, eax	;; Save loop counter
 	mov	loopcount3z, 0		;; Clear outermost loop counter
-	sub	rax, rax		;; Clear big/lit flags
 ttp	movzx	rax, BYTE PTR [rdi+0]	;; Load big vs. little flags
 no ttp	sub	rax, rax
+no ttp	sub	rcx, rcx
 ilp0:	mov	ebx, cache_line_multiplier ;; Load inner loop counter
 	mov	loopcount1z, rbx	;; Save loop counter
 	lea	rbx, XMM_COL_MULTS	;; Load col mult scratch area

@@ -2,7 +2,7 @@
 /* so that they can be included in both the command-line mprime version as */
 /* well as the Mac OS X GUI version. */
 
-/* Copyright 1995-2009 Mersenne Research, Inc. */
+/* Copyright 1995-2010 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -11,14 +11,14 @@
 /* Windows uses this to implement boot delay. */
 
 void PreLaunchCallback (
-			int	launch_type)
+	int	launch_type)
 {
 }
 
 /* Do some work after worker threads have terminated */
 
 void PostLaunchCallback (
-			 int	launch_type)
+	int	launch_type)
 {
 }
 
@@ -27,7 +27,7 @@ void PostLaunchCallback (
 /* can't be done any other way. */
 
 void stopCheckCallback (
-			int	thread_num)
+	int	thread_num)
 {
 }
 
@@ -263,8 +263,8 @@ void raiseAllWorkerThreadPriority (void)
 /* 0 (linux's normal priority). */
 
 void setThreadPriorityAndAffinity (
-				   int	priority,		/* Priority, 1=low, 9=high */
-				   int	mask)			/* Affinity mask */
+	int	priority,		/* Priority, 1=low, 9=high */
+	int	*mask)			/* Affinity mask (32-bits per array entry) */
 {
 #ifdef __IBMC__
 	DosSetPriority(PRTYS_PROCESS,
@@ -277,8 +277,9 @@ void setThreadPriorityAndAffinity (
 		       0);
 #endif
 #ifdef __linux__
-	int	linux_priority, errcode;
+	int	linux_priority, i, errcode;
 	pid_t	thread_id;
+	cpu_set_t linux_mask;
 
 /* I couldn't get the standard syscall0 declaration of gettid to */
 /* work in my Linux distro.  Use the direct system call instead. */
@@ -295,7 +296,10 @@ void setThreadPriorityAndAffinity (
 /* as in Windows with physical CPUs representing the least significant bits */
 /* and hyperthreaded logical CPUs as the next set of more significant bits */
 
-	errcode = sched_setaffinity (thread_id, sizeof (mask), &mask);
+	CPU_ZERO (&linux_mask);
+	for (i = 0; i < MAX_NUM_WORKER_THREADS; i++)
+		if (mask[i/32] & (1 << (i & 31))) CPU_SET (i, &linux_mask);
+	errcode = sched_setaffinity (thread_id, sizeof (linux_mask), &linux_mask);
 #endif
 
 #if defined (__APPLE__) || defined (__FreeBSD__)
@@ -304,9 +308,13 @@ void setThreadPriorityAndAffinity (
 	static	int	min_priority = 0;
 	static	int	max_priority = 0;
 	struct sched_param sp;
+#ifdef __FreeBSD__
+	int	i;
+	cpuset_t cset;
+#endif
 
 /* Get the default thread priority when a thread is first launched */
-	
+
 	if (default_priority == 999) {
 		memset (&sp, 0, sizeof(struct sched_param));
 		if (pthread_getschedparam (pthread_self(), &default_policy, &sp) >= 0) {
@@ -327,6 +335,15 @@ void setThreadPriorityAndAffinity (
 	memset (&sp, 0, sizeof(struct sched_param));
 	sp.sched_priority = min_priority + (priority - 1) * (default_priority - min_priority) / 7;
 	pthread_setschedparam (pthread_self(), default_policy, &sp);
+
+/* Set affinity for FreeBSD threads */
+
+#ifdef __FreeBSD__
+	CPU_ZERO (&cset);
+	for (i = 0; i < MAX_NUM_WORKER_THREADS; i++)
+		if (mask[i/32] & (1 << (i & 31))) CPU_SET (i, &cset);
+	cpuset_setaffinity (CPU_LEVEL_WHICH, CPU_WHICH_TID, -1, sizeof (cset), &cset);
+#endif
 #endif
 }
 

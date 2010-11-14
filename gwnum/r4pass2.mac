@@ -17879,7 +17879,7 @@ ELSE					;; Pentium 4 faster doing merged loops
 	start_timer 13
 	mov	rdi, xsincos_complex	;; Load sin/cos pointer
 	mov	rbp, rdi
-	loops_init_prefetch 1024, 128, 4, rcx;; 4 iters of 2 iters of 128
+	loops_init_prefetch 1024, 64, 2, rcx;; 4 iters of 2 iters of 128
 	r4_x4cl_four_complex_djbunfft_preload
 
 c2a:	xtouch	[rcx+4096-64]		;; Load prefetch TLBs
@@ -17890,6 +17890,7 @@ c2b:	r4_x4cl_four_complex_djbunfft rsi, 8*dist128, 2*dist128, 4*dist128, rbp, 25
 	bump	rsi, -4*8*dist128	;; Restore source pointer
 	loops_undo 4
 
+	loops_set_prefetch 64, 1024, rcx ;; Disable prefetching in this section
 c1b:	r4_x4cl_four_complex_djbunfft rsi, 2*dist128, 8*dist128, 16*dist128, rdi, 1024*XMM_SCD2
 	bump	rdi, 256*XMM_SCD2	;; Next sin/cos ptr
 	loops	4, c1b			;; Test loop counter

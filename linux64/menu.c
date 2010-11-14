@@ -397,7 +397,7 @@ again:	if (max_num_workers () > 1)
 		outputLongLine ("\nUse the following values to select a work type:\n  0 - Whatever makes the most sense\n  2 - Trial factoring\n 100 - First time primality tests\n  101 - Double-checking\n  102 - World record primality tests\n  4 - P-1 factoring\n  104 - 100 million digit primality tests\n  1 - Trial factoring to low limits\n  5 - ECM on small Mersenne numbers\n  6 - ECM on Fermat numbers\n");
 	}
 
-	if (USE_PRIMENET || NUM_CPUS * CPU_HYPERTHREADS > m_num_thread) {
+	if (USE_PRIMENET || NUM_CPUS * CPU_HYPERTHREADS > 1) {
 	    for (i = 0; i < m_num_thread; i++) {
 		if (m_num_thread > 1)
 			printf ("\nOptions for worker #%d\n\n", i+1);
@@ -406,6 +406,19 @@ again:	if (max_num_workers () > 1)
 
 		if (USE_PRIMENET)
 			askNum ("Type of work to get", &m_work_pref[i], 0, 150);
+
+		if (NUM_CPUS * CPU_HYPERTHREADS > 1) {
+			char question[200];
+			unsigned long affinity;
+			sprintf (question,
+				 "CPU affinity (1-%d=specific CPU, 99=any CPU, 100=smart assignment)",
+				 (int) (NUM_CPUS * CPU_HYPERTHREADS));
+			affinity = m_affinity[i];
+			if (affinity < 99) affinity++;
+			askNum (question, &affinity, 1, 100);
+			if (affinity < 99) affinity--;
+			m_affinity[i] = affinity;
+		}
 
 		if (NUM_CPUS * CPU_HYPERTHREADS > m_num_thread)
 			askNum ("CPUs to use in LL test (multithreading)",

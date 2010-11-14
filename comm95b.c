@@ -77,9 +77,10 @@ void clearThreadHandleArray (void)
 
 void setThreadPriorityAndAffinity (
 	int	priority,		/* Priority, 1=low, 9=high */
-	int	mask)			/* Affinity mask */
+	int	*mask)			/* Affinity mask (32-bits per array entry) */
 {
 	HANDLE	h;
+	DWORD_PTR winmask;
 	int	pri_class, thread_pri;
 
 /* Get and remember the thread handle */
@@ -113,7 +114,12 @@ void setThreadPriorityAndAffinity (
 
 /* Set the affinity */
 
-	SetThreadAffinityMask (h, mask);
+#ifdef X86_64
+	winmask = (((DWORD_PTR) mask[1]) << 32) + (DWORD_PTR) mask[0];
+#else
+	winmask = (DWORD_PTR) mask[0];
+#endif
+	SetThreadAffinityMask (h, winmask);
 }
 
 /* Register a thread termination.  We remove the thread handle from the */

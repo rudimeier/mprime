@@ -8,7 +8,7 @@ CPP = g++
 CPPFLAGS = -I.. -I../gwnum -DX86_64 -O2
 
 LFLAGS = -Wl,-M
-LIBS = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lm -lpthread -Wl,-Bstatic -lcurl -lstdc++ -Wl,-Bdynamic -ldl
+LIBS = ../gwnum/gwnum.a ../gwnum/gwnum.ld -lm -lpthread -Wl,-Bstatic $(shell pkg-config --static --libs libcurl) -lstdc++ -Wl,-Bdynamic -ldl
 
 FACTOROBJ = factor64.o
 LINUXOBJS = prime.o menu.o

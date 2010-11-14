@@ -406,9 +406,13 @@ int ell_add_special (
 	gwfftfftmul (&ecmdata->gwdata, z2, t1, t1);
 	gwfftfftmul (&ecmdata->gwdata, x2, t2, t2);
 	gwaddsub (&ecmdata->gwdata, t2, t1);	/* x3 = (t2 + t1)^2 * zdiff */
+	gwstartnextfft (&ecmdata->gwdata, TRUE);
 	gwsquare (&ecmdata->gwdata, t2);
+	gwstartnextfft (&ecmdata->gwdata, FALSE);
 	gwfftmul (&ecmdata->gwdata, zdiff, t2);
+	gwstartnextfft (&ecmdata->gwdata, TRUE);
 	gwsquare (&ecmdata->gwdata, t1);	/* z3 = (t2 - t1)^2 * xdiff */
+	gwstartnextfft (&ecmdata->gwdata, FALSE);
 	gwfftmul (&ecmdata->gwdata, xdiff, t1);
 	gwcopy (&ecmdata->gwdata, t2, x3);
 	gwcopy (&ecmdata->gwdata, t1, z3);
@@ -466,7 +470,9 @@ int ell_dbl_fft (
 	gwfft (&ecmdata->gwdata, t3, t3);
 	gwfft (&ecmdata->gwdata, x2, x2);
 	gwfftadd3 (&ecmdata->gwdata, t3, x2, t1);	/* Compute fft of t1! */
+	gwstartnextfft (&ecmdata->gwdata, TRUE);
 	gwfftfftmul (&ecmdata->gwdata, Ad4, x2, x2);	/* x2 = t2 * Ad4 */
+	gwstartnextfft (&ecmdata->gwdata, FALSE);
 	gwfft (&ecmdata->gwdata, x2, x2);
 	gwfftadd3 (&ecmdata->gwdata, x2, t3, z2);	/* z2 = (t2 * Ad4 + t3) * t3 */
 	gwfftfftmul (&ecmdata->gwdata, t3, z2, z2);
@@ -508,10 +514,12 @@ int ell_add_fft (
 	gwfftfftmul (&ecmdata->gwdata, x2, z1, t2);
 					/* t2 = (x1 - z1)(x2 + z2) */
 	gwaddsub (&ecmdata->gwdata, t2, t1);
+	gwstartnextfft (&ecmdata->gwdata, TRUE);
 	gwsquare (&ecmdata->gwdata, t2);
 					/* t2 = (t2 + t1)^2 (will become x3) */
 	gwsquare (&ecmdata->gwdata, t1);
 					/* t1 = (t2 - t1)^2 (will become z3) */
+	gwstartnextfft (&ecmdata->gwdata, FALSE);
 	gwfftaddsub4 (&ecmdata->gwdata, xdiff, zdiff, x3, z3);
 					/* x3 = xdiff = (xdiff + zdiff) */
 					/* z3 = zdiff = (xdiff - zdiff) */
@@ -556,10 +564,12 @@ int ell_add_fft_last (
 					/* t2 = (x1 - z1)(x2 + z2) */
 	if (xdiff != x3) {
 		gwaddsub4 (&ecmdata->gwdata, t2, t1, x3, z3);
+		gwstartnextfft (&ecmdata->gwdata, TRUE);
 		gwsquare (&ecmdata->gwdata, x3);
 					/* x3 = (t2 + t1)^2 */
 		gwsquare (&ecmdata->gwdata, z3);
 					/* z3 = (t2 - t1)^2 */
+		gwstartnextfft (&ecmdata->gwdata, FALSE);
 		gwfftaddsub4 (&ecmdata->gwdata, xdiff, zdiff, t1, t2);
 					/* t1 = xdiff = (xdiff + zdiff) */
 					/* t2 = zdiff = (xdiff - zdiff) */
@@ -569,10 +579,12 @@ int ell_add_fft_last (
 					/* z3 = z3 * xdiff */
 	} else {
 		gwaddsub (&ecmdata->gwdata, t2, t1);
+		gwstartnextfft (&ecmdata->gwdata, TRUE);
 		gwsquare (&ecmdata->gwdata, t2);
 		gwfft (&ecmdata->gwdata, t2, t2);
 		gwsquare (&ecmdata->gwdata, t1);
 		gwfft (&ecmdata->gwdata, t1, t1);
+		gwstartnextfft (&ecmdata->gwdata, FALSE);
 		gwfftaddsub4 (&ecmdata->gwdata, xdiff, zdiff, z3, x3);
 		gwfftfftmul (&ecmdata->gwdata, t2, x3, x3);
 		gwfftfftmul (&ecmdata->gwdata, t1, z3, z3);
@@ -3154,11 +3166,14 @@ restart3:
 			// In case stop_reason is out-of-memory, free some up
 			// before calling ecm_save.
 			mQ_term (&ecmdata);
-			dbltogw (&ecmdata.gwdata, 1.0, Q2x);
-			gwfft (&ecmdata.gwdata, Q2x, Q2x);
-			gwfftfftmul (&ecmdata.gwdata, Q2x, ecmdata.nQx[0], ecmdata.nQx[0]);
+			t1 = gwalloc (&ecmdata.gwdata);
+			if (t1 == NULL) goto oom;
+			dbltogw (&ecmdata.gwdata, 1.0, t1);
+			gwmul (&ecmdata.gwdata, t1, gg);
+			gwfftfftmul (&ecmdata.gwdata, t1, ecmdata.nQx[0], ecmdata.nQx[0]);
 			ecm_save (&ecmdata, filename, w, ECM_STAGE2, curve,
 				  sigma, B, B, prime, ecmdata.nQx[0], gg);
+			gwfree (&ecmdata.gwdata, t1);
 			goto exit;
 		}
 		if (factor != NULL) goto bingo;
@@ -3179,7 +3194,9 @@ restart3:
 			} else
 				break;
 			gwfftsub3 (&ecmdata.gwdata, mQx, ecmdata.nQx[i], t1);
+			gwstartnextfft (&ecmdata.gwdata, TRUE);
 			gwfftmul (&ecmdata.gwdata, t1, gg);
+			gwstartnextfft (&ecmdata.gwdata, FALSE);
 		    }
 		}
 
@@ -3195,10 +3212,14 @@ restart3:
 				if (bittst (ecmdata.pairings, i)) continue;
 			} else
 				break;
+			gwstartnextfft (&ecmdata.gwdata, TRUE);
 			gwfftfftmul (&ecmdata.gwdata, ecmdata.nQx[i], mQz, t1);
+			gwstartnextfft (&ecmdata.gwdata, FALSE);
 			gwfft (&ecmdata.gwdata, t1, t1);
 			gwfftsub3 (&ecmdata.gwdata, mQx, t1, t1);
+			gwstartnextfft (&ecmdata.gwdata, TRUE);
 			gwfftmul (&ecmdata.gwdata, t1, gg);
+			gwstartnextfft (&ecmdata.gwdata, FALSE);
 		    }
 		}
 		gwfree (&ecmdata.gwdata, t1);
@@ -3255,7 +3276,7 @@ restart3:
 			t1 = gwalloc (&ecmdata.gwdata);
 			if (t1 == NULL) goto oom;
 			dbltogw (&ecmdata.gwdata, 1.0, t1);
-			gwfft (&ecmdata.gwdata, t1, t1);
+			gwmul (&ecmdata.gwdata, t1, gg);
 			gwfftfftmul (&ecmdata.gwdata, t1, ecmdata.nQx[0], t1);
 			ecm_save (&ecmdata, filename, w, ECM_STAGE2, curve,
 				  sigma, B, B, prime, t1, gg);
@@ -3264,6 +3285,11 @@ restart3:
 		}
 	}
 	mQ_term (&ecmdata);
+	t1 = gwalloc (&ecmdata.gwdata);
+	if (t1 == NULL) goto oom;
+	dbltogw (&ecmdata.gwdata, 1.0, t1);
+	gwmul (&ecmdata.gwdata, t1, gg);
+	gwfree (&ecmdata.gwdata, t1);
 
 /* Stage 2 is complete */
 

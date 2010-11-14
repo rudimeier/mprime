@@ -1203,6 +1203,32 @@ int parse_string (
 	return (TRUE);
 }
 
+int parse_multiline_string (
+	char	*buf,
+	char	*id,
+	char	*result_buf,
+	unsigned int result_buflen)
+{
+	unsigned int i;
+	buf = find_id (buf, id);
+	if (buf == NULL) return (FALSE);
+	for  (i = 0; i < result_buflen-1 && buf[i]; i++) {
+		if (buf[i] == '\n') {
+			char	*equal_sign, *next_newline;
+			equal_sign = strchr (buf+i+1, '=');
+			next_newline = strchr (buf+i+1, '\n');
+			if (equal_sign < next_newline ||
+			    (equal_sign != NULL && next_newline == NULL) ||
+			    (equal_sign == NULL && next_newline == NULL && buf[i+1] == 0))
+				break;
+		}
+		result_buf[i] = (buf[i] == '\r' ? '\n' : buf[i]);
+	}
+	result_buf[i] = 0;
+//bug -raise error if string too long
+	return (TRUE);
+}
+
 int parse_int (
 	char	*buf,
 	char	*id,
@@ -1270,7 +1296,7 @@ int parse_page (char *response_buf, short operation, void *pkt)
 			
 		return (PRIMENET_ERROR_PNERRORRESULT);
 	}
-	if (!parse_string (s, "pnErrorDetail", errtxt, sizeof (errtxt))) {
+	if (!parse_multiline_string (s, "pnErrorDetail", errtxt, sizeof (errtxt))) {
 		LogMsg ("PnErrorDetail string missing\n");
 		return (PRIMENET_ERROR_PNERRORDETAIL);
 	}

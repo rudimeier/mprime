@@ -26,6 +26,9 @@
 #define INCL_DOSPROFILE
 #include <os2.h>
 #endif
+#if defined (__HAIKU__)
+#include <unistd.h>
+#endif
 #if defined (__linux__) || defined (__FreeBSD__) || defined (__APPLE__) || defined (__HAIKU__)
 #include <sys/time.h>
 #define _timeb	timeb
