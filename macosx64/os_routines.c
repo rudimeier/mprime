@@ -2,7 +2,7 @@
 /* so that they can be included in both the command-line mprime version as */
 /* well as the Mac OS X GUI version. */
 
-/* Copyright 1995-2010 Mersenne Research, Inc. */
+/* Copyright 1995-2011 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -292,9 +292,8 @@ void setThreadPriorityAndAffinity (
 	linux_priority = (8 - (int) priority) * 19 / 7;
 	errcode = setpriority (PRIO_PROCESS, thread_id, linux_priority);
 
-/* Set affinity for this thread.  We assume the processor mask is the same */
-/* as in Windows with physical CPUs representing the least significant bits */
-/* and hyperthreaded logical CPUs as the next set of more significant bits */
+/* Set affinity for this thread.  It is the callers responsibility to */
+/* determine which logical hyperthreaded CPUs map to a single physical CPU. */
 
 	CPU_ZERO (&linux_mask);
 	for (i = 0; i < MAX_NUM_WORKER_THREADS; i++)
@@ -384,14 +383,14 @@ int LoadPrimeNet (void)
 	}
 	/* The old code for testing an Internet connection is below */
 	else {
-		fgets(buffer, 199, fd);
-		fgets(buffer, 199, fd);
+		(void) fgets(buffer, 199, fd);
+		(void) fgets(buffer, 199, fd);
 		while (!feof(fd)) {
 			if (strncmp(buffer, "lo", 2)) {
 				fclose(fd);
 				return TRUE;
 			}
-			fgets(buffer, 199, fd);
+			(void) fgets(buffer, 199, fd);
 		}
 	}
 	fclose(fd);

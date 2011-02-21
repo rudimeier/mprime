@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
@@ -180,10 +180,425 @@ unsigned int MEM_RESTART_IF_MORE_AMOUNT[MAX_NUM_WORKER_THREADS] = {0};
 int	MEM_MUTEX_INITIALIZED = FALSE;
 gwmutex	MEM_MUTEX;		/* Lock for accessing mem globals */
 
+/*************************************/
+/* Routines used to time code chunks */
+/*************************************/
+
+void clear_timers (
+	double	*timers,
+	int	num_timers)
+{
+	int	i;
+	for (i = 0; i < num_timers; i++) timers[i] = 0.0;
+}
+
+void clear_timer (
+	double	*timers,
+	int	i)
+{
+	timers[i] = 0.0;
+}
+
+void start_timer (
+	double	*timers,
+	int	i)
+{
+	if (RDTSC_TIMING < 10) {
+		timers[i] -= getHighResTimer ();
+	} else if (RDTSC_TIMING > 10 && (CPU_FLAGS & CPU_RDTSC)) {
+		uint32_t hi, lo;
+		rdtsc (&hi, &lo);
+		timers[i] -= (double) hi * 4294967296.0 + lo;
+	} else {
+		struct _timeb timeval;
+		_ftime (&timeval);
+		timers[i] -= (double) timeval.time * 1000.0 + timeval.millitm;
+	}
+}
+
+void end_timer (
+	double	*timers,
+	int	i)
+{
+	if (RDTSC_TIMING < 10) {
+		timers[i] += getHighResTimer ();
+	} else if (RDTSC_TIMING > 10 && (CPU_FLAGS & CPU_RDTSC)) {
+		uint32_t hi, lo;
+		rdtsc (&hi, &lo);
+		timers[i] += (double) hi * 4294967296.0 + lo;
+	} else {
+		struct _timeb timeval;
+		_ftime (&timeval);
+		timers[i] += (double) timeval.time * 1000.0 + timeval.millitm;
+	}
+}
+
+void divide_timer (
+	double	*timers,
+	int	i,
+	int	j)
+{
+	timers[i] = timers[i] / (double) j;
+}
+
+double timer_value (
+	double	*timers,
+	int	i)
+{
+	if (RDTSC_TIMING < 10)
+		return (timers[i] / getHighResTimerFrequency ());
+	else if (RDTSC_TIMING > 10 && (CPU_FLAGS & CPU_RDTSC))
+		return (timers[i] / CPU_SPEED / 1000000.0);
+	else
+		return (timers[i] / 1000.0);
+}
+
+#define TIMER_NL	0x1
+#define TIMER_CLR	0x2
+#define TIMER_OPT_CLR	0x4
+#define TIMER_MS	0x8
+
+void print_timer (
+	double	*timers,
+	int	i,
+	char	*buf,
+	int	flags)
+{
+	double	t;
+
+/* The timer could be less than zero if the computer went into hibernation. */
+/* Hibernation is where the memory image is saved to disk and the computer */
+/* shut off.  Upon power up the memory image is restored but the RDTSC */
+/* timestamp counter has been reset to zero. */
+
+	buf += strlen (buf);
+	t = timer_value (timers, i);
+	if (t < 0.0) {
+		strcpy (buf, "Unknown");
+		timers[i] = 0.0;
+	}
+
+/* Format the timer value in one of several styles */
+
+	else {
+		int	style;
+
+		style = IniGetInt (INI_FILE, "TimingOutput", 0);
+		if (style == 0) {
+			if (flags & TIMER_MS) style = 4;
+			else style = 1;
+		}
+
+		if (style == 1)
+			sprintf (buf, "%.3f sec.", t);
+		else if (style == 2)
+			sprintf (buf, "%.1f ms.", t * 1000.0);
+		else if (style == 3)
+			sprintf (buf, "%.2f ms.", t * 1000.0);
+		else
+			sprintf (buf, "%.3f ms.", t * 1000.0);
+		if (RDTSC_TIMING == 12 && (CPU_FLAGS & CPU_RDTSC)) {
+			sprintf (buf+strlen(buf), " (%.0f clocks)", timers[i]);
+		}
+	}
+
+/* Append optional newline */
+
+	if (flags & TIMER_NL) strcat (buf, "\n");
+
+/* Clear the timer */
+
+	if (flags & TIMER_CLR) timers[i] = 0.0;
+	if ((flags & TIMER_OPT_CLR) && !CUMULATIVE_TIMING) timers[i] = 0.0;
+}
+
 /**************************************************************/
 /*    Routines dealing with thread priority and affinity      */
 /**************************************************************/
 
+/* Macros to aid in setting affinity masks */
+
+#define maskset(x)	mask[(x)/32] |= (1 << ((x) & 31))
+#define maskget(m,x)	(m[(x)/32] & (1 << ((x) & 31)))
+
+/* Busy loop to keep a physical CPU cores occupied.  This will */
+/* help us identify the hyperthreaded logical CPUs running on the */
+/* same physical CPU. */
+
+int	affinity_busy_cpu_num = 0;
+
+void affinity_busy_loop (void *arg)
+{
+	int	cpu_num, mask[MAX_NUM_WORKER_THREADS/32];
+
+/* Set the affinity so that busy loop runs on the specified CPU core */
+
+	cpu_num = (int) (intptr_t) arg;
+	memset (mask, 0, sizeof (mask));
+	maskset (cpu_num);
+	setThreadPriorityAndAffinity (8, mask);		// Call OS-specific routine to set affinity
+
+/* Stay busy until affinity_busy_cpu_num says this CPU thread should close */
+
+	affinity_busy_cpu_num = cpu_num;
+	while (affinity_busy_cpu_num == cpu_num) one_hundred_thousand_clocks ();
+}
+
+/* Try to determine which hyperthreaded logical CPUs map to the same physical CPUs. */
+/* Generate an "affinity scramble" that maps our internal numbering of logical CPUs */
+/* that map to the same physical CPU core to OS's numbering of logical CPUs */
+/* that map to the same physical CPU core. */
+
+char	AFFINITY_SCRAMBLE[MAX_NUM_WORKER_THREADS] = {0};
+char	AFFINITY_SCRAMBLE_STATE = 0;	/* 0 = not initialized, 1 = computed, 2 = read in from local.txt */
+
+void generate_affinity_scramble_thread (void *arg)
+{
+	char	mapped_cpus[MAX_NUM_WORKER_THREADS];  /* Logical CPUs whose mate has been found */
+	char	scramble[MAX_NUM_WORKER_THREADS+1];  /* Affinity scramble from local.txt */
+	int	mask[MAX_NUM_WORKER_THREADS/32];
+	unsigned int i, j, k, n, diff, num_successes;
+	int	saved_rdtsc_timing, debug;
+	double	timers[1], best_100000, test_100000, saved_100000[MAX_NUM_WORKER_THREADS];
+	gwthread thread_id;
+	char	buf[128];
+
+/* Use the highly accurate RDTSC instruction for timings. */
+/* Get the debug flag. */
+
+	saved_rdtsc_timing = RDTSC_TIMING;
+	RDTSC_TIMING = 13;
+	debug = IniGetInt (INI_FILE, "DebugAffinityScramble", 0);
+
+/* Now search for sets of logical CPUs that comprise a physical CPU */
+
+	memset (AFFINITY_SCRAMBLE, 0xFF, sizeof (AFFINITY_SCRAMBLE));
+	memset (mapped_cpus, 0, sizeof (mapped_cpus));
+
+/* Loop over each physical CPU core */
+
+	diff = num_successes = 0;
+	for (i = 0; i < NUM_CPUS; i++) {
+
+/* Find the first logical CPU that we have associated with a physical */
+/* CPU core.  This logical CPU will become the first one associated */
+/* with this physical CPU. */
+
+		for (k = 0; k < NUM_CPUS * CPU_HYPERTHREADS; k++)
+			if (mapped_cpus[k] == 0) break;
+		AFFINITY_SCRAMBLE[i*CPU_HYPERTHREADS] = k;
+		mapped_cpus[k] = 1;
+
+/* Time the 100,000 clock routine when (hopefully) nothing is running on the CPU core */
+
+		memset (mask, 0, sizeof (mask));
+		maskset (k);
+		setThreadPriorityAndAffinity (8, mask);		// Call OS-specific routine to set affinity
+		for (n = 0; n < 10; n++) {
+			clear_timers (timers, sizeof (timers) / sizeof (timers[0]));
+			start_timer (timers, 0);
+			one_hundred_thousand_clocks ();
+			end_timer (timers, 0);
+			if (n == 0 || timers[0] < best_100000) best_100000 = timers[0];
+		}
+
+		if (debug) {
+			sprintf (buf, "Test clocks: %d\n", (int) best_100000);
+			OutputStr (MAIN_THREAD_NUM, buf);
+		}
+
+/* Start a thread on the logical CPU.  In theory, the hyperthreaded */
+/* logical CPUs that are also running on this physical CPU will now */
+/* run at half speed.  We sleep for a tad to give the thread time to start. */
+
+		affinity_busy_cpu_num = 99999;
+		gwthread_create (&thread_id, &affinity_busy_loop, (void *) (intptr_t) k);
+		while (affinity_busy_cpu_num == 99999) Sleep (1);
+
+/* Now search for the all the hyperthreaded logical CPUs running on the */
+/* same physical CPU */
+
+		for (j = 1; j < CPU_HYPERTHREADS; j++) {
+
+/* Find an unmapped logical CPU to run timings on */
+
+			for (k = 0; k < NUM_CPUS * CPU_HYPERTHREADS; k++) {
+				if (mapped_cpus[k]) continue;
+
+/* Set this thread to run on the unmapped logical CPU */
+
+				memset (mask, 0, sizeof (mask));
+				maskset (k);
+				setThreadPriorityAndAffinity (8, mask);		// Call OS-specific routine to set affinity
+
+/* Run several timings, getting the best timing */
+
+				for (n = 0; n < 10; n++) {
+					clear_timers (timers, sizeof (timers) / sizeof (timers[0]));
+					start_timer (timers, 0);
+					one_hundred_thousand_clocks ();
+					end_timer (timers, 0);
+					if (n == 0 || timers[0] < test_100000) test_100000 = timers[0];
+				}
+
+				if (debug) {
+					sprintf (buf, "Logical CPU %d clocks: %d\n", (int) k, (int) test_100000);
+					OutputStr (MAIN_THREAD_NUM, buf);
+				}
+
+/* If this thread is running at half speed then this is a hyperthreaded */
+/* logical CPU running on the same physical CPU core. */
+
+				if (test_100000 >= 1.9 * best_100000 && test_100000 <= 2.03 * best_100000)
+					break;
+
+/* Remember timing for a possible secondary test at the end of the loop */
+
+				saved_100000[k] = test_100000;
+			}
+
+/* If we didn't find a logical CPU running at half speed, go to our second */
+/* option.  Look for one logical CPU that ran significantly slower than all the others */
+/* For example, on our Core i7 one of the hyperthreaded CPUs has a best time of */
+/* approximately 178,000 clocks while all the others are the expected 100,000 clocks. */
+
+			if (k == NUM_CPUS * CPU_HYPERTHREADS) {
+				unsigned int worst_k, count_slow_cpus;
+
+				worst_k = 99999;
+				for (k = 0; k < NUM_CPUS * CPU_HYPERTHREADS; k++) {
+					if (mapped_cpus[k]) continue;
+					if (worst_k == 99999 || saved_100000[k] > saved_100000[worst_k])
+						worst_k = k;
+				}
+
+				count_slow_cpus = 0;
+				for (k = 0; k < NUM_CPUS * CPU_HYPERTHREADS; k++) {
+					if (mapped_cpus[k]) continue;
+					if (saved_100000[k] > saved_100000[worst_k] - 0.4 * test_100000)
+						count_slow_cpus++;
+				}
+
+				if (count_slow_cpus == 1) k = worst_k;
+			}
+
+/* If we found a hyperthread CPU, set the affinity scramble mask to */
+/* note the logical CPU is running on the same physical CPU core. */
+
+			if (k < NUM_CPUS * CPU_HYPERTHREADS) {
+				AFFINITY_SCRAMBLE[i*CPU_HYPERTHREADS+j] = k;
+				mapped_cpus[k] = 1;
+				num_successes++;
+
+/* Remember difference in logical CPU numbers.  We'll use this to make a good guess */
+/* of the affinity scramble string in the case where we cannot figure out every set */
+/* of logical CPUs running on physical CPUs. */
+
+				if (diff == 0 || diff == k - AFFINITY_SCRAMBLE[i*CPU_HYPERTHREADS+j-1])
+					diff = k - AFFINITY_SCRAMBLE[i*CPU_HYPERTHREADS+j-1];
+				else
+					diff = 99999;
+			}
+		}
+
+/* Terminate the thread that is running the first logical CPU of this physical CPU */
+
+		affinity_busy_cpu_num = 100000;
+	}
+	RDTSC_TIMING = saved_rdtsc_timing;
+
+/* Now handle the case where we haven't properly identified all the hyperthreaded logical CPUs */
+
+	AFFINITY_SCRAMBLE_STATE = 1;
+	if (num_successes != NUM_CPUS * (CPU_HYPERTHREADS-1)) {
+		if (diff == 0) {
+			OutputStr (MAIN_THREAD_NUM, "Unable to detect which logical CPUs are hyperthreaded.\n");
+			AFFINITY_SCRAMBLE_STATE = 0;
+		} else {
+			OutputStr (MAIN_THREAD_NUM, "Unable to detect some of the hyperthreaded logical CPUs.\n");
+			for (k = 1; k < NUM_CPUS * CPU_HYPERTHREADS; k++) {
+				if (AFFINITY_SCRAMBLE[k] == -1) {
+					j = AFFINITY_SCRAMBLE[k-1] + diff;
+					if (j < NUM_CPUS * CPU_HYPERTHREADS && !mapped_cpus[j]) {
+						AFFINITY_SCRAMBLE[k] = j;
+						mapped_cpus[j] = 1;
+					}
+					else
+						diff = 99999;
+				}
+			}
+			if (diff == 99999) {
+				AFFINITY_SCRAMBLE_STATE = 0;
+			} else {
+				OutputStr (MAIN_THREAD_NUM, "Enough information obtained to make a reasonable guess.\n");
+			}
+		}
+		if (AFFINITY_SCRAMBLE_STATE == 0)
+			OutputStr (MAIN_THREAD_NUM, "See AffinityScramble2 in undoc.txt.\n");
+	}
+
+/* Output our findings */
+
+	if (AFFINITY_SCRAMBLE_STATE == 1) {
+		for (i = 0; i < NUM_CPUS; i++) {
+			strcpy (buf, "Logical CPUs ");
+			for (j = 0; j < CPU_HYPERTHREADS; j++) {
+				sprintf (buf+strlen(buf), "%d,", (int) AFFINITY_SCRAMBLE[i*CPU_HYPERTHREADS+j]);
+			}
+			strcpy (buf+strlen(buf)-1, " form one physical CPU.\n");
+			OutputStr (MAIN_THREAD_NUM, buf);
+		}
+	}
+
+/* Get the optional string used to scramble the affinity mask bits to */
+/* new or odd optimizations we had not considered. */
+
+	IniGetString (LOCALINI_FILE, "AffinityScramble2", scramble, sizeof (scramble), "*");
+	if (scramble[0] != '*') {
+		AFFINITY_SCRAMBLE_STATE = 2;
+		for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
+			if (scramble[i] >= '0' && scramble[i] <= '9')
+				AFFINITY_SCRAMBLE[i] = scramble[i] - '0';
+			else if (scramble[i] >= 'A' && scramble[i] <= 'Z')
+				AFFINITY_SCRAMBLE[i] = scramble[i] - 'A' + 10;
+			else if (scramble[i] >= 'a' && scramble[i] <= 'z')
+				AFFINITY_SCRAMBLE[i] = scramble[i] - 'A' + 36;
+			else if (scramble[i] == '(')
+				AFFINITY_SCRAMBLE[i] = 62;
+			else if (scramble[i] == ')')
+				AFFINITY_SCRAMBLE[i] = 63;
+			else
+				AFFINITY_SCRAMBLE[i] = i;  /* Illegal entry = no mapping */
+		}
+	}
+
+/* Mark all the unused logical CPU numbers as "no scramble" */
+
+	for (k = NUM_CPUS * CPU_HYPERTHREADS; k < MAX_NUM_WORKER_THREADS; k++) AFFINITY_SCRAMBLE[k] = k;
+}
+
+/* Try to determine which hyperthreaded logical CPUs map to the same physical CPUs */
+/* All our internal code uses this scheme: if there are N cpus with hyperthreading, */
+/* then physical cpu 0 is logical cpu 0 and 1, physical cpu 1 is logical cpu 2 and 3, etc. */
+/* When launching threads, we apply the dynamically generated affinity scramble computed */
+/*  here to map our internal scheme to the numbering scheme that the OS is using. */
+
+void generate_affinity_scramble (void)
+{
+	gwthread thread_id;
+
+/* If the CPU does not support hyperthreading, then were done */
+/* If there is only one physical CPU, then affinity scrambling isn't needed */
+
+	if (CPU_HYPERTHREADS == 1 || NUM_CPUS == 1) return;
+
+/* Do the scramble computations in a separate thread to avoid changing the main thread's priority */
+
+	gwthread_create_waitable (&thread_id, &generate_affinity_scramble_thread, NULL);
+	gwthread_wait_for_exit (&thread_id);
+}
+
+	
 /* Set the thread priority correctly.  Most screen savers run at priority 4. */
 /* Most application's run at priority 9 when in foreground, 7 when in */
 /* background.  In selecting the proper thread priority I've assumed the */
@@ -196,14 +611,10 @@ gwmutex	MEM_MUTEX;		/* Lock for accessing mem globals */
 void SetPriority (
 	struct PriorityInfo *info)
 {
-static	char	AFFINITY_SCRAMBLE[MAX_NUM_WORKER_THREADS+1] = {0};
-static	char	AFFINITY_SCRAMBLE_STATE = 0;	/* 0 = not read in, 1 = read in and valid, 2 = no scramble string in local.txt */
 	unsigned int i;
 	int	mask[MAX_NUM_WORKER_THREADS/32];
-#define maskset(x)	mask[(x)/32] |= (1 << ((x) & 31))
-#define maskget(m,x)	(m[(x)/32] & (1 << ((x) & 31)))
 
-/* Benchmarking affinity.  For hyperthreaded CPUs, we put auxillary */
+/* Benchmarking affinity.  For hyperthreaded CPUs, we put auxiliary */
 /* threads onto the logical CPUs before moving onto the next physical CPU. */  
 
 	if (info->type == SET_PRIORITY_BENCHMARKING) {
@@ -242,8 +653,8 @@ static	char	AFFINITY_SCRAMBLE_STATE = 0;	/* 0 = not read in, 1 = read in and val
 	}
 
 /* A small CPU_AFFINITY setting means run only on that CPU.  Since there is */
-/* no way to explicitly tell us which CPU to run an auxillary thread on, */
-/* we put the auxillary threads on the subsequent logical CPUs. */
+/* no way to explicitly tell us which CPU to run an auxiliary thread on, */
+/* we put the auxiliary threads on the subsequent logical CPUs. */
 
 	else if (CPU_AFFINITY[info->thread_num] < 100) {
 		if (CPU_AFFINITY[info->thread_num] + info->aux_thread_num >= NUM_CPUS * CPU_HYPERTHREADS)
@@ -266,7 +677,7 @@ static	char	AFFINITY_SCRAMBLE_STATE = 0;	/* 0 = not read in, 1 = read in and val
 
 /* If number of worker threads equals number of logical cpus then run each */
 /* worker thread on its own logical CPU.  If the user also has us running */
-/* auxillary threads, then the user has made a really bad decision and a */
+/* auxiliary threads, then the user has made a really bad decision and a */
 /* performance hit will occur. */
 
 	else if (NUM_WORKER_THREADS == NUM_CPUS * CPU_HYPERTHREADS) {
@@ -276,9 +687,9 @@ static	char	AFFINITY_SCRAMBLE_STATE = 0;	/* 0 = not read in, 1 = read in and val
 	}
 
 /* If number of worker threads equals number of physical cpus then run each */
-/* worker thread on its own physical CPU.  Run auxillary threads on the same */
+/* worker thread on its own physical CPU.  Run auxiliary threads on the same */
 /* physical CPU.  This should be advantageous on hyperthreaded CPUs.  We */
-/* should be careful to not run more auxillary threads than available */
+/* should be careful to not run more auxiliary threads than available */
 /* logical CPUs created by hyperthreading. */ 
 
 	else if (NUM_WORKER_THREADS == NUM_CPUS) {
@@ -291,35 +702,9 @@ static	char	AFFINITY_SCRAMBLE_STATE = 0;	/* 0 = not read in, 1 = read in and val
 	else
 		memset (mask, 0xFF, sizeof (mask));
 
-/* Get the optional string used to scramble the affinity mask bits to */
-/* new or odd optimizations we had not considered. */
-
-	if (AFFINITY_SCRAMBLE_STATE == 0) {
-		IniGetString (LOCALINI_FILE, "AffinityScramble", AFFINITY_SCRAMBLE, sizeof (AFFINITY_SCRAMBLE), "*");
-		if (AFFINITY_SCRAMBLE[0] == '*') {
-			AFFINITY_SCRAMBLE_STATE = 2;
-		} else {
-			AFFINITY_SCRAMBLE_STATE = 1;
-			for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
-				if (AFFINITY_SCRAMBLE[i] >= '0' && AFFINITY_SCRAMBLE[i] <= '9')
-					AFFINITY_SCRAMBLE[i] -= '0';
-				else if (AFFINITY_SCRAMBLE[i] >= 'A' && AFFINITY_SCRAMBLE[i] <= 'Z')
-					AFFINITY_SCRAMBLE[i] = AFFINITY_SCRAMBLE[i] - 'A' + 10;
-				else if (AFFINITY_SCRAMBLE[i] >= 'a' && AFFINITY_SCRAMBLE[i] <= 'z')
-					AFFINITY_SCRAMBLE[i] = AFFINITY_SCRAMBLE[i] - 'A' + 36;
-				else if (AFFINITY_SCRAMBLE[i] == '(')
-					AFFINITY_SCRAMBLE[i] = 62;
-				else if (AFFINITY_SCRAMBLE[i] == ')')
-					AFFINITY_SCRAMBLE[i] = 63;
-				else
-					AFFINITY_SCRAMBLE[i] = i;  /* Illegal entry = no mapping */
-			}
-		}
-	}
-
 /* Apply the optional affinity mask scrambling */
 
-	if (AFFINITY_SCRAMBLE_STATE == 1) {
+	if (AFFINITY_SCRAMBLE_STATE) {
 		int	old_mask[MAX_NUM_WORKER_THREADS/32];
 		memcpy (old_mask, mask, sizeof (mask));
 		memset (mask, 0, sizeof (mask));
@@ -2282,135 +2667,6 @@ double trunc_percent (
 	percent -= 0.5 * pow (10.0, - (double) PRECISION);
 	if (percent < 0.0) return (0.0);
 	return (percent);
-}
-
-/*************************************/
-/* Routines used to time code chunks */
-/*************************************/
-
-void clear_timers (double *timers, int num_timers) {
-	int	i;
-	for (i = 0; i < num_timers; i++) timers[i] = 0.0;
-}
-
-void clear_timer (
-	double	*timers,
-	int	i)
-{
-	timers[i] = 0.0;
-}
-
-void start_timer (
-	double	*timers,
-	int	i)
-{
-	if (RDTSC_TIMING < 10) {
-		timers[i] -= getHighResTimer ();
-	} else if (RDTSC_TIMING > 10 && (CPU_FLAGS & CPU_RDTSC)) {
-		uint32_t hi, lo;
-		rdtsc (&hi, &lo);
-		timers[i] -= (double) hi * 4294967296.0 + lo;
-	} else {
-		struct _timeb timeval;
-		_ftime (&timeval);
-		timers[i] -= (double) timeval.time * 1000.0 + timeval.millitm;
-	}
-}
-
-void end_timer (
-	double	*timers,
-	int	i)
-{
-	if (RDTSC_TIMING < 10) {
-		timers[i] += getHighResTimer ();
-	} else if (RDTSC_TIMING > 10 && (CPU_FLAGS & CPU_RDTSC)) {
-		uint32_t hi, lo;
-		rdtsc (&hi, &lo);
-		timers[i] += (double) hi * 4294967296.0 + lo;
-	} else {
-		struct _timeb timeval;
-		_ftime (&timeval);
-		timers[i] += (double) timeval.time * 1000.0 + timeval.millitm;
-	}
-}
-
-void divide_timer (
-	double	*timers,
-	int	i,
-	int	j)
-{
-	timers[i] = timers[i] / (double) j;
-}
-
-double timer_value (
-	double	*timers,
-	int	i)
-{
-	if (RDTSC_TIMING < 10)
-		return (timers[i] / getHighResTimerFrequency ());
-	else if (RDTSC_TIMING > 10 && (CPU_FLAGS & CPU_RDTSC))
-		return (timers[i] / CPU_SPEED / 1000000.0);
-	else
-		return (timers[i] / 1000.0);
-}
-
-#define TIMER_NL	0x1
-#define TIMER_CLR	0x2
-#define TIMER_OPT_CLR	0x4
-#define TIMER_MS	0x8
-
-void print_timer (
-	double	*timers,
-	int	i,
-	char	*buf,
-	int	flags)
-{
-	double	t;
-
-/* The timer could be less than zero if the computer went into hibernation. */
-/* Hibernation is where the memory image is saved to disk and the computer */
-/* shut off.  Upon power up the memory image is restored but the RDTSC */
-/* timestamp counter has been reset to zero. */
-
-	buf += strlen (buf);
-	t = timer_value (timers, i);
-	if (t < 0.0) {
-		strcpy (buf, "Unknown");
-		timers[i] = 0.0;
-	}
-
-/* Format the timer value in one of several styles */
-
-	else {
-		int	style;
-
-		style = IniGetInt (INI_FILE, "TimingOutput", 0);
-		if (style == 0) {
-			if (flags & TIMER_MS) style = 4;
-			else style = 1;
-		}
-
-		if (style == 1)
-			sprintf (buf, "%.3f sec.", t);
-		else if (style == 2)
-			sprintf (buf, "%.1f ms.", t * 1000.0);
-		else if (style == 3)
-			sprintf (buf, "%.2f ms.", t * 1000.0);
-		else
-			sprintf (buf, "%.3f ms.", t * 1000.0);
-		if (RDTSC_TIMING == 12 && (CPU_FLAGS & CPU_RDTSC)) {
-			sprintf (buf+strlen(buf), " (%.0f clocks)", timers[i]);
-		}
-	}
-
-/* Append optional newline */
-
-	if (flags & TIMER_NL) strcat (buf, "\n");
-
-/* Clear the timer */
-
-	if (flags & TIMER_CLR) timers[i] = 0.0;
-	if ((flags & TIMER_OPT_CLR) && !CUMULATIVE_TIMING) timers[i] = 0.0;
 }
 
 /****************************************************************************/
@@ -4413,8 +4669,8 @@ int make_error_count_message (
 
 	count_repeatable = (error_count >> 24) & 0x7F;
 	count_illegal_sumout = (error_count >> 16) & 0xFF;
-	count_suminp = (error_count >> 8) & 0xFF;
-	count_roundoff = error_count & 0xFF;
+	count_roundoff = (error_count >> 8) & 0xFF;
+	count_suminp = error_count & 0xFF;
 
 /* Return if no hardware errors have occurred */
 
@@ -6253,8 +6509,7 @@ int lucas_QA (
 /* Read a line from the file */
 
 		p = 0;
-		fscanf (fd, "%lu,%lu,%lu,%lu,%s\n",
-			&p, &fftlen, &iters, &units_bit, res);
+		(void) fscanf (fd, "%lu,%lu,%lu,%lu,%s\n", &p, &fftlen, &iters, &units_bit, res);
 		if (p == 0) break;
 
 /* In a type 4 run, we decrement through exponents to find any with */
@@ -6496,7 +6751,7 @@ int primeSieveTest (
 
 /* What is the factor? */
 
-		fscanf (fd, "%s", fac);
+		(void) fscanf (fd, "%s", fac);
 		fachi = facmid = faclo = 0;
 		for (f = fac; *f; f++) {
 			if (*f < '0' || *f > '9') continue;
@@ -6769,6 +7024,37 @@ int primeTime (
 	return (0);
 }
 
+/* Busy loop to keep CPU cores occupied.  Used during */
+/* a benchmark so that turbo boost does not kick in. */
+
+int	last_bench_cpu_num = 0;
+
+void bench_busy_loop (void *arg)
+{
+	int	cpu_num;
+	struct PriorityInfo sp_info;
+
+/* Only put newer CPUs into a busy loop.  We do this because one_hundred_thousand_clocks */
+/* uses SSE2 instructions and pre-SSE2 machines don't have speed step / turbo boost. */
+/* Without this check, dual-core Pentium 2 and 3 machines will crash benchmarking. */
+
+	if (! (CPU_FLAGS & CPU_SSE2)) return;
+
+/* Set the affinity so that busy loop runs on the specified CPU core */
+
+	cpu_num = (int) (intptr_t) arg;
+	sp_info.type = SET_PRIORITY_BENCHMARKING;
+	sp_info.thread_num = 0;
+	sp_info.aux_thread_num = cpu_num * CPU_HYPERTHREADS;
+	SetPriority (&sp_info);
+
+/* Stay busy until last_bench_cpu_num says this CPU thread should close */
+
+	while (cpu_num > last_bench_cpu_num) one_hundred_thousand_clocks ();
+}
+
+/* Routine to benchmark the trial factoring code */
+
 #define BENCH1 "Your timings will be written to the results.txt file.\n"
 #define BENCH2 "Compare your results to other computers at http://www.mersenne.org/report_benchmarks\n"
 
@@ -6784,6 +7070,17 @@ int factorBench (
 	int	res, stop_reason;
 	double	timers[2];
 
+/* Keep the other CPU cores busy.  This should prevent "turbo boost" from kicking in. */
+/* We do this to hopefully produce more consistent benchmarks.  We don't want to report */
+/* a CPU speed of 1.87 GHz and then produce a benchmark running at a boosted 3.2 GHz */
+/* (this happens on a Core i7 Q840M processor). */
+
+	last_bench_cpu_num = 0;			// CPU #0 is benching
+	for (i = 1; i < NUM_CPUS; i++) {	// CPU #1 to NUM_CPUS-1 are busy looping
+		gwthread thread_id;
+		gwthread_create (&thread_id, &bench_busy_loop, (void *) (intptr_t) i);
+	}
+
 /* Loop over all trial factor lengths */
 
 	num_lengths = sizeof (bit_lengths) / sizeof (int);
@@ -6792,7 +7089,10 @@ int factorBench (
 /* Initialize for this bit length. */
 
 		stop_reason = factorSetup (thread_num, 35000011, &facdata);
-		if (stop_reason) return (stop_reason);
+		if (stop_reason) {
+			last_bench_cpu_num = NUM_CPUS;
+			return (stop_reason);
+		}
 		if (bit_lengths[i] <= 64) {
 			facdata.asm_data->FACHSW = 0;
 			facdata.asm_data->FACMSW = 1L << (bit_lengths[i]-33);
@@ -6801,7 +7101,10 @@ int factorBench (
 			facdata.asm_data->FACMSW = 0;
 		}
 		stop_reason = factorPassSetup (thread_num, 0, &facdata);
-		if (stop_reason) return (stop_reason);
+		if (stop_reason) {
+			last_bench_cpu_num = NUM_CPUS;
+			return (stop_reason);
+		}
 
 /* Output start message for this bit length */
 
@@ -6820,6 +7123,7 @@ int factorBench (
 				OutputStrNoTimeStamp (thread_num, "\n");
 				OutputStr (thread_num, "Execution halted.\n");
 				factorDone (&facdata);
+				last_bench_cpu_num = NUM_CPUS;
 				return (stop_reason);
 			}
 			clear_timers (timers, sizeof (timers) / sizeof (timers[0]));
@@ -6854,6 +7158,10 @@ int factorBench (
 		}
 
 	}
+
+/* End the threads that are looping and return */
+
+	last_bench_cpu_num = NUM_CPUS;
 	return (0);
 }
 
@@ -6879,13 +7187,6 @@ int primeBench (
 	memset (&pkt, 0, sizeof (pkt));
 	strcpy (pkt.computer_guid, COMPUTER_GUID);
 
-/* Set the process/thread priority */
-
-	sp_info.type = SET_PRIORITY_BENCHMARKING;
-	sp_info.thread_num = thread_num;
-	sp_info.aux_thread_num = 0;
-	SetPriority (&sp_info);
-
 /* Output startup message */
 
 	title (thread_num, "Benchmarking");
@@ -6905,6 +7206,15 @@ int primeBench (
 #endif
 	writeResults (buf);
 
+/* Set the process/thread priority AFTER getting the CPU description. */
+/* This is required so that any threads spawned by getCpuSpeed will not */
+/* be confined to just one CPU core. */
+
+	sp_info.type = SET_PRIORITY_BENCHMARKING;
+	sp_info.thread_num = thread_num;
+	sp_info.aux_thread_num = 0;
+	SetPriority (&sp_info);
+
 /* Decide which FFT lengths to time */
 
 	min_FFT_length = 768;			/* Default lengths to test */
@@ -6923,6 +7233,17 @@ int primeBench (
 	time_all_complex = IniGetInt (INI_FILE, "BenchAllComplex", time_all_complex);
 	all_bench = IniGetInt (INI_FILE, "AllBench", 0);	/* Benchmark all implementations of each FFT length */
 
+/* Keep CPU cores busy.  This should prevent "turbo boost" from kicking in. */
+/* We do this to hopefully produce more consistent benchmarks.  We don't want to report */
+/* a CPU speed of 1.87 GHz and then produce a benchmark running at a boosted 3.2 GHz */
+/* (this happens on a Core i7 Q840M processor). */
+
+	last_bench_cpu_num = 0;			// CPU #0 is benching
+	for (i = 1; i < NUM_CPUS; i++) {	// CPU #1 to NUM_CPUS-1 are busy looping
+		gwthread thread_id;
+		gwthread_create (&thread_id, &bench_busy_loop, (void *) (intptr_t) i);
+	}
+
 /* Loop over all all possible multithread possibilities */
 
 	for (threads = 1; threads <= NUM_CPUS * CPU_HYPERTHREADS; threads++) {
@@ -6938,6 +7259,10 @@ int primeBench (
 	      OutputBoth (thread_num, buf);
 	    }
 	  }
+
+/* Set global that makes sures we are running the correct number of busy loops */
+
+	  last_bench_cpu_num = (threads-1) / CPU_HYPERTHREADS;
 
 /* Loop over a variety of FFT lengths */
 
@@ -7031,6 +7356,7 @@ int primeBench (
 				OutputStrNoTimeStamp (thread_num, "\n");
 				OutputStr (thread_num, "Execution halted.\n");
 				lucasDone (&lldata);
+				last_bench_cpu_num = NUM_CPUS;
 				return (stop_reason);
 			}
 			clear_timers (timers, sizeof (timers) / sizeof (timers[0]));
@@ -7094,10 +7420,14 @@ int primeBench (
 
 /* Time next FFT */
 
-	      }
-	   }
-	}
-}
+	      }  // End ii implementation loop
+	    }  // End fftlen loop
+	  }  // End plus1 loop
+	} // End threads loop
+
+/* End the threads that are busy looping */
+
+	last_bench_cpu_num = NUM_CPUS;
 
 /* Now benchmark the trial factoring code */
 

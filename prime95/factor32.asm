@@ -1,4 +1,4 @@
-; Copyright 1995-2009 Mersenne Research, Inc., all rights reserved
+; Copyright 1995-2011 Mersenne Research, Inc., all rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -1476,7 +1476,7 @@ fac2	equ	ecx
 ;	Parameter ptr = [esp+4]
 
 PROCFL	factor64
-	ad_prolog 0,0,rbx,rbp,rsi,rdi
+	ad_prolog 0,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 
 ; Init the FPU every iteration just to be safe
 
@@ -5437,7 +5437,7 @@ bqloop:	sse2_fac 86
 ; All done
 ;
 
-done:	ad_epilog 0,0,rbx,rbp,rsi,rdi
+done:	ad_epilog 0,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 factor64 ENDP
 
 _TEXT	ENDS

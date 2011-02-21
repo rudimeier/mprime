@@ -2,7 +2,7 @@
 #
 
 CC = gcc
-CFLAGS = -I.. -I../gwnum -DX86_64 -O2
+CFLAGS = -I.. -I../gwnum -DX86_64 -O2 -Wno-unused-result
 
 CPP = g++
 CPPFLAGS = -I.. -I../gwnum -DX86_64 -O2

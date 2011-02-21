@@ -1,3 +1,20 @@
+/**************************************************************
+ *
+ *	ecm.c
+ *
+ *	ECM and P-1 factoring program
+ *
+ *	Original author:  Richard Crandall - www.perfsci.com
+ *	Adapted to Mersenne numbers and optimized by George Woltman
+ *	Further optimizations from Paul Zimmerman's GMP-ECM program
+ *	Other important ideas courtesy of Peter Montgomery.
+ *
+ *	c. 1997 Perfectly Scientific, Inc.
+ *	c. 1998-2011 Mersenne Research, Inc.
+ *	All Rights Reserved.
+ *
+ *************************************************************/
+
 /* IDEAS:
    is sieve tuned optimally?  use assembly?
 	One idea: make sieve bytes correspond to the 8 possible values mod 30
@@ -17,23 +34,6 @@
 	   combos isn't great.  Another possibility would be to remember only
 	   those primes where a better solution is available
 */
-
-/**************************************************************
- *
- *	ecm.c
- *
- *	ECM and P-1 factoring program
- *
- *	Original author:  Richard Crandall - www.perfsci.com
- *	Adapted to Mersenne numbers and optimized by George Woltman
- *	Further optimizations from Paul Zimmerman's GMP-ECM program
- *	Other important ideas courtesy of Peter Montgomery.
- *
- *	c. 1997 Perfectly Scientific, Inc.
- *	c. 1998-2009 Mersenne Research, Inc.
- *	All Rights Reserved.
- *
- *************************************************************/
 
 /* Global variables */
 
@@ -1110,10 +1110,10 @@ int setN (
 		giant	tmp, f;
 
 		if (buf[0] != 'M' && buf[0] != 'P') continue;
-		fscanf (fd, "%ld", &p);
+		(void) fscanf (fd, "%ld", &p);
 		if (p > w->n) break;
 		if (p < w->n) continue;
-		fscanf (fd, "%s", buf);
+		(void) fscanf (fd, "%s", buf);
 		if (buf[1] != 'C') continue;
 
 /* Allocate space for factor verification */
@@ -1125,7 +1125,7 @@ int setN (
 
 /* Get the factor */
 
-		fscanf (fd, "%s", buf);
+		(void) fscanf (fd, "%s", buf);
 		ctog (buf, f);
 
 /* Divide N by factor - but first verify the factor */
@@ -3552,7 +3552,7 @@ int ecm_QA (
 /* Read a line from the file */
 
 		n = 0;
-		fscanf (fd, "%lf,%lu,%lu,%ld,%lf,%lu,%lu,%lu,%s\n",
+		(void) fscanf (fd, "%lf,%lu,%lu,%ld,%lf,%lu,%lu,%lu,%s\n",
 			&k, &b, &n, &c, &sigma, &B1, &B2_start, &B2_end,
 			fac_str);
 		if (n == 0) break;
@@ -4625,12 +4625,15 @@ int pminus1 (
 	title (thread_num, buf);
 	if (w->work_type == WORK_PMINUS1) {
 		if (C <= B)
-			sprintf (buf, "P-1 on %s with B1=%.0f\n",
-				 testnum, (double) B);
+			sprintf (buf, "P-1 on %s with B1=%.0f\n", testnum, (double) B);
 		else
-			sprintf (buf, "P-1 on %s with B1=%.0f, B2=%.0f\n",
-				 testnum, (double) B, (double) C);
+			sprintf (buf, "P-1 on %s with B1=%.0f, B2=%.0f\n", testnum, (double) B, (double) C);
 		OutputStr (thread_num, buf);
+		if (w->sieve_depth > 0.0) {
+			double prob = guess_pminus1_probability (w);
+			sprintf (buf, "Chance of finding a factor is an estimated %.3g%%\n", prob * 100.0);
+			OutputStr (thread_num, buf);
+		}
 	}
 
 /* Clear all timers */
@@ -4783,11 +4786,15 @@ restart:
 /* an LL tester that has already begun stage 2 only do this for the */
 /* non-LL tester. */
 
-			if (B > pm1data.B_done) {
-				if (w->work_type == WORK_PMINUS1) {
-					gwfree (&pm1data.gwdata, gg);
-					goto more_B;
-				}
+			if (B > pm1data.B_done && w->work_type == WORK_PMINUS1) {
+				gwfree (&pm1data.gwdata, gg);
+				goto more_B;
+			}
+
+/* If B is larger than the one in the save file, then use the one in the save */
+/* file rather than discarding all the work done thusfar in stage 2. */
+
+			if (B != pm1data.B_done) {
 				B = pm1data.B_done;
 				C_start = pm1data.B_done;
 				sprintf (buf, "Ignoring suggested B1 value, using B1=%.0f from the save file\n", (double) B);
@@ -4805,9 +4812,13 @@ restart:
 
 			if (pm1data.bitarray_len == 0) goto more_C;
 
-/* If LL testing and bound #2 has changed then use the original bound #2 */
+/* If LL testing and bound #2 has changed then use the original bound #2. */
+/* If explicit P-1 testing and bound #2 is larger in the save file then use the original bound #2. */
+/* The user doing explicit P-1 testing that wants to discard the stage 2 work he has done thusfar */
+/* and reduce the stage 2 bound must manually delete the save file. */
 
-			if (w->work_type != WORK_PMINUS1 && C > pm1data.C) {
+			if ((w->work_type != WORK_PMINUS1 && C != pm1data.C) ||
+			    (w->work_type == WORK_PMINUS1 && C < pm1data.C)) {
 				C = pm1data.C;
 				sprintf (buf, "Ignoring suggested B2 value, using B2=%.0f from the save file\n", (double) C);
 				OutputStr (thread_num, buf);
@@ -5199,8 +5210,7 @@ restart2:
 /* user opted to skip the GCD after stage 1. */
 
 restart3a:
-	sprintf (buf, "%s P-1 stage 2 init",
-		 gwmodulo_as_string (&pm1data.gwdata));
+	sprintf (buf, "%s P-1 stage 2 init", gwmodulo_as_string (&pm1data.gwdata));
 	title (thread_num, buf);
 	strcpy (w->stage, "S2");
 	w->pct_complete = 0.0;
@@ -5243,6 +5253,8 @@ more_C:	pm1data.C_start = (C_start > pm1data.C_done) ? C_start : pm1data.C_done;
 /* move to the next pass of a multi-pass stage 2 run */
 
 restart3b:
+	sprintf (buf, "%s P-1 stage 2 init", gwmodulo_as_string (&pm1data.gwdata));
+	title (thread_num, buf);
 	stage = 2;
 	strcpy (w->stage, "S2");
 	base_pct_complete =
@@ -5268,8 +5280,7 @@ replan:	stop_reason = choose_pminus1_implementation (&pm1data, w, &using_t3);
 /* for gg, and an optional gwnum for t3. */
 
 	memused = cvt_gwnums_to_mem (&pm1data.gwdata, pm1data.rels_this_pass + pm1data.E + 2 + using_t3);
-	if (set_memory_usage (thread_num, MEM_VARIABLE_USAGE, memused))
-		goto replan;
+	if (set_memory_usage (thread_num, MEM_VARIABLE_USAGE, memused)) goto replan;
 	sprintf (buf,
 		 "Using %luMB of memory.  Processing %lu relative primes (%lu of %lu already processed).\n",
 		 memused, pm1data.rels_this_pass, pm1data.rels_done, pm1data.numrels);
@@ -5336,10 +5347,13 @@ replan:	stop_reason = choose_pminus1_implementation (&pm1data, w, &using_t3);
 	fd_term (&pm1data);
 
 /* Compute m = CEIL(start/D)*D, the first group we work on in stage 2 */
+/* For the count of paired primes to be accurate, this code must exactly mirror */
+/* the calculation of adjusted_C_start and first_m in fill_pminus1_bitarray. */	
 
 	if (pm1data.D >= 2310) m = pm1data.C / 13;
 	else if (pm1data.D >= 210) m = pm1data.C / 11;
 	else m = pm1data.C / 7;
+	m |= 1;
 	if (m < pm1data.C_start) m = pm1data.C_start;
 	m = (m / pm1data.D + 1) * pm1data.D;
 	stage2incr = (pm1data.E == 1) ? pm1data.D : pm1data.D + pm1data.D;
@@ -5378,6 +5392,15 @@ found_a_bit:;
 		j = i >> 1;
 		if (pm1data.nQx[j] != NULL)
 			gwtouch (&pm1data.gwdata, pm1data.nQx[j]);
+	}
+
+/* Stage 2 init complete, change the title */
+
+	{
+		char	mask[80];
+		sprintf (mask, "%%.%df%%%% of %%s P-1 stage 2 (using %%dMB)", PRECISION);
+		sprintf (buf, mask, trunc_percent (w->pct_complete), gwmodulo_as_string (&pm1data.gwdata), memused);
+		title (thread_num, buf);
 	}
 
 /* When E >= 2, we can do prime pairing and each loop iteration */
@@ -5647,7 +5670,7 @@ msg_and_exit:
 /* If this is pre-factoring for an LL or PRP test, then delete the large */
 /* save file. */
 
-	if (w->work_type == WORK_PMINUS1)
+	if (w->work_type == WORK_PMINUS1 && IniGetInt (INI_FILE, "KeepPminus1SaveFiles", 1))
 		pm1_save (&pm1data, filename, w, 0, x, NULL);
 	else
 		unlinkSaveFiles (filename);
@@ -5657,7 +5680,8 @@ msg_and_exit:
 done:	if (w->work_type == WORK_PMINUS1 || w->work_type == WORK_PFACTOR)
 		stop_reason = STOP_WORK_UNIT_COMPLETE;
 	else {
-		w->pminus1ed = 1;
+		w->pminus1ed = 1;		// Flag to indicate LL test has completed P-1
+		w->tests_saved = 0.0;		// Variable to indicate PRP test has completed P-1
 		stop_reason = updateWorkToDoLine (thread_num, w);
 		if (stop_reason) goto exit;
 	}
@@ -5850,7 +5874,7 @@ int pminus1_QA (
 /* Read a line from the file */
 
 		n = 0;
-		fscanf (fd, "%lf,%lu,%lu,%ld,%lu,%lu,%lu,%s\n",
+		(void) fscanf (fd, "%lf,%lu,%lu,%ld,%lu,%lu,%lu,%s\n",
 			&k, &b, &n, &c, &B1, &B2_start, &B2_end, fac_str);
 		if (n == 0) break;
 
@@ -6040,7 +6064,7 @@ void guess_pminus1_bounds (
 	} best[2];
 
 /* Guard against wild tests_saved values.  Huge values will cause this routine */
-/* to run for a very long time.  This shouldn't happen as auxillaryWorkUnitInit */
+/* to run for a very long time.  This shouldn't happen as auxiliaryWorkUnitInit */
 /* now has the exact same test. */
 
 	if (tests_saved > 10) tests_saved = 10;
@@ -6226,6 +6250,76 @@ void guess_pminus1_bounds (
 	}
 }
 
+/* Determine the probability of P-1 finding a factor */
+/* This code was pulled from guess_pminus1_bounds */
+
+double guess_pminus1_probability (
+	struct work_unit *w)
+{
+	double	log2, logB1, logB2, h, kk, logkk, temp, logtemp, prob;
+
+/* Constants */
+
+	log2 = log ((double) 2.0);
+	logB1 = log (w->B1);
+	logB2 = log (w->B2);
+
+/* What is the "average" value that must be smooth for P-1 to succeed? */
+/* Ordinarily this is 1.5 * 2^how_far_factored.  However, for Mersenne */
+/* numbers the factor must be of the form 2kp+1.  Consequently, the */
+/* value that must be smooth (k) is much smaller. */
+
+	kk = 1.5 * pow (2.0, w->sieve_depth);
+	if (w->k == 1.0 && w->b == 2 && w->c == -1) kk = kk / 2.0 / w->n;
+	logkk = log (kk);
+
+/* Set temp to the number that will need B1 smooth if k has an */
+/* average-sized factor found in stage 2 */
+
+	temp = kk / ((w->B1 + w->B2) / 2);
+	logtemp = log (temp);
+
+/* Loop over increasing bit lengths for the factor */
+
+	prob = 0.0;
+	for (h = w->sieve_depth; ; ) {
+		double	prob1, prob2;
+
+/* If temp < 1.0, then there are no factor to find in this bit level */
+
+		if (logtemp > 0.0) {
+
+/* See how many smooth k's we should find using B1 */
+/* Using Dickman's function (see Knuth pg 382-383) we want k^a <= B1 */
+
+			prob1 = F (logB1 / logkk);
+
+/* See how many smooth k's we should find using B2 */
+/* Adjust this slightly to eliminate k's that have two primes > B1 and < B2 */
+/* Do this by assuming the largest factor is the average of B1 and B2 */
+/* and the remaining cofactor is B1 smooth */
+
+			prob2 = prob1 + (F (logB2 / logkk) - prob1) *
+				        (F (logB1 / logtemp) / F (logB2 / logtemp));
+			if (prob2 < 0.0001) break;
+
+/* Add this data in to the total chance of finding a factor */
+
+			prob += prob2 / (h + 0.5);
+		}
+
+/* Move to next bit level */
+
+		h += 1.0;
+		logkk += log2;
+		logtemp += log2;
+	}
+
+/* Return the final probability */
+
+	return (prob);
+}
+
 /* Do the P-1 factoring step prior to a Lucas-Lehmer test */
 /* Similar to the main P-1 entry point, except bounds are not known */
 
@@ -6287,7 +6381,8 @@ int pfactor (
 			//this assignment out.
 			return (STOP_WORK_UNIT_COMPLETE);
 		} else {
-			w->pminus1ed = 1;
+			w->pminus1ed = 1;		// Flag to indicate LL test has completed P-1
+			w->tests_saved = 0.0;		// Variable to indicate PRP test has completed P-1
 			stop_reason = updateWorkToDoLine (thread_num, w);
 			if (stop_reason) return (stop_reason);
 			return (0);

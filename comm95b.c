@@ -5,7 +5,7 @@
  * Comm95b contains information used only during execution
  * Comm95c contains information used during setup and execution
  *
- * Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+ * Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
  *
  */ 
 
@@ -71,9 +71,8 @@ void clearThreadHandleArray (void)
 /* background.  In selecting the proper thread priority I've assumed the */
 /* program usually runs in the background. */ 
 
-/* This routine is also responsible for setting the thread's CPU affinity. */
-/* If there are N cpus with hyperthreading, then physical cpu 0 is logical */
-/* cpu 0 and N, physical cpu 1 is logical cpu 1 and N+1, etc. */
+/* Set affinity for this thread.  It is the callers responsibility to */
+/* determine which logical hyperthreaded CPUs map to a single physical CPU. */
 
 void setThreadPriorityAndAffinity (
 	int	priority,		/* Priority, 1=low, 9=high */

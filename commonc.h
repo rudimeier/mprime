@@ -1,9 +1,9 @@
-/* Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved */
+/* Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved */
 
 /* Constants */
 
-#define VERSION		"26.4"
-#define BUILD_NUM	"1"
+#define VERSION		"26.5"
+#define BUILD_NUM	"5"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
 /* Linux (mprime)  #2 */
@@ -169,6 +169,9 @@ extern int MERGE_WINDOWS;		/* Flags indicating which MDI */
 #define MERGE_MAINCOMM_WINDOWS	0x8	/* Merge main and comm windows */
 #define MERGE_NO_PREFIX		0x20	/* Output thread prefix on each line flag */
 
+extern double UNOFFICIAL_CPU_SPEED;	/* Last calculated CPU Speed in MHz.  We only */
+					/* lower the official CPU_SPEED (the one reported to */
+					/* the server) after several lower measurements */
 extern unsigned int ROLLING_AVERAGE;	/* Ratio of this computer's speed */
 					/* compared to the expected speed */
 					/* for this CPU */

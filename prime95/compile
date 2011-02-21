@@ -20,6 +20,7 @@ all:	factor32.obj service.obj
 
 factor32.obj: factor32.asm factor32.mac
     $(masm) /Fofactor32.obj factor32.asm
+    ..\gwnum\strip factor32.obj
     $(objconv) -felf32 factor32.obj linux\factor32.o
     attrib -r linux\factor32.o
     $(objconv) -fmac -wd1050 factor32.obj macosx\factor32.o

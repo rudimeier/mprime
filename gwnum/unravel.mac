@@ -1,4 +1,4 @@
-; Copyright 1995-2010 - Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2011 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -30,6 +30,7 @@ ENDIF
 ;; MSVC 2005's MASM does not recognize the ROUNDPD instruction.  When I upgrade
 ;; to a later version, this macro can be deleted.
 
+IFDEF MSVC2005
 roundpd	MACRO arg1, arg2, arg3
 	LOCAL	x, y
 x:	nop				;; Roundpd is 3-byte opcode vs addpd 2 bytes
@@ -44,6 +45,7 @@ y:
 	org	y+1
 	DB	arg3			;; Output roundpd's immediate byte
 	ENDM
+ENDIF
 
 ;; We must be very careful to obey the various ABIs on the OSes we run.
 ;; These macros help us do just that.

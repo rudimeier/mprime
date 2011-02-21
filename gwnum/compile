@@ -74,14 +74,14 @@ linux\gwnum.a: mult.obj mult1.obj mult1aux.obj mult2.obj mult2p.obj mult2a.obj m
 macosx\gwnum.a: macosx\mult.obj mult1.obj mult1aux.obj mult2.obj mult2p.obj mult2a.obj mult2aux.obj \
 		mult3.obj mult3p.obj mult3a.obj mult3ap.obj mult4.obj mult4p.obj gianthlp.obj cpuidhlp.obj \
 		xmult1ax.obj xmult2.obj xmult2a_core.obj xmult2ax.obj xmult3.obj xmult3a_core.obj xmult3ax.obj \
-		hg_blend.obj hg_core.obj hg_p4.obj hg_p4tp.obj \
-		r4_core.obj r4_p4.obj r4_p4tp.obj \
-		r4delay_core.obj r4delay_p4.obj r4delay_p4tp.obj \
-		r4delay3_core.obj r4delay3_p4.obj r4delay3_p4tp.obj \
-		r4delay5_core.obj r4delay5_p4.obj r4delay5_p4tp.obj \
-		r4dwpn_core.obj r4dwpn_p4.obj r4dwpn_p4tp.obj \
-		r4dwpn3_core.obj r4dwpn3_p4.obj r4dwpn3_p4tp.obj \
-		r4dwpn5_core.obj r4dwpn5_p4.obj r4dwpn5_p4tp.obj \
+		hg_blend.obj hg_core.obj hg_p4.obj \
+		r4_core.obj r4_p4.obj \
+		r4delay_core.obj r4delay_p4.obj \
+		r4delay3_core.obj r4delay3_p4.obj \
+		r4delay5_core.obj r4delay5_p4.obj \
+		r4dwpn_core.obj r4dwpn_p4.obj \
+		r4dwpn3_core.obj r4dwpn3_p4.obj \
+		r4dwpn5_core.obj r4dwpn5_p4.obj \
 		timeit.obj
     attrib -r macosx\gwnum.a
     del /q macosx\foo
@@ -91,6 +91,7 @@ macosx\gwnum.a: macosx\mult.obj mult1.obj mult1aux.obj mult2.obj mult2p.obj mult
     copy macosx\mult.obj macosx\foo
     del macosx\*.obj
     xcopy /q *.obj macosx
+    del macosx\*_p4tp.obj
     del macosx\*_k8.obj
     del macosx\*_k10.obj
     xcopy /y /q macosx\foo macosx
@@ -152,202 +153,268 @@ debug\ecmstag1.obj: ecmstag1.c gwnum.h
 
 mult.obj: mult.asm
     $(masm) mult.asm
+    strip mult.obj
 
 macosx\mult.obj: mult.asm
     $(masm) /DAPPLE /Fomacosx\mult.obj mult.asm
 
 mult1.obj: mult1.asm mult.mac fft1.mac lucas.mac
     $(masm) /DPPRO mult1.asm
+    strip mult1.obj
 
 mult1aux.obj: mult1aux.asm mult.mac normal.mac
     $(masm) mult1aux.asm
+    strip mult1aux.obj
 
 mult2.obj: mult2.asm mult.mac fft2.mac lucas.mac
     $(masm) /DPPRO mult2.asm
+    strip mult2.obj
 
 mult2p.obj: mult2.asm mult.mac fft2.mac lucas.mac
     $(masm) /DPPRO /DPFETCH /Fomult2p.obj mult2.asm
+    strip mult2p.obj
 
 mult2a.obj: mult2a.asm mult.mac normal.mac
     $(masm) mult2a.asm
+    strip mult2a.obj
 
 mult2aux.obj: mult2aux.asm mult.mac normal.mac
     $(masm) mult2aux.asm
+    strip mult2aux.obj
 
 mult3.obj: mult3.asm mult.mac fft3.mac lucas.mac
     $(masm) /DPPRO mult3.asm
+    strip mult3.obj
 
 mult3p.obj: mult3.asm mult.mac fft3.mac lucas.mac
     $(masm) /DPPRO /DPFETCH /Fomult3p.obj mult3.asm
+    strip mult3p.obj
 
 mult3a.obj: mult3a.asm mult.mac pass2.mac lucas.mac
     $(masm) /DPPRO mult3a.asm
+    strip mult3a.obj
 
 mult3ap.obj: mult3a.asm mult.mac pass2.mac lucas.mac
     $(masm) /DPPRO /DPFETCH /Fomult3ap.obj mult3a.asm
+    strip mult3ap.obj
 
 mult4.obj: mult4.asm mult.mac fft4.mac lucas.mac
     $(masm) /DPPRO mult4.asm
+    strip mult4.obj
 
 mult4p.obj: mult4.asm mult.mac fft4.mac lucas.mac
     $(masm) /DPPRO /DPFETCH /Fomult4p.obj mult4.asm
+    strip mult4p.obj
 
 gianthlp.obj: gianthlp.asm
     $(masm) gianthlp.asm
+    strip gianthlp.obj
 
 cpuidhlp.obj: cpuidhlp.asm
     $(masm) cpuidhlp.asm
+    strip cpuidhlp.obj
 
 xmult1ax.obj: xmult1ax.asm xmult.mac xnormal.mac
     $(masm) /DARCH=BLEND xmult1ax.asm
+    strip xmult1ax.obj
 
 xmult2.obj: xmult2.asm xmult.mac xnormal.mac
     $(masm) /DARCH=BLEND xmult2.asm
+    strip xmult2.obj
 
 xmult2a_core.obj: xmult2a.asm xmult.mac xnormal.mac
     $(masm) /DARCH=CORE /Foxmult2a_core.obj xmult2a.asm
+    strip xmult2a_core.obj
 
 xmult2a_k8.obj: xmult2a.asm xmult.mac xnormal.mac
     $(masm) /DARCH=K8 /Foxmult2a_k8.obj xmult2a.asm
+    strip xmult2a_k8.obj
 
 xmult2ax.obj: xmult2ax.asm xmult.mac xnormal.mac
     $(masm) /DARCH=BLEND xmult2ax.asm
+    strip xmult2ax.obj
 
 xmult3.obj: xmult3.asm xmult.mac xnormal.mac
     $(masm) /DARCH=BLEND xmult3.asm
+    strip xmult3.obj
 
 xmult3a_core.obj: xmult3a.asm xmult.mac xnormal.mac
     $(masm) /DARCH=CORE /Foxmult3a_core.obj xmult3a.asm
+    strip xmult3a_core.obj
 
 xmult3a_k8.obj: xmult3a.asm xmult.mac xnormal.mac
     $(masm) /DARCH=K8 /Foxmult3a_k8.obj xmult3a.asm
+    strip xmult3a_k8.obj
 
 xmult3ax.obj: xmult3ax.asm xmult.mac xnormal.mac
     $(masm) /DARCH=BLEND xmult3ax.asm
+    strip xmult3ax.obj
 
 hg_blend.obj: hg.asm xmult.mac hg.mac hgpass1sc.mac hgpass2.mac
     $(masm) /DARCH=BLEND /Fohg_blend.obj hg.asm
+    strip hg_blend.obj
 
 hg_core.obj: hg.asm xmult.mac hg.mac hgpass1sc.mac hgpass2.mac
     $(masm) /DARCH=CORE /Fohg_core.obj hg.asm
+    strip hg_core.obj
 
 hg_p4.obj: hg.asm xmult.mac hg.mac hgpass1sc.mac hgpass2.mac
     $(masm) /DARCH=P4 /Fohg_p4.obj hg.asm
+    strip hg_p4.obj
 
 hg_p4tp.obj: hg.asm xmult.mac hg.mac hgpass1sc.mac hgpass2.mac
     $(masm) /DARCH=P4TP /Fohg_p4tp.obj hg.asm
+    strip hg_p4tp.obj
 
 hg_k8.obj: hg.asm xmult.mac hg.mac hgpass1sc.mac hgpass2.mac
     $(masm) /DARCH=K8 /Fohg_k8.obj hg.asm
+    strip hg_k8.obj
 
 hg_k10.obj: hg.asm xmult.mac hg.mac hgpass1sc.mac hgpass2.mac
     $(masm) /DARCH=K10 /Fohg_k10.obj hg.asm
+    strip hg_k10.obj
 
 r4_core.obj: r4.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4pass1sc.mac r4pass2.mac
     $(masm) /DARCH=CORE /For4_core.obj r4.asm
+    strip r4_core.obj
 
 r4_p4.obj: r4.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4pass1sc.mac r4pass2.mac
     $(masm) /DARCH=P4 /For4_p4.obj r4.asm
+    strip r4_p4.obj
 
 r4_p4tp.obj: r4.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4pass1sc.mac r4pass2.mac
     $(masm) /DARCH=P4TP /For4_p4tp.obj r4.asm
+    strip r4_p4tp.obj
 
 r4_k8.obj: r4.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4pass1sc.mac r4pass2.mac
     $(masm) /DARCH=K8 /For4_k8.obj r4.asm
+    strip r4_k8.obj
 
 r4_k10.obj: r4.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4pass1sc.mac r4pass2.mac
     $(masm) /DARCH=K10 /For4_k10.obj r4.asm
+    strip r4_k10.obj
 
 r4delay_core.obj: r4delay.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=CORE /For4delay_core.obj r4delay.asm
+    strip r4delay_core.obj
 
 r4delay_p4.obj: r4delay.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=P4 /For4delay_p4.obj r4delay.asm
+    strip r4delay_p4.obj
 
 r4delay_p4tp.obj: r4delay.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=P4TP /For4delay_p4tp.obj r4delay.asm
+    strip r4delay_p4tp.obj
 
 r4delay_k8.obj: r4delay.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=K8 /For4delay_k8.obj r4delay.asm
+    strip r4delay_k8.obj
 
 r4delay_k10.obj: r4delay.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=K10 /For4delay_k10.obj r4delay.asm
+    strip r4delay_k10.obj
 
 r4delay3_core.obj: r4delay3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=CORE /For4delay3_core.obj r4delay3.asm
+    strip r4delay3_core.obj
 
 r4delay3_p4.obj: r4delay3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=P4 /For4delay3_p4.obj r4delay3.asm
+    strip r4delay3_p4.obj
 
 r4delay3_p4tp.obj: r4delay3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=P4TP /For4delay3_p4tp.obj r4delay3.asm
+    strip r4delay3_p4tp.obj
 
 r4delay3_k8.obj: r4delay3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=K8 /For4delay3_k8.obj r4delay3.asm
+    strip r4delay3_k8.obj
 
 r4delay3_k10.obj: r4delay3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=K10 /For4delay3_k10.obj r4delay3.asm
+    strip r4delay3_k10.obj
 
 r4delay5_core.obj: r4delay5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=CORE /For4delay5_core.obj r4delay5.asm
+    strip r4delay5_core.obj
 
 r4delay5_p4.obj: r4delay5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=P4 /For4delay5_p4.obj r4delay5.asm
+    strip r4delay5_p4.obj
 
 r4delay5_p4tp.obj: r4delay5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=P4TP /For4delay5_p4tp.obj r4delay5.asm
+    strip r4delay5_p4tp.obj
 
 r4delay5_k8.obj: r4delay5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=K8 /For4delay5_k8.obj r4delay5.asm
+    strip r4delay5_k8.obj
 
 r4delay5_k10.obj: r4delay5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4delaypass1sc.mac r4delaypass2.mac
     $(masm) /DARCH=K10 /For4delay5_k10.obj r4delay5.asm
+    strip r4delay5_k10.obj
 
 r4dwpn_core.obj: r4dwpn.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=CORE /For4dwpn_core.obj r4dwpn.asm
+    strip r4dwpn_core.obj
 
 r4dwpn_p4.obj: r4dwpn.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=P4 /For4dwpn_p4.obj r4dwpn.asm
+    strip r4dwpn_p4.obj
 
 r4dwpn_p4tp.obj: r4dwpn.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=P4TP /For4dwpn_p4tp.obj r4dwpn.asm
+    strip r4dwpn_p4tp.obj
 
 r4dwpn_k8.obj: r4dwpn.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=K8 /For4dwpn_k8.obj r4dwpn.asm
+    strip r4dwpn_k8.obj
 
 r4dwpn_k10.obj: r4dwpn.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=K10 /For4dwpn_k10.obj r4dwpn.asm
+    strip r4dwpn_k10.obj
 
 r4dwpn3_core.obj: r4dwpn3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=CORE /For4dwpn3_core.obj r4dwpn3.asm
+    strip r4dwpn3_core.obj
 
 r4dwpn3_p4.obj: r4dwpn3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=P4 /For4dwpn3_p4.obj r4dwpn3.asm
+    strip r4dwpn3_p4.obj
 
 r4dwpn3_p4tp.obj: r4dwpn3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=P4TP /For4dwpn3_p4tp.obj r4dwpn3.asm
+    strip r4dwpn3_p4tp.obj
 
 r4dwpn3_k8.obj: r4dwpn3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=K8 /For4dwpn3_k8.obj r4dwpn3.asm
+    strip r4dwpn3_k8.obj
 
 r4dwpn3_k10.obj: r4dwpn3.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=K10 /For4dwpn3_k10.obj r4dwpn3.asm
+    strip r4dwpn3_k10.obj
 
 r4dwpn5_core.obj: r4dwpn5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=CORE /For4dwpn5_core.obj r4dwpn5.asm
+    strip r4dwpn5_core.obj
 
 r4dwpn5_p4.obj: r4dwpn5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=P4 /For4dwpn5_p4.obj r4dwpn5.asm
+    strip r4dwpn5_p4.obj
 
 r4dwpn5_p4tp.obj: r4dwpn5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=P4TP /For4dwpn5_p4tp.obj r4dwpn5.asm
+    strip r4dwpn5_p4tp.obj
 
 r4dwpn5_k8.obj: r4dwpn5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=K8 /For4dwpn5_k8.obj r4dwpn5.asm
+    strip r4dwpn5_k8.obj
 
 r4dwpn5_k10.obj: r4dwpn5.asm xmult.mac r4.mac r2.mac r3.mac r5.mac r8.mac r4dwpnpass1sc.mac r4dwpnpass2.mac
     $(masm) /DARCH=K10 /For4dwpn5_k10.obj r4dwpn5.asm
+    strip r4dwpn5_k10.obj
 
 timeit.obj: timeit.asm mult.mac lucas.mac xmult.mac hg.mac r4.mac r2.mac r3.mac r5.mac r8.mac
     $(masm) /DARCH=CORE timeit.asm
+    strip timeit.obj
 

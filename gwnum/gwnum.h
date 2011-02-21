@@ -16,7 +16,7 @@
 | threads IF AND ONLY IF each uses a different gwhandle structure
 | initialized by gwinit.
 | 
-|  Copyright 2002-2010 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2002-2011 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 #ifndef _GWNUM_H
@@ -59,9 +59,9 @@ typedef double *gwnum;
 /* gwsetup verifies that the version numbers match.  This prevents bugs */
 /* from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"26.4"
+#define GWNUM_VERSION		"26.5"
 #define GWNUM_MAJOR_VERSION	26
-#define GWNUM_MINOR_VERSION	4
+#define GWNUM_MINOR_VERSION	5
 
 /* Error codes returned by the three gwsetup routines */
 
@@ -207,13 +207,13 @@ void gwdone (
 #define gwset_num_threads(h,n)		((h)->num_threads = n)
 #define gwget_num_threads(h)		((h)->num_threads)
 
-/* Specify a call back routine for the auxillary threads to call when they */
+/* Specify a call back routine for the auxiliary threads to call when they */
 /* are created.  This lets the user of the gwnum library set the thread */
 /* priority and affinity as it sees fit.  You can also specify an arbitrary */
 /* pointer to pass to the callback routine. */
 /* The callback routine must be declared as follows: */
 /*	void callback (int thread_num, int action, void *data) */
-/* If you tell gwnum to use 4 threads, it will create 3 auxillary threads */
+/* If you tell gwnum to use 4 threads, it will create 3 auxiliary threads */
 /* and pass the callback routine with thread_num = 1, 2, and 3. */
 /* Action is 0 for thread starting and 1 for thread terminating. */
 
@@ -755,7 +755,7 @@ int gwnum_ecmStage1 (
 |                             GWNUM INTERNALS                          |
 +---------------------------------------------------------------------*/
 
-#define MAX_AUXILLARY_THREADS	31
+#define MAX_AUXILIARY_THREADS	31
 
 /* This structure mimics a jmptable entry defined in the assembly code */
 /* We use C code to read the entry and do lots of initialization. */
@@ -875,24 +875,24 @@ struct gwhandle_struct {
 	ghandle	gdata;		/* Structure that allows sharing giants and */
 				/* gwnum memory allocations */
 	void	(*thread_callback)(int, int, void *);
-				/* Auxillary thread callback routine letting */
-				/* the gwnum library user set auxillary */
+				/* Auxiliary thread callback routine letting */
+				/* the gwnum library user set auxiliary */
 				/* thread priority and affinity */
 	void	*thread_callback_data;
 				/* User-supplied data to pass to the */
-				/* auxillary thread callback routine */
+				/* auxiliary thread callback routine */
 	gwmutex	thread_lock;	/* This mutex allows the assembly code to */
 				/* limit one thread at a time in critical */
 				/* sections. */
 	gwevent	thread_work_to_do; /* This event is set whenever the */
-				/* auxillary threads have work to do. */
+				/* auxiliary threads have work to do. */
 	unsigned int num_active_threads; /* Count of the number of active */
-				/* auxillary threads */
+				/* auxiliary threads */
 	gwevent	all_threads_done; /* This event is set whenever the */
-				/* auxillary threads are done and the */
+				/* auxiliary threads are done and the */
 				/* main thread can resume.  That is, it is */
 				/* set if and only if num_active_threads==0 */
-	int	threads_must_exit; /* Flag set to force all auxillary */
+	int	threads_must_exit; /* Flag set to force all auxiliary */
 				/* threads to terminate */
 	int	pass1_state;	/* Mainly used to keep track of what we are */
 				/* doing in pass 1 of an FFT.  See */
@@ -918,13 +918,13 @@ struct gwhandle_struct {
 	unsigned long num_postfft_blocks; /* Number of data blocks that */
 				/* must delay the forward fft because */
 				/* POSTFFT is set. */
-	gwevent	pass1_norm_events[MAX_AUXILLARY_THREADS];
+	gwevent	pass1_norm_events[MAX_AUXILIARY_THREADS];
 				/* These events serialize execution */
 				/* of the normalization code */
 	gwevent	gwcarries_complete; /* This event is signalled when the */
 				/* gwcarries at the end of pass 1 completes */
-	gwthread thread_id[MAX_AUXILLARY_THREADS];
-				/* Array of auxillary thread ids */
+	gwthread thread_id[MAX_AUXILIARY_THREADS];
+				/* Array of auxiliary thread ids */
 	uint32_t ASM_TIMERS[32];/* Internal timers used by me to */
 				/* optimize code */
 	int	bench_pick_nth_fft; /* DO NOT set this variable.  Internal */

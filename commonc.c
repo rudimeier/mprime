@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
@@ -11,7 +11,7 @@
 | Commonc contains information used during setup and execution
 +---------------------------------------------------------------------*/
 
-char JUNK[]="Copyright 1996-2010 Mersenne Research, Inc. All rights reserved";
+char JUNK[]="Copyright 1996-2011 Mersenne Research, Inc. All rights reserved";
 
 char	INI_FILE[80] = {0};
 char	LOCALINI_FILE[80] = {0};
@@ -55,6 +55,7 @@ int	TRAY_ICON = TRUE;
 int	HIDE_ICON = FALSE;
 int	MERGE_WINDOWS = 0;		/* Flags indicating which MDI */
 					/* windows to merge together */
+double UNOFFICIAL_CPU_SPEED = 0.0;
 unsigned int ROLLING_AVERAGE = 0;
 unsigned int PRECISION = 2;
 int	RDTSC_TIMING = 1;
@@ -247,7 +248,7 @@ void generate_computer_guid (void)
 
 void getCpuSpeed (void)
 {
-	int	temp, old_cpu_speed;
+	int	temp, old_cpu_speed, report_new_cpu_speed;
 
 /* Guess the CPU speed using the RDTSC instruction */
 
@@ -263,18 +264,67 @@ void getCpuSpeed (void)
 	if (CPU_SPEED > 50000) CPU_SPEED = 50000;
 	if (CPU_SPEED < 25) CPU_SPEED = 25;
 
-/* If CPU speed has changed greatly since the last time, then */
+/* Set the unofficial CPU speed.  The unofficial CPU speed is the */
+/* last CPU speed measurement.  The official CPU speed is the one */
+/* reported to the server. */
+
+	UNOFFICIAL_CPU_SPEED = CPU_SPEED;
+
+/* If CPU speed is much less than the official CPU speed, then set a new */
+/* official CPU speed only after several slower measurements. */
+/* The reason for this is that erroneously (due to one aberrant CPU speed */
+/* calculation) reducing the speed we report to the server may result */
+/* in erroneously unreserving exponents. */
+
+	report_new_cpu_speed = FALSE;
+	old_cpu_speed = IniGetInt (LOCALINI_FILE, "OldCpuSpeed", 0);
+	if (CPU_SPEED < (double) old_cpu_speed * 0.97) {
+		if (IniGetInt (LOCALINI_FILE, "NewCpuSpeedCount", 0) <= 5) {
+			if (CPU_SPEED > (double) IniGetInt (LOCALINI_FILE, "NewCpuSpeed", 0))
+				IniWriteInt (LOCALINI_FILE, "NewCpuSpeed", (int) (CPU_SPEED + 0.5));
+			IniWriteInt (LOCALINI_FILE, "NewCpuSpeedCount", IniGetInt (LOCALINI_FILE, "NewCpuSpeedCount", 0) + 1);
+			CPU_SPEED = old_cpu_speed;
+		} else {
+			if (CPU_SPEED < (double) IniGetInt (LOCALINI_FILE, "NewCpuSpeed", 0))
+				CPU_SPEED = (double) IniGetInt (LOCALINI_FILE, "NewCpuSpeed", 0);
+			report_new_cpu_speed = TRUE;
+		}
+	}
+
+/* If CPU speed is close to last reported CPU speed, then use it. */
 /* tell the server, recalculate new completion dates, and reset the */
 /* rolling average.  Don't do this on the first run (before the Welcome */
 /* dialog has been displayed). */
 
-	old_cpu_speed = IniGetInt (LOCALINI_FILE, "OldCpuSpeed", 0);
-	if (CPU_SPEED < (double) old_cpu_speed * 0.97 ||
-	    CPU_SPEED > (double) old_cpu_speed * 1.03) {
+	else if (CPU_SPEED < (double) old_cpu_speed * 1.03) {
+		IniWriteInt (LOCALINI_FILE, "NewCpuSpeedCount", 0);
+		IniWriteInt (LOCALINI_FILE, "NewCpuSpeed", 0);
+	}
+
+/* If CPU speed is much larger than the speed reported to the server, then */
+/* use this new speed and tell the server. */
+
+	else {
+		report_new_cpu_speed = TRUE;
+	}
+
+/* Report a new CPU speed.  Remember the new CPU speed, tell the server, */
+/* recalculate new completion dates, and reset the rolling average in */
+/* such a way as to reduce the chance of spurious unreserves.  Don't */
+/* do this on the first run (before the Welcome dialog has been displayed). */
+
+	if (report_new_cpu_speed) {
 		IniWriteInt (LOCALINI_FILE, "OldCpuSpeed", (int) (CPU_SPEED + 0.5));
+		IniWriteInt (LOCALINI_FILE, "NewCpuSpeedCount", 0);
+		IniWriteInt (LOCALINI_FILE, "NewCpuSpeed", 0);
 		if (old_cpu_speed) {
-			ROLLING_AVERAGE = 1000;
-			IniWriteInt (LOCALINI_FILE, "RollingAverage", 1000);
+			if (WORKTODO_COUNT) {
+				ROLLING_AVERAGE = (int) (ROLLING_AVERAGE * old_cpu_speed / CPU_SPEED);
+				if (ROLLING_AVERAGE < 1000) ROLLING_AVERAGE = 1000;
+			}
+			else
+				ROLLING_AVERAGE = 1000;
+			IniWriteInt (LOCALINI_FILE, "RollingAverage", ROLLING_AVERAGE);
 			IniWriteInt (LOCALINI_FILE, "RollingStartTime", 0);
 			spoolMessage (PRIMENET_UPDATE_COMPUTER_INFO, NULL);
 			UpdateEndDates ();
@@ -334,6 +384,12 @@ void getCpuInfo (void)
 	temp = IniGetInt (LOCALINI_FILE, "CpuSupports3DNow", 99);
 	if (temp == 0) CPU_FLAGS &= ~CPU_3DNOW;
 	if (temp == 1) CPU_FLAGS |= CPU_3DNOW;
+	temp = IniGetInt (LOCALINI_FILE, "CpuSupportsAVX", 99);
+	if (temp == 0) CPU_FLAGS &= ~CPU_AVX;
+	if (temp == 1) CPU_FLAGS |= CPU_AVX;
+	temp = IniGetInt (LOCALINI_FILE, "CpuSupportsFMA", 99);
+	if (temp == 0) CPU_FLAGS &= ~CPU_FMA;
+	if (temp == 1) CPU_FLAGS |= CPU_FMA;
 
 /* Let the user override the L2 cache size in local.ini file */
 
@@ -387,7 +443,7 @@ void getCpuDescription (
 
 /* Now format a pretty CPU description */
 
-	sprintf (buf, "%s\nCPU speed: %.2f MHz", CPU_BRAND, CPU_SPEED);
+	sprintf (buf, "%s\nCPU speed: %.2f MHz", CPU_BRAND, UNOFFICIAL_CPU_SPEED);
 	if (NUM_CPUS > 1 && CPU_HYPERTHREADS > 1)
 		sprintf (buf + strlen (buf),
 			 ", %lu hyperthreaded cores", NUM_CPUS);
@@ -398,14 +454,16 @@ void getCpuDescription (
 	strcat (buf, "\n");
 	if (CPU_FLAGS) {
 		strcat (buf, "CPU features: ");
-		if (CPU_FLAGS & CPU_RDTSC) strcat (buf, "RDTSC, ");
-		if (CPU_FLAGS & CPU_CMOV) strcat (buf, "CMOV, ");
+//		if (CPU_FLAGS & CPU_RDTSC) strcat (buf, "RDTSC, ");
+//		if (CPU_FLAGS & CPU_CMOV) strcat (buf, "CMOV, ");
 		if (CPU_FLAGS & CPU_PREFETCH) strcat (buf, "Prefetch, ");
 		if (CPU_FLAGS & CPU_3DNOW) strcat (buf, "3DNow!, ");
 		if (CPU_FLAGS & CPU_MMX) strcat (buf, "MMX, ");
 		if (CPU_FLAGS & CPU_SSE) strcat (buf, "SSE, ");
 		if (CPU_FLAGS & CPU_SSE2) strcat (buf, "SSE2, ");
 		if (CPU_FLAGS & CPU_SSE41) strcat (buf, "SSE4, ");
+		if (CPU_FLAGS & CPU_AVX) strcat (buf, "AVX, ");
+		if (CPU_FLAGS & CPU_FMA) strcat (buf, "FMA, ");
 		strcpy (buf + strlen (buf) - 2, "\n");
 	}
 	strcat (buf, "L1 cache size: ");
@@ -628,7 +686,7 @@ void nameAndReadIniFiles (
 	IniGetString (INI_FILE, "prime.log", LOGFILE, 80, LOGFILE);
 	IniGetString (INI_FILE, "prime.ini", INI_FILE, 80, INI_FILE);
 	if (buf[0]) {
-		_chdir (buf);
+		(void) _chdir (buf);
 		IniFileReread (INI_FILE);
 	}
 
@@ -683,7 +741,7 @@ void nameAndReadIniFiles (
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_PENTIUM_M ? "Pentium M" :
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_CORE ? "Core Solo/Duo" :
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_CORE_2 ? "Core 2" :
-		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_CORE_I7 ? "Core i3/i5/i7/i9" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_CORE_I7 ? "Core i3/i5/i7" :
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_ATOM ? "Atom" :
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_INTEL_OTHER ? "Unknown Intel" :
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_AMD_K8 ? "AMD K8" :
@@ -703,6 +761,10 @@ void nameAndReadIniFiles (
 	}
 	strcat (buf, "\n");
 	OutputStr (MAIN_THREAD_NUM, buf);
+
+/* Dynamically determine which logical hyperthreaded CPUs map to physical CPUs */
+
+	generate_affinity_scramble ();
 
 /* Start some initial timers */
 
@@ -1125,7 +1187,7 @@ void writeIniFile (
 			strcat (buf, p->lines[j]->value);
 		}
 		strcat (buf, "\n");
-		_write (fd, buf, (unsigned int) strlen (buf));
+		(void) _write (fd, buf, (unsigned int) strlen (buf));
 	}
 	p->dirty = 0;
 	_close (fd);
@@ -2289,7 +2351,7 @@ unsigned int countCommas (
 /* not appear in the worktodo.ini file, but need initializing in a */
 /* common place. */
 
-void auxillaryWorkUnitInit (
+void auxiliaryWorkUnitInit (
 	struct work_unit *w)
 {
 
@@ -2454,16 +2516,23 @@ int readWorkToDoFile (void)
 		gwmutex_lock (&WORKTODO_MUTEX);
 
 /* Make sure no other threads are accessing work units right now. */
-/* There should be no worker threads active so any use will be very */
-/* short-lived.  Output a message if this takes too long - so that we */
-/* can diagnose locking problems that shouldn't be happening. */
+/* There should be no worker threads active so any use should be short-lived. */
 
-		if (WORKTODO_IN_USE_COUNT == 0) break;
+		if (WORKTODO_IN_USE_COUNT == 0 && !WORKTODO_CHANGED) break;
 		gwmutex_unlock (&WORKTODO_MUTEX);
-		Sleep (1);
-		if (i % 10000 == 0)
-			OutputStr (MAIN_THREAD_NUM,
-				   "Use count locking problem in reading worktodo file.\n"); 
+		if (i <= 10) {
+			Sleep (50);
+			continue;
+		}
+
+/* Uh oh, the lock hasn't been released after half-a-second.  This happens processing large */
+/* worktodo.txt files in communicateWithServer (see James Heinrich's complaints in 26.4 thread). */
+/* As a workaround, we'll simply not re-read the worktodo.txt file now.  We only reread the file */
+/* to pick up any manual edits that may have taken place since the last time worktodo.txt was */
+/* read in (and to process worktodo.add).  Hopefully the comm-with-server thread will finish up */
+/* and we can successfully re-read the worktodo.txt file at a later time. */
+
+		return (0);
 	}
 
 /* Clear file needs writing flag and count of worktodo lines */
@@ -2522,7 +2591,7 @@ int readWorkToDoFile (void)
 		if (tnum == NUM_WORKER_THREADS) {
 		    char	buf[100];
 		    sprintf (buf,
-			     "Too many sections in worktodo.txt.  Line #%d\n",
+			     "Too many sections in worktodo.txt.  Line #%u\n",
 			     linenum);
 		    OutputSomewhere (MAIN_THREAD_NUM, buf);
 		}
@@ -2779,7 +2848,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 /* Handle Pminus1 lines:  Old style:				*/
 /*	Pminus1=exponent,B1,B2,plus1[,B2_start]			*/
 /* New style is:						*/
-/*	Pminus1=k,b,n,c,B1,B2[,B2_start][,"factors"]		*/
+/*	Pminus1=k,b,n,c,B1,B2[,how_far_factored][,B2_start][,"factors"] */
 
 	    else if (_stricmp (keyword, "Pminus1") == 0) {
 		char	*q;
@@ -2812,6 +2881,15 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 			if ((q = strchr (q+1, ',')) == NULL) goto illegal_line;
 			w->B2 = atof (q+1);
 			q = strchr (q+1, ',');
+			w->sieve_depth = 0.0;
+			if (q != NULL && q[1] != '"') {
+				double	j;
+				j = atof (q+1);
+				if (j < 100.0) {
+					w->sieve_depth = j;
+					q = strchr (q+1, ',');
+				}
+			}
 			w->B2_start = 0;
 			if (q != NULL && q[1] != '"') {
 				double	j;
@@ -2910,9 +2988,26 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 		goto illegal_line;
 	    }
 
+/* A user discovered a case where a computer that dual boots between 32-bit prime95 */
+/* and 64-bit prime95 can run into problems.  If near the FFT limit an FFT length is */
+/* picked and written to worktodo.ini.  When running the other executable, that FFT */
+/* length may not be supported leading to a "cannot iniitialize FFT error".  For */
+/* example, the 2800K FFT length is implemented in 64-bit prime95, but not 32-bit prime95. */
+/* The quick workaround here is to ignore FFT lengths from the worktodo file if that FFT */
+/* length is not supported.  This is non-optimal because the proper FFT size will */
+/* have to be recalculated. */
+
+	    if (w->forced_fftlen && gwmap_fftlen_to_max_exponent (w->forced_fftlen) == 0) {
+		    char	buf[100];
+		    sprintf (buf, "Warning: Ignoring unsupported FFT length, %ld, on line %u of worktodo.txt.\n",
+			     w->forced_fftlen, linenum);
+		    OutputBoth (MAIN_THREAD_NUM, buf);
+		    w->forced_fftlen = 0;
+	    }
+
 /* Do more initialization of the work_unit structure */
 
-	    auxillaryWorkUnitInit (w);
+	    auxiliaryWorkUnitInit (w);
 
 /* Grow the work_unit array if necessary and add this entry */
 
@@ -2956,7 +3051,7 @@ wdone:	    rc = addToWorkUnitArray (tnum, w, TRUE);
 
 /* See if any other worker's first work unit is testing the same number. */
 /* If so, assume any existing save files are for that worker */
-			
+
 			for (tnum2 = 0; tnum2 < MAX_NUM_WORKER_THREADS; tnum2++) {
 				for (w2 = WORK_UNITS[tnum2].first; w2 != NULL; w2 = w2->next) {
 					if (w2->work_type == WORK_NONE) continue;
@@ -3178,30 +3273,20 @@ int writeWorkToDoFile (
 		case WORK_PMINUS1:
 			sprintf (buf, "Pminus1=%s%.0f,%lu,%lu,%ld,%.0f,%.0f",
 				 idbuf, w->k, w->b, w->n, w->c, w->B1, w->B2);
+			if (w->sieve_depth > 0.0)
+				sprintf (buf + strlen (buf), ",%.0f", w->sieve_depth);
 			if (w->B2_start > w->B1)
-				sprintf (buf + strlen (buf),
-					 ",%.0f",
-					 w->B2_start);
+				sprintf (buf + strlen (buf), ",%.0f", w->B2_start);
 			if (w->known_factors != NULL)
-				sprintf (buf + strlen (buf),
-					 ",\"%s\"",
-					 w->known_factors);
+				sprintf (buf + strlen (buf), ",\"%s\"", w->known_factors);
 			break;
 
 		case WORK_PRP:
+			sprintf (buf, "PRP=%s%.0f,%lu,%lu,%ld", idbuf, w->k, w->b, w->n, w->c);
 			if (w->tests_saved > 0.0)
-				sprintf (buf,
-					 "PRP=%s%.0f,%lu,%lu,%ld",
-					 idbuf, w->k, w->b, w->n, w->c);
-			else
-				sprintf (buf,
-					 "PRP=%s%.0f,%lu,%lu,%ld,%g,%g",
-					 idbuf, w->k, w->b, w->n, w->c,
-					 w->sieve_depth, w->tests_saved);
+				sprintf (buf + strlen (buf), ",%g,%g", w->sieve_depth, w->tests_saved);
 			if (w->known_factors != NULL)
-				sprintf (buf + strlen (buf),
-					 ",\"%s\"",
-					 w->known_factors);
+				sprintf (buf + strlen (buf), ",\"%s\"", w->known_factors);
 			break;
 		}
 
@@ -3329,7 +3414,7 @@ int addWorkToDoLine (
 
 /* Do more initialization of the work_unit structure */
 
-	auxillaryWorkUnitInit (w);
+	auxiliaryWorkUnitInit (w);
 
 /* Copy work unit from stack to malloc'ed area */
 
@@ -3595,7 +3680,8 @@ double work_estimate (
 		for (i = (int) w->sieve_depth+1; i <= (int) w->factor_to; i++) {
 			if (i < 48) continue;
 			timing = (i > 64) ? 20.2 : (i > 62) ? 16.1 : 15.1;
-			timing *= 145000.0 * (1L << (i - 48)) / w->n;
+			if (i <= 72) timing *= 145000.0 * (1L << (i - 48)) / w->n;
+			else timing *= 145000.0 * 16777216.0 * (1L << (i - 72)) / w->n;
 			if (i == tf_level)
 				est += timing * (1.0 - pct_complete);
 			else
@@ -4430,7 +4516,7 @@ static	time_t	last_time = 0;
 		strcpy (buf+1, ctime (&this_time));
 		buf[25] = ']';
 		buf[26] = '\n';
-		_write (fd, buf, 27);
+		(void) _write (fd, buf, 27);
 	}
 
 /* Output the message */
@@ -4719,9 +4805,9 @@ void spoolMessage (
 			(msgType == PRIMENET_ASSIGNMENT_UNRESERVE) ?
 			sizeof (struct primenetAssignmentUnreserve) :
 			sizeof (struct primenetBenchmarkData);
-		_write (fd, &msgType, sizeof (short));
-		_write (fd, &datalen, sizeof (short));
-		_write (fd, msg, datalen);
+		(void) _write (fd, &msgType, sizeof (short));
+		(void) _write (fd, &datalen, sizeof (short));
+		(void) _write (fd, msg, datalen);
 	}
 
 /* Close the spool file */
@@ -4886,7 +4972,7 @@ static	time_t	last_time = 0;
 				OutputStr (COMM_THREAD_NUM, "Unable to truncate log file.\n");
 				return;
 			}
-			_write (fd, buf, (unsigned int) (p - buf));
+			(void) _write (fd, buf, (unsigned int) (p - buf));
 			free (buf);
 		}
 	}
@@ -4901,12 +4987,12 @@ static	time_t	last_time = 0;
 		buf[0] = '[';
 		strcpy (buf+1, ctime (&this_time));
 		sprintf (buf+25, " - ver %s]\n", VERSION);
-		_write (fd, buf, (unsigned int) strlen (buf));
+		(void) _write (fd, buf, (unsigned int) strlen (buf));
 	}
 
 /* Output the message */
 
-	_write (fd, str, (unsigned int) strlen (str));
+	(void) _write (fd, str, (unsigned int) strlen (str));
 	_close (fd);
 	gwmutex_unlock (&LOG_MUTEX);
 }
@@ -5581,6 +5667,7 @@ retry:
 		if (CPU_FLAGS & CPU_SSE) strcat (pkt.cpu_features, "SSE,");
 		if (CPU_FLAGS & CPU_SSE2) strcat (pkt.cpu_features, "SSE2,");
 		if (CPU_FLAGS & CPU_SSE41) strcat (pkt.cpu_features, "SSE4,");
+		if (CPU_FLAGS & CPU_AVX) strcat (pkt.cpu_features, "AVX,");
 		if (pkt.cpu_features[0])
 			pkt.cpu_features[strlen (pkt.cpu_features) - 1] = 0;
 		pkt.L1_cache_size = CPU_L1_CACHE_SIZE;
@@ -5730,7 +5817,7 @@ retry:
 		if (fd < 0) goto locked_leave;
 		_lseek (fd, msg_offset, SEEK_SET);
 		msgType = -1;
-		_write (fd, &msgType, sizeof (short));
+		(void) _write (fd, &msgType, sizeof (short));
 		_close (fd);
 		gwmutex_unlock (&SPOOL_FILE_MUTEX);
 		msg_offset = new_offset;
@@ -5765,10 +5852,6 @@ retry:
 		    (est >= work_to_get + unreserve_threshold &&
 		     ! isWorkUnitActive (w) &&
 		     w->pct_complete == 0.0)) {
-
-			sprintf (buf, "DEBUG INFO.  est: %g, wtg: %g, ut: %g, hw: %ld\n",
-				 est, work_to_get, unreserve_threshold, header_words[1]);
-			LogMsg (buf);
 
 			if (w->assignment_uid[0]) {
 				struct primenetAssignmentUnreserve pkt;

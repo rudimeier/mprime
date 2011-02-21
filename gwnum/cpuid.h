@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
 | Author:  George Woltman
 | Email: woltman@alum.mit.edu
 |
@@ -22,7 +22,8 @@ extern "C" {
 
 #include "gwcommon.h"
 
-/* Routines that the user should call */
+/* Routines that the user should call.  When calling */
+/* guessCpuSpeed, affinity should be set to run on any CPU core */
 
 void guessCpuType (void);
 void guessCpuSpeed (void);
@@ -50,6 +51,9 @@ extern double CPU_SPEED;		/* Actual CPU Speed in MHz */
 #define CPU_SSE42	0x0400
 #define CPU_TLB_PRIMING	0x0800		/* Prefetching requires TLB priming. */
 					/* Early Pentium 4's require priming. */
+#define CPU_TSC_INVARIANT 0x1000	/* RDTSC does NOT count CPU clocks! */
+#define CPU_AVX		0x2000		/* AVX instructions */
+#define CPU_FMA		0x4000		/* Fused multiply-add instructions */
 extern unsigned int CPU_FLAGS;		/* Cpu capabilities */
 extern unsigned int CPU_CORES;		/* Number CPU cores */
 extern unsigned int CPU_HYPERTHREADS;	/* Number of virtual processors */
@@ -77,7 +81,7 @@ extern unsigned int CPU_SIGNATURE;	/* Vendor-specific family number, */
 #define CPU_ARCHITECTURE_PENTIUM_M	2
 #define CPU_ARCHITECTURE_CORE		3		/* Core Solo and Core Duo */
 #define CPU_ARCHITECTURE_CORE_2		4
-#define CPU_ARCHITECTURE_CORE_I7	5		/* Core i3/i5/i7/i9 */
+#define CPU_ARCHITECTURE_CORE_I7	5		/* Core i3/i5/i7 */
 #define CPU_ARCHITECTURE_ATOM		6
 #define CPU_ARCHITECTURE_INTEL_OTHER	99
 #define CPU_ARCHITECTURE_AMD_K8		100
@@ -104,12 +108,22 @@ void ecpuid (struct cpuid_data *);
 #define isCpuidSupported()	ecpuidsupport ()
 #define Cpuid(a,s)		{ (s)->EAX=a; ecpuid (s); }
 
+/* Cleaner access to xgetbv assembly code */
+
+void exgetbv (struct cpuid_data *);
+#define Xgetbv(a,s)		{ (s)->ECX=a; exgetbv (s); }
+
 /* Routine used to time code chunks */
 void erdtsc (uint32_t *hi, uint32_t *lo);
 #define rdtsc(hi,lo)		erdtsc(hi,lo)
 
 /* Init the x87 FPU, probably not needed any longer */
 void fpu_init (void);
+
+/* Masm routines to burn up a specific number of clocks */
+
+void one_hundred_thousand_clocks ();
+void one_million_clocks ();
 
 #ifdef __cplusplus
 }

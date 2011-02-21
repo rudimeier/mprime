@@ -5,7 +5,7 @@
 | in the multi-precision arithmetic routines.  That is, all routines
 | that deal with the gwnum data type.
 | 
-|  Copyright 2002-2010 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2002-2011 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 /* Include files */
@@ -303,14 +303,14 @@ struct gwasm_data {
 	float	P3;		/* 3.0 */
 
 	int32_t	thread_num;	/* Thread num - so we can differentiate main */
-				/* thread from auxillary threads */
+				/* thread from auxiliary threads */
 	void	*data_addr;	/* FFT data to work on this pass */
 	void	*data_prefetch;	/* FFT data to prefetch for next pass */
 	void	*premult_addr;	/* Premult data to use this pass */
 	void	*premult_prefetch;/* Premult data to prefetch for next pass */
 	gwhandle *gwdata;	/* Allows callback routines to access gwdata */
 	void	*pass1_wake_up_threads; /* Callback routine to wake up */
-				/* auxillary threads */
+				/* auxiliary threads */
 	void	*pass1_wait_for_carries; /* Callback routine to ensure the */
 				/* normalization routine accesses the carry */
 				/* data in ascending block numbers */
@@ -319,11 +319,11 @@ struct gwasm_data {
 	void	*pass1_get_next_block; /* Callback routine to get next block */
 				/* number for thread to process */
 	void	*pass2_wake_up_threads; /* Callback routine to wake up */
-				/* auxillary threads */
+				/* auxiliary threads */
 	void	*pass2_get_next_block; /* Callback routine to get next block */
 				/* number for thread to process */
 	void	(*thread_work_routine)(void*); /* Assembly routine to call */
-				/* when auxillary thread wakes up */
+				/* when auxiliary thread wakes up */
 	uint32_t this_block; /* Block currently being processed */
 	uint32_t next_block; /* Next block to process */
 	uint32_t last_pass1_block; /* Last block to process */
@@ -356,7 +356,7 @@ struct gwasm_data {
 #define extern_decl(name)		extern void (*name)(void);
 #define array_entry(name)		&name,
 
-/* Build an array of the assembly auxillary routines (addition, subtraction, etc.) */
+/* Build an array of the assembly auxiliary routines (addition, subtraction, etc.) */
 
 #define aux_decl(name)			extern_decl(name##1)	extern_decl(name##2)
 #define aux_decl3(name)			extern_decl(name##1)	extern_decl(name##2)	extern_decl(name##3)
@@ -833,10 +833,10 @@ double *r4_build_pass2_complex_table (
 {
 	unsigned long i, N, limit, aux_table_size;
 
-/* We also build a smaller auxillary table so the final several levels aren't using */
+/* We also build a smaller auxiliary table so the final several levels aren't using */
 /* cache-unfriendly large strides to access sin/cos data.  If the last levels use */
-/* eight_complex macros set auxillary table size to 512, otherwise the last levels */
-/* use the four_complex macros and we'll build an auxillary table size of 256. */
+/* eight_complex macros set auxiliary table size to 512, otherwise the last levels */
+/* use the four_complex macros and we'll build an auxiliary table size of 256. */
 
 	if (gwdata->PASS2_SIZE <= 640 && gwdata->PASS2_SIZE % 3 != 0)
 		aux_table_size = 0;
@@ -884,7 +884,7 @@ double *r4_build_pass2_complex_table (
 		}
 	}
 
-/* Build the smaller auxillary table */
+/* Build the smaller auxiliary table */
 
 	if (aux_table_size) {
 		N = aux_table_size;
@@ -3530,10 +3530,10 @@ int calculate_bif (
 		retval = 0;			/* Look for FFTs optimized for Core 2 */
 		break;
 	case CPU_ARCHITECTURE_CORE_I7:
-		retval = 1;			/* Look for FFTs optimized for Core i3/i5/i7/i9 */
+		retval = 1;			/* Look for FFTs optimized for Core i3/i5/i7 */
 		break;
 	case CPU_ARCHITECTURE_INTEL_OTHER:	/* This is probably one of Intel's next generation CPUs */ 
-		retval = 1;			/* Look for FFTs optimized for Core i3/i5/i7/i9 */
+		retval = 1;			/* Look for FFTs optimized for Core i3/i5/i7 */
 		break;
 	case CPU_ARCHITECTURE_AMD_K8:
 		retval = 6;			/* Look for FFTs optimized for K8 */
@@ -3554,7 +3554,9 @@ int calculate_bif (
 /* are asked to run one of these large FFTs, select an FFT optimized for a different */
 /* CPU architecture. */
 
-	if (fftlen > 4194304 && (retval == 3 || retval == 4))
+	if (fftlen > 1572864 && retval == 4)
+		retval = 2;		/* Tiny cache P4s have best FFT implementations up to 1536K */
+	if (fftlen > 4194304 && retval == 3)
 		retval = 2;		/* Small cache P4s have best FFT implementations up to 4M */
 	if (fftlen > 6291456 && retval == 2)
 		retval = 0;		/* P4s have best FFT implementations up to 6M */
@@ -3954,16 +3956,16 @@ next1:			while (zpad_jmptab->flags & 0x80000000) INC_JMPTAB_1 (zpad_jmptab);
 /* fewer bits.  The correction is if log2b is 3 you can get 1 more output bit than */
 /* expected, if log2b is 6 you get about 2 extra bits, if log2b is 12 you can get */
 /* 3 extra bits. */
-/* Also, some examples such as 19464*19^31895+1 still raise round off errors. */
-/* For added safety we assume an extra 0.25 bits of output are needed when */
-/* base is not 2. */
+/* Also, some examples such as 19464*19^31895+1 and 245*830^492-1 (worst case we */
+/* know of) still raise round off errors.  For added safety we assume an extra */
+/* 0.3 bits of output are needed when base is not 2. */
 
 		else if (! is_pathological_distribution (num_big_words, num_small_words)) {
 			weighted_bits_per_output_word -=
 					((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
 					 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
 							  2.0 + (log2b - 6.0) / 6.0);
-			if (b != 2) weighted_bits_per_output_word += 0.25;
+			if (b != 2) weighted_bits_per_output_word += 0.3;
 		}
 
 /* If the bits in an output word is less than the maximum allowed, we can */
@@ -5801,7 +5803,7 @@ int internal_gwsetup (
 	asm_data->XMM_P434[0] = asm_data->XMM_P434[1] = asm_values[23];
 
 /* Non-SSE2 initialization. Calculate constants used in two pass FFTs. */
-/* Foremost is the pass 1 blkdst and normalize blkdst for auxillary mult */
+/* Foremost is the pass 1 blkdst and normalize blkdst for auxiliary mult */
 /* routines.  The two values are the same except for larger FFTs which */
 /* use a scratch area. */
 
@@ -6436,7 +6438,7 @@ __inline void pass2_assign_next_block (
 }
 
 
-/* Routine for auxillary threads */
+/* Routine for auxiliary threads */
 
 struct thread_data {
 	gwhandle *gwdata;
@@ -6445,7 +6447,7 @@ struct thread_data {
 	void	*scratch_area;
 };
 
-void auxillary_thread (void *arg)
+void auxiliary_thread (void *arg)
 {
 	gwhandle *gwdata;
 	struct gwasm_data *asm_data, *main_thread_asm_data;
@@ -6465,11 +6467,11 @@ void auxillary_thread (void *arg)
 	memcpy (asm_data, main_thread_asm_data, sizeof (struct gwasm_data));
 
 /* Set the thread number so that the assembly code can differentiate between */
-/* the main thread and an auxillary thread. */
+/* the main thread and an auxiliary thread. */
 
 	asm_data->thread_num = info->thread_num;
 
-/* Each auxillary thread needs its own pass 1 scratch area */
+/* Each auxiliary thread needs its own pass 1 scratch area */
 
 	asm_data->scratch_area = info->scratch_area;
 
@@ -6482,7 +6484,7 @@ void auxillary_thread (void *arg)
 			gwdata->thread_callback_data);
 
 /* Loop waiting for work to do.  The main thread will signal the */
-/* thread_work_to_do event whenever there is work for the auxillary */
+/* thread_work_to_do event whenever there is work for the auxiliary */
 /* thread to do. */
 
 	for ( ; ; ) {
@@ -6526,7 +6528,7 @@ void auxillary_thread (void *arg)
 		}
 
 /* Increment the number of active threads so that we can tell */
-/* when all auxillary routines have finished. */
+/* when all auxiliary routines have finished. */
 
 		gwdata->num_active_threads++;
 		gwevent_reset (&gwdata->all_threads_done);
@@ -6565,9 +6567,9 @@ asm_data->POSTFFT = main_thread_asm_data->POSTFFT;
 			pass2_aux_entry_point (asm_data);
 		gwmutex_lock (&gwdata->thread_lock);
 
-/* The auxillary threads have run out of work.  Decrement the count of */
-/* number of active auxillary threads.  Signal all threads done when */
-/* last auxillary thread is done. */
+/* The auxiliary threads have run out of work.  Decrement the count of */
+/* number of active auxiliary threads.  Signal all threads done when */
+/* last auxiliary thread is done. */
 
 		gwdata->num_active_threads--;
 		if (gwdata->num_active_threads == 0)
@@ -6587,7 +6589,7 @@ aux_done:	gwevent_reset (&gwdata->thread_work_to_do);
 			info->thread_num, 1,
 			gwdata->thread_callback_data);
 
-/* Free the allocated memory and exit the auxillary thread */
+/* Free the allocated memory and exit the auxiliary thread */
 
 	aligned_free (info->scratch_area);
 	aligned_free (info->asm_data_alloc);
@@ -6597,7 +6599,7 @@ aux_done:	gwevent_reset (&gwdata->thread_work_to_do);
 
 
 /* This routine is called by the main thread assembly code to */
-/* fire up all the auxillary worker threads in pass 1. */
+/* fire up all the auxiliary worker threads in pass 1. */
 
 void pass1_wake_up_threads (
 	struct gwasm_data *asm_data)
@@ -6734,8 +6736,8 @@ void pass1_wake_up_threads_mt (
 		gwdata->next_block = 0;
 	}
 
-/* Set flags and events, set assembly routine ptr that auxilllary threads */
-/* should call to do work, signal the auxillary threads to resume working */
+/* Set flags and events, set assembly routine ptr that auxiliary threads */
+/* should call to do work, signal the auxiliary threads to resume working */
 
 	gwevent_signal (&gwdata->pass1_norm_events[0]);
 	for (i = 1; i < gwdata->num_threads; i++)
@@ -6920,7 +6922,7 @@ int pass1_get_next_block (
 
 /* There are no more blocks to process when the next block is the same */
 /* as the block just processed.  In that case, if this is the main thread */
-/* wait for auxillary threads to complete.  If this is an auxillary thread */
+/* wait for auxiliary threads to complete.  If this is an auxiliary thread */
 /* then return code telling the assembly code to exit. */
 
 		if (asm_data->this_block == asm_data->next_block) {
@@ -7041,7 +7043,7 @@ int pass1_get_next_block_mt (
 
 /* There are no more blocks to process when the next block is the same */
 /* as the block just processed.  In that case, if this is the main thread */
-/* wait for auxillary threads to complete.  If this is an auxillary thread */
+/* wait for auxiliary threads to complete.  If this is an auxiliary thread */
 /* then return code telling the assembly code to exit. */
 
 		if (asm_data->this_block == asm_data->next_block) {
@@ -7106,7 +7108,7 @@ int pass1_get_next_block_mt (
 
 /* There are no more blocks to process when the next block is the same */
 /* as the block just processed.  In that case, if this is the main thread */
-/* wait for auxillary threads to complete.  If this is an auxillary thread */
+/* wait for auxiliary threads to complete.  If this is an auxiliary thread */
 /* then return code telling the assembly code to exit. */
 
 		if (asm_data->this_block == asm_data->next_block) {
@@ -7173,7 +7175,7 @@ int pass1_get_next_block_mt (
 
 
 /* This callback routine is called by the main thread assembly code to */
-/* fire up all the auxillary worker threads in pass 2. */
+/* fire up all the auxiliary worker threads in pass 2. */
 
 void pass2_wake_up_threads (
 	struct gwasm_data *asm_data)
@@ -7206,8 +7208,8 @@ void pass2_wake_up_threads_mt (
 	gwdata->pass1_state = 999;
 	pass2_assign_first_block (gwdata, asm_data);
 
-/* Set flags and events, set assembly routine ptr that auxilllary threads */
-/* should call to do work,  signal the auxillary threads to resume working */
+/* Set flags and events, set assembly routine ptr that auxiliary threads */
+/* should call to do work,  signal the auxiliary threads to resume working */
 
 	gwevent_signal (&gwdata->thread_work_to_do);
 	gwmutex_unlock (&gwdata->thread_lock);
@@ -7252,7 +7254,7 @@ int pass2_get_next_block_mt (
 
 /* There are no more blocks to process when the next block is the same */
 /* as the block just processed.  In that case, if this is the main thread */
-/* wait for auxillary threads to complete.  If this is an auxillary thread */
+/* wait for auxiliary threads to complete.  If this is an auxiliary thread */
 /* then return code telling the assembly code to exit. */
 
 	if (asm_data->this_block == asm_data->next_block) {
@@ -7352,10 +7354,10 @@ int multithread_init (
 
 /* Sanity check num_threads argument */
 
-	if (gwdata->num_threads > MAX_AUXILLARY_THREADS+1)
-		gwdata->num_threads = MAX_AUXILLARY_THREADS+1;
+	if (gwdata->num_threads > MAX_AUXILIARY_THREADS+1)
+		gwdata->num_threads = MAX_AUXILIARY_THREADS+1;
 
-/* Init mutexes and events used to control auxillary threads */
+/* Init mutexes and events used to control auxiliary threads */
 
 	gwmutex_init (&gwdata->thread_lock);
 	gwevent_init (&gwdata->thread_work_to_do);
@@ -7375,7 +7377,7 @@ int multithread_init (
 	asm_data->pass2_wake_up_threads = pass2_wake_up_threads_mt;
 	asm_data->pass2_get_next_block = pass2_get_next_block_mt;
 
-/* Pre-create each auxillary thread used in multiplication code. */
+/* Pre-create each auxiliary thread used in multiplication code. */
 /* We allocate the memory here so that error recovery is easier. */
 
 	gwdata->threads_must_exit = FALSE;
@@ -7403,7 +7405,7 @@ int multithread_init (
 			return (GWERROR_MALLOC);
 		}
 		gwthread_create_waitable (&gwdata->thread_id[i],
-					  &auxillary_thread, info);
+					  &auxiliary_thread, info);
 	}
 
 /* Return success */
@@ -7423,7 +7425,7 @@ void multithread_term (
 	if (gwdata->num_threads <= 1) return;
 	if (gwdata->thread_lock == NULL) return;
 
-/* Set termination variable and fire up auxillary threads */
+/* Set termination variable and fire up auxiliary threads */
 
 	gwmutex_lock (&gwdata->thread_lock);
 	gwdata->threads_must_exit = TRUE;

@@ -8,7 +8,7 @@
 #	ldd mprime
 
 CC = gcc
-CFLAGS = -I.. -I../gwnum -O2 -march=i486 -malign-double
+CFLAGS = -I.. -I../gwnum -O2 -march=i486 -malign-double -Wno-unused-result
 
 CPP = g++
 CPPFLAGS = -I.. -I../gwnum -O2 -march=i486 -malign-double

@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
 | Author:  George Woltman
 | Email: woltman@alum.mit.edu
 |
@@ -36,6 +36,7 @@
 #endif
 #include <sys/timeb.h>
 #include "cpuid.h"
+#include "gwthread.h"
 
 /* Global variables describing the CPU we are running on */
 
@@ -238,6 +239,15 @@ int canExecInstruction (
 #endif
 #endif
 
+/* Busy loop to keep CPU cores occupied.  Used sometimes to aid */
+/* in measuring CPU speed. */
+
+int	end_busy_loop = FALSE;
+
+void busy_loop (void *arg)
+{
+	while (!end_busy_loop) one_million_clocks ();
+}
 
 /* Work with CPUID instruction to guess the cpu type and features */
 /* See Intel's document AP-485 for using CPUID on Intel processors */
@@ -356,6 +366,17 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			CPU_FLAGS |= CPU_SSE41;
 		if ((reg.ECX >> 20) & 0x1)
 			CPU_FLAGS |= CPU_SSE42;
+		if ((reg.ECX >> 28) & 0x1)
+			CPU_FLAGS |= CPU_AVX;
+		if ((reg.ECX >> 12) & 0x1)
+			CPU_FLAGS |= CPU_FMA;
+
+/* If hardware supports AVX, see if OS supports it too */
+
+		if (CPU_FLAGS & CPU_AVX) {
+			Xgetbv (0, &reg);
+			if ((reg.EAX & 6) != 6) CPU_FLAGS &= ~CPU_AVX;
+		}
 	}
 
 /* Call CPUID with 0x80000000 argument.  It tells us how many extended CPU */
@@ -363,6 +384,16 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 
 	Cpuid (0x80000000, &reg);
 	max_extended_cpuid_value = reg.EAX;
+
+/* Get the flag that says RDTSC counts independently of CPU clock ticks */
+/* Intel did this so that RDTSC would keep accurate real time regardless */
+/* of the CPU core speed controlled by SpeedStep. */
+
+	if (max_extended_cpuid_value >= 0x80000007) {
+		Cpuid (0x80000007, &reg);
+		if ((reg.EDX >> 8) & 0x1)
+			CPU_FLAGS |= CPU_TSC_INVARIANT;
+	}
 
 /* Two users on the Mersenne forums have reported their Core 2 machines */
 /* are not getting the brand string right after a reboot.  How strange. */
@@ -447,11 +478,14 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			 (family == 6 && model == 22) ||
 			 (family == 6 && model == 23))
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE_2;
-		else if ((family == 6 && model == 37) ||		// Core i3/i5 (according to CPU-world)
-			 (family == 6 && model == 26) ||		// Core i7
+		else if ((family == 6 && model == 26) ||		// Core i7
 			 (family == 6 && model == 30) ||		// Core i5/i7
-			 (family == 6 && model == 44) ||		// Core i9 (according to Wikipedia)
-			 (family == 6 && model == 29))			// ??? I read it somewhere....
+			 (family == 6 && model == 29) ||		// Xeon MP (based on Core i7 technology)
+			 (family == 6 && model == 46) ||		// Xeon MP (based on Core i7 technology)
+			 (family == 6 && model == 47) ||		// Xeon MP (based on Sandy Bridge technology)
+			 (family == 6 && model == 44) ||		// Core i7 (based on Sandy Bridge technology)
+			 (family == 6 && model == 37) ||		// Core i3, mobile i5/i7 (based on Sandy Bridge technology)
+			 (family == 6 && model == 42))			// Core i7 (based on Sandy Bridge technology)
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE_I7;
 		else if (family == 6 && model == 28)
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_ATOM;
@@ -548,6 +582,21 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 						CPU_L1_CACHE_SIZE = 16;
 						CPU_L1_CACHE_LINE_SIZE = 32;
 						CPU_L1_SET_ASSOCIATIVE = 4;
+						break;
+					case 0x0D:
+						CPU_L1_CACHE_SIZE = 16;
+						CPU_L1_CACHE_LINE_SIZE = 64;
+						CPU_L1_SET_ASSOCIATIVE = 4;
+						break;
+					case 0x0E:
+						CPU_L1_CACHE_SIZE = 24;
+						CPU_L1_CACHE_LINE_SIZE = 64;
+						CPU_L1_SET_ASSOCIATIVE = 6;
+						break;
+					case 0x21:
+						CPU_L2_CACHE_SIZE = 256;
+						CPU_L2_CACHE_LINE_SIZE = 64;
+						CPU_L2_SET_ASSOCIATIVE = 8;
 						break;
 					case 0x22:
 						CPU_L3_CACHE_SIZE = 512;
@@ -646,6 +695,11 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 						CPU_L3_CACHE_LINE_SIZE = 64;
 						CPU_L3_SET_ASSOCIATIVE = 8;
 						break;
+					case 0x48:
+						CPU_L2_CACHE_SIZE = 3072;
+						CPU_L2_CACHE_LINE_SIZE = 64;
+						CPU_L2_SET_ASSOCIATIVE = 12;
+						break;
 					case 0x49:
 						if (family == 0x0F && model == 0x06) {
 							CPU_L3_CACHE_SIZE = 4096;
@@ -683,6 +737,7 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 						CPU_L2_SET_ASSOCIATIVE = 24;
 						break;
 					case 0x5B:
+					case 0xBA:
 						CPU_L2_DATA_TLBS = 64;
 						break;
 					case 0x5C:
@@ -748,6 +803,11 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 						CPU_L2_CACHE_LINE_SIZE = 64;
 						CPU_L2_SET_ASSOCIATIVE = 2;
 						break;
+					case 0x80:
+						CPU_L2_CACHE_SIZE = 512;
+						CPU_L2_CACHE_LINE_SIZE = 64;
+						CPU_L2_SET_ASSOCIATIVE = 8;
+						break;
 					case 0x82:
 						CPU_L2_CACHE_SIZE = 256;
 						CPU_L2_CACHE_LINE_SIZE = 32;
@@ -778,6 +838,81 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 						CPU_L2_CACHE_LINE_SIZE = 64;
 						CPU_L2_SET_ASSOCIATIVE = 8;
 						break;
+					case 0xD0:
+						CPU_L3_CACHE_SIZE = 512;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 4;
+						break;
+					case 0xD1:
+						CPU_L3_CACHE_SIZE = 1024;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 4;
+						break;
+					case 0xD2:
+						CPU_L3_CACHE_SIZE = 2048;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 4;
+						break;
+					case 0xD6:
+						CPU_L3_CACHE_SIZE = 1024;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 8;
+						break;
+					case 0xD7:
+						CPU_L3_CACHE_SIZE = 2048;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 8;
+						break;
+					case 0xD8:
+						CPU_L3_CACHE_SIZE = 4096;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 8;
+						break;
+					case 0xDC:
+						CPU_L3_CACHE_SIZE = 1536;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 12;
+						break;
+					case 0xDD:
+						CPU_L3_CACHE_SIZE = 3072;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 12;
+						break;
+					case 0xDE:
+						CPU_L3_CACHE_SIZE = 6144;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 12;
+						break;
+					case 0xE2:
+						CPU_L3_CACHE_SIZE = 2048;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 16;
+						break;
+					case 0xE3:
+						CPU_L3_CACHE_SIZE = 4096;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 16;
+						break;
+					case 0xE4:
+						CPU_L3_CACHE_SIZE = 8192;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 16;
+						break;
+					case 0xEA:
+						CPU_L3_CACHE_SIZE = 12288;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 24;
+						break;
+					case 0xEB:
+						CPU_L3_CACHE_SIZE = 18432;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 24;
+						break;
+					case 0xEC:
+						CPU_L3_CACHE_SIZE = 24576;
+						CPU_L3_CACHE_LINE_SIZE = 64;
+						CPU_L3_SET_ASSOCIATIVE = 24;
+						break;
 					}
 				}
 			}
@@ -801,10 +936,10 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			CPU_L2_CACHE_SIZE = (reg.ECX >> 16);
 		}
 
-/* If we still haven't figured out the L2 or L3 cache size, use 0x00000004 to deduce */
+/* If we still haven't figured out the L1, L2 or L3 cache size, use 0x00000004 to deduce */
 /* the cache size. */
 
-		if ((CPU_L2_CACHE_SIZE == -1 || CPU_L3_CACHE_SIZE == -1) &&
+		if ((CPU_L1_CACHE_SIZE == -1 || CPU_L2_CACHE_SIZE == -1 || CPU_L3_CACHE_SIZE == -1) &&
 		    max_cpuid_value >= 4) {
 			int	i;
 			for (i = 0; i < 10; i++) {
@@ -826,8 +961,13 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 				sets = reg.ECX + 1;
 				prefetch_stride = (reg.EDX & 0x3FF);
 				if (prefetch_stride == 0) prefetch_stride = 64;
-				/* Not documeted, but 45nm core 2 returns prefetch_stride of 1 */
+				/* Not documented, but 45nm core 2 returns prefetch_stride of 1 */
 				if (prefetch_stride == 1) prefetch_stride = 64;
+				if (CPU_L1_CACHE_SIZE == -1 && cache_level == 1) {
+					CPU_L1_CACHE_SIZE = (associativity * partitions * line_size * sets) >> 10;
+					CPU_L1_SET_ASSOCIATIVE = associativity;
+					CPU_L1_CACHE_LINE_SIZE = prefetch_stride;
+				}
 				if (CPU_L2_CACHE_SIZE == -1 && cache_level == 2) {
 					CPU_L2_CACHE_SIZE = (associativity * partitions * line_size * sets) >> 10;
 					CPU_L2_SET_ASSOCIATIVE = associativity;
@@ -1186,10 +1326,52 @@ void guessCpuSpeed (void)
 
 	if (isHighResTimerAvailable ()) {
 		uint32_t start_hi, start_lo, end_hi, end_lo;
-		double	frequency, temp, start_time, end_time;
-		unsigned long iterations;
+		double	frequency, rdtsc_multiplier, temp, start_time, end_time;
+		unsigned long iterations, min_100000, min_1000000;
 		double	speed1, speed2, speed3, avg_speed;
 		int	tries;
+
+/* In Sandy Bridge and some or all of the Core 2 series CPUs, RDTSC no longer */
+/* counts clock ticks.  Intel did this so that RDTSC can make accurate timing */
+/* as SpeedStep changes the CPU frequency.  For such CPUs we try to find a */
+/* multiplier that will convert RDTSC clocks into CPU core clocks.  Note that */
+/* this isn't a perfect solution because some CPUs have a wide range of CPU core */
+/* speeds (such as the i7-Q840M which ranges from 1.87 to 3.2 GHz).  We try to */
+/* get the non-turbo-boost core speed by loading up all but one core before */
+/* doing our timings. */
+
+		rdtsc_multiplier = 1.0;
+		if (CPU_FLAGS & CPU_TSC_INVARIANT) {
+			unsigned int i;
+			gwthread thread_id;
+			// Start threads so that all cores are doing work.  This will
+			// hopefully let us measure the CPU core speed when all cores
+			// are busy rather than the speed when cores are Turbo boosted.
+			end_busy_loop = FALSE;
+			for (i = 1; i <= CPU_CORES-1; i++) gwthread_create (&thread_id, &busy_loop, NULL);
+			// Run several million clocks in hopes of ramping up the core's
+			// clock speed to the maximum allowed by SpeedStep.
+			for (tries = 1; tries <= 50; tries++) one_million_clocks ();
+			// Find how many RDTSC clock ticks occur in 900,000 CPU clock ticks.
+			for (tries = 1; tries <= 10; tries++) {
+				rdtsc (&start_hi, &start_lo);
+				one_hundred_thousand_clocks ();
+				rdtsc (&end_hi, &end_lo);
+				if (tries == 1 || min_100000 > (end_lo - start_lo)) min_100000 = (end_lo - start_lo);
+				rdtsc (&start_hi, &start_lo);
+				one_million_clocks ();
+				rdtsc (&end_hi, &end_lo);
+				if (tries == 1 || min_1000000 > (end_lo - start_lo)) min_1000000 = (end_lo - start_lo);
+			}
+			rdtsc_multiplier = 900000.0 / (double) (min_1000000 - min_100000);
+			// On hyperthreaded machines (like my i7-860) the routines for
+			// 100,000 and 1,000,000 clocks will not work accurately when
+			// hyperthreaded cores are busy.  As a sanity check, make sure
+			// rdtsc_multiplier does not fall below 1.0.
+			if (CPU_HYPERTHREADS > 1 && rdtsc_multiplier < 1.0) rdtsc_multiplier = 1.0;
+			// Terminate the busy loop threads
+			end_busy_loop = TRUE;
+		}
 
 /* Compute the number of high resolution ticks in one millisecond */
 /* This should give us good accuracy while hopefully avoiding time slices */
@@ -1225,7 +1407,7 @@ void guessCpuSpeed (void)
 /* Compute speed based on number of clocks in the time interval */
 
 			speed1 = (end_hi * 4294967296.0 + end_lo -
-				  start_hi * 4294967296.0 - start_lo) *
+				  start_hi * 4294967296.0 - start_lo) * rdtsc_multiplier *
 				 frequency /
 				 (end_time - start_time) / 1000000.0;
 
@@ -1311,7 +1493,6 @@ void guessCpuSpeed (void)
 		CPU_SPEED = avg_speed;
 	}
 }
-
 
 /*--------------------------------------------------------------------------
 | And now, the routines that access the high resolution performance counter.

@@ -1,4 +1,4 @@
-/* Copyright 1995-2010 Mersenne Research, Inc. */
+/* Copyright 1995-2011 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -19,7 +19,7 @@ void get_line (
 {
 	int	len;
 	buf[0] = 0;
-	fgets (buf, 80, stdin);
+	(void) fgets (buf, 80, stdin);
 	len = strlen (buf);
 	if (len > 0 && buf[len-1] == '\n') buf[len-1] = 0;
 }
@@ -289,13 +289,10 @@ done:	if (askOkCancel ()) {
 		IniWriteInt (INI_FILE, "DialUp", DIAL_UP);
 
 		if (m_proxy_host[0] && m_proxy_port != 8080)
-			sprintf (m_proxy_host + strlen (m_proxy_host), ":%d",
-				 m_proxy_port);
-		IniSectionWriteString (INI_FILE, "PrimeNet",
-				       "ProxyHost", m_proxy_host);
+			sprintf (m_proxy_host + strlen (m_proxy_host), ":%lu", m_proxy_port);
+		IniSectionWriteString (INI_FILE, "PrimeNet", "ProxyHost", m_proxy_host);
 		if (m_proxy_host[0]) {
-			IniSectionWriteString (INI_FILE, "PrimeNet",
-				       "ProxyUser", m_proxy_user);
+			IniSectionWriteString (INI_FILE, "PrimeNet", "ProxyUser", m_proxy_user);
 			if (strcmp (m_proxy_pwd, orig_proxy_pwd)) {
 				IniSectionWriteString (INI_FILE, "PrimeNet",
 					"ProxyPass", m_proxy_pwd);
@@ -1005,7 +1002,7 @@ void help_about (void)
 	printf ("GIMPS: Mersenne Prime Search\n");
 	printf ("Web site: http://mersenne.org\n");
 	printf ("%s\n", app_string);
-	printf ("Copyright 1996-2010 Mersenne Research, Inc.\n");
+	printf ("Copyright 1996-2011 Mersenne Research, Inc.\n");
 	printf ("Author: George Woltman\n");
 	printf ("Email:  woltman@alum.mit.edu\n");
 	askOK ();

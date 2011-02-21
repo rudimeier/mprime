@@ -1,4 +1,4 @@
-/* Copyright 1995-2010 Mersenne Research, Inc. */
+/* Copyright 1995-2011 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -148,7 +148,7 @@ int main (
 	p = strrchr (buf, '/');
 	if (p != NULL) {
 		*p = 0;
-		_chdir (buf);
+		(void) _chdir (buf);
 	}
 
 /* Initialize gwnum call back routines.  Using callback routines lets the */
@@ -238,7 +238,7 @@ int main (
 
 		case 'W':
 		case 'w':
-			_chdir (p);
+			(void) _chdir (p);
 			break; 
 
 /* Otherwise unknown switch */
