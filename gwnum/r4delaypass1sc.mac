@@ -1,4 +1,4 @@
-; Copyright 2009-2010 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2009-2011 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -4323,8 +4323,8 @@ c0b:	start_timer 16
 	mov	rdx, PREMULT_ADDR	;; Real data sin/cos pointer
 	lea	rdi, [rdx+2*clm*XMM_SCD2] ;; Complex data sin/cos ptr
 pfing	lea	rbp, [rdx+(57-12)*2*clm*64] ;; Finish prefetching the sin/cos data
-	loops_init_prefetch 192*2*clm, 64, 16, rbp ;; 192*2*clm iterations
-;;bug	xtouchpages rbp, 192*2*clm * 64 / 16 ;; Prefetch TLBs
+	loops_init 192*2*clm		;; 192*2*clm iterations
+
 c8b:	r4_sg2cl_eight_reals_unfft4 rsi, 64, blkdst, rcx, 64, clmblkdst, rdi, rdx
 	bump	rdi, XMM_SCD4		;; Next premult/sin/cos data
 	bump	rdx, XMM_SCD2		;; Next sine/cosine pointer
@@ -4372,7 +4372,8 @@ c9b:	r4_sg2cl_four_complex_unfft4 rsi, 64, blkdst, rcx, 64, clmblkdst, rdi
 
 	start_timer 17
 	lea	rdi, [rdx+4*2*clm*XMM_SCD2] ;; Real data sin/cos ptr
-	loops_init 96*2*clm		;; 96*2*clm iterations
+	loops_init_prefetch 96*2*clm, 64, 8, rbp ;; 96*2*clm iterations
+;;bug	xtouchpages rbp, 96*2*clm * 64 / 8 ;; Prefetch TLBs
 
 	r4_x4cl_eight_reals_unfft_preload
 c6b:	r4_x4cl_eight_reals_unfft rsi, 64, 2*clmblkdst, 4*clmblkdst, rdi, 2*2*clm*XMM_SCD2, rdx, 2*2*clm*XMM_SCD2

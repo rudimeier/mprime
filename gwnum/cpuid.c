@@ -371,11 +371,15 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 		if ((reg.ECX >> 12) & 0x1)
 			CPU_FLAGS |= CPU_FMA;
 
-/* If hardware supports AVX, see if OS supports it too */
+/* If hardware supports AVX that doesn't mean the OS supports AVX. */
+/* See if OS supports XGETBV, then see if OS supports AVX. */
 
 		if (CPU_FLAGS & CPU_AVX) {
-			Xgetbv (0, &reg);
-			if ((reg.EAX & 6) != 6) CPU_FLAGS &= ~CPU_AVX;
+			CPU_FLAGS &= ~CPU_AVX;
+			if ((reg.ECX >> 27) & 0x1) {
+				Xgetbv (0, &reg);
+				if ((reg.EAX & 6) == 6) CPU_FLAGS |= CPU_AVX;
+			}
 		}
 	}
 

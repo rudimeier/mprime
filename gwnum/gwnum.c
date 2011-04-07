@@ -3527,7 +3527,10 @@ int calculate_bif (
 			retval = 2;		/* Look for FFTs optimized for large cache P4s */
 		break;
 	case CPU_ARCHITECTURE_CORE_2:
-		retval = 0;			/* Look for FFTs optimized for Core 2 */
+		if (CPU_L2_CACHE_SIZE <= 1024)
+			retval = 8;		/* Look for FFTs optimized for Core 2 Celerons */
+		else
+			retval = 0;		/* Look for FFTs optimized for Core 2 */
 		break;
 	case CPU_ARCHITECTURE_CORE_I7:
 		retval = 1;			/* Look for FFTs optimized for Core i3/i5/i7 */
@@ -3562,6 +3565,8 @@ int calculate_bif (
 		retval = 0;		/* P4s have best FFT implementations up to 6M */
 	if (fftlen > 6291456 && retval == 6)
 		retval = 7;		/* K8s have best FFT implementations up to 6M */
+	if (fftlen > 4194304 && retval == 8)
+		retval = 0;		/* Small cache Core 2 Celerons have best FFT implementations up to 4M */
 
 /* Return the result */
 
@@ -9058,10 +9063,12 @@ long nonbase2_gianttogw (
 			mask = is_big_word (gwdata, i) ? mask2 : mask1;
 
 			gtog (a, newg);
-			ultog (mask, tmp);
-			divg (tmp, a);
-			mulgi (&gwdata->gdata, a, tmp);
-			subg (tmp, newg);
+			if (i != gwdata->FFTLEN - 1) {
+				ultog (mask, tmp);
+				divg (tmp, a);
+				mulgi (&gwdata->gdata, a, tmp);
+				subg (tmp, newg);
+			}
 			value = (newg->sign) ? newg->n[0] : 0;
 			value += carry;
 
@@ -9880,7 +9887,7 @@ void gwsafemul (		/* Multiply source with dest */
 
 /* Generate random FFT data.  We used to use the C runtime library. */
 /* However, when a caller discovered a bug in gwsquare_carefully it */
-/* very difficult to track down because the bug was no reproducible. */
+/* very difficult to track down because the bug was not reproducible. */
 /* We could make bugs reproducible by calling srand with a fixed value, */
 /* but it is bad form for a library to do this.  Thus, we found a */
 /* public domain random number generator to use. */

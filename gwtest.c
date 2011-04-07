@@ -536,6 +536,16 @@ void test_it (
 	specialmodg (gwdata, g);
 	if (CHECK_OFTEN) compare (thread_num, gwdata, x, g);
 
+	gwsetmulbyconst (gwdata, -3);
+	gwsetnormroutine (gwdata, 0, 1, 1);
+	gwsquare (gwdata, x);
+	gwsetnormroutine (gwdata, 0, 1, 0);
+	diff = fabs (gwsuminp (gwdata, x) - gwsumout (gwdata, x));
+	if (diff > maxdiff) maxdiff = diff;
+	squaregi (&gwdata->gdata, g); imulg (-3, g);
+	specialmodg (gwdata, g);
+	if (CHECK_OFTEN) compare (thread_num, gwdata, x, g);
+
 /* Test square carefully */
 
 	gwfree (gwdata, x3); gwfree (gwdata, x4);

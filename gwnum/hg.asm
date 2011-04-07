@@ -1,4 +1,4 @@
-; Copyright 2001-2010 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2011 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -92,8 +92,8 @@ ELSE
 ;; Generate pass 2 routines optmized for this architecture
 
 buildfor CORE    + P4    + P4TP + K8    + K10,	xpass2gen 8
-buildfor         + P4    + P4TP + K8         ,	xpass2gen 10
-buildfor         + P4    + P4TP + K8_32      ,	xpass2gen 11
+buildfor CORE    + P4    + P4TP + K8         ,	xpass2gen 10
+buildfor CORE    + P4    + P4TP + K8_32      ,	xpass2gen 11
 buildfor CORE_64 + P4    + P4TP + K8_32      ,	xpass2gen 12
 buildfor                 + P4TP              ,	xpass2gen 13
 
@@ -116,7 +116,7 @@ buildfor         + P4                        ,	hg_pass1levels7complex4 32K, 8, 4
 buildfor                 + P4TP              ,	hg_pass1sclevels8pfa5 160K, 10, 4
 buildfor                                     ,	hg_pass1sclevels8pfa5 160K, 10, 2
 buildfor                 + P4TP              ,	hg_pass1sclevels8pfa6 192K, 10, 4
-buildfor                 + P4TP              ,	hg_pass1sclevels8pfa6 192K, 10, 2
+buildfor CORE            + P4TP              ,	hg_pass1sclevels8pfa6 192K, 10, 2
 buildfor         + P4_32                     ,	hg_pass1sclevels8pfa6 192K, 10, 1
 buildfor                 + P4TP              ,	hg_pass1sclevels8pfa7 224K, 10, 4
 buildfor                 + P4TP + K8         ,	hg_pass1sclevels8pfa7 224K, 10, 2
@@ -149,7 +149,7 @@ buildfor                                     ,	hg_pass1sclevels9complex4 512K, 1
 buildfor                                     ,	hg_pass1sclevels9complex4 512K, 10, 1
 
 buildfor         + P4_32 + P4TP              ,	hg_pass1levels5pfa5 40K, 11, 4
-buildfor                 + P4TP              ,	hg_pass1levels5pfa6 48K, 11, 4
+buildfor CORE            + P4TP              ,	hg_pass1levels5pfa6 48K, 11, 4
 buildfor                 + P4TP              ,	hg_pass1levels5pfa7 56K, 11, 4
 buildfor                 + P4TP              ,	hg_pass1levels5pfa8 64K, 11, 4
 buildfor                                     ,	hg_pass1levels6pfa5 80K, 11, 4

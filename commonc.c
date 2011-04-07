@@ -342,13 +342,18 @@ void getCpuInfo (void)
 /* Get the CPU info using CPUID instruction */	
 
 	guessCpuType ();
-	NUM_CPUS = CPU_CORES;
 
 /* Allow overriding the number of physical processors.  For historical */
 /* reasons, this code uses a variable called NUM_CPUS rather */
 /* than the CPU_CORES value set by guessCpuType. */
 
 	NUM_CPUS = IniGetInt (LOCALINI_FILE, "NumCPUs", CPU_CORES);
+	temp = IniGetInt (LOCALINI_FILE, "NumPhysicalCores", 9999);
+	if (temp != 9999) {
+		CPU_HYPERTHREADS = NUM_CPUS / temp;
+		if (CPU_HYPERTHREADS < 1) CPU_HYPERTHREADS = 1;
+		NUM_CPUS = temp;
+	}
 
 /* Calculate hardware GUID (global unique identifier) using the CPUID info. */
 /* Well, it isn't unique but it is about as good as we can do and still have */

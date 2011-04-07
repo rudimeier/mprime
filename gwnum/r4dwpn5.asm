@@ -1,4 +1,4 @@
-; Copyright 2010 Mersenne Research, Inc.  All rights reserved
+; Copyright 2010-2011 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -424,7 +424,7 @@ buildfor                                        ,	r4dwpn_pass1sc256ac 5M, 20480,
 buildfor                                        ,	r4dwpn_pass1sc256ac 6400K, 25600, 4
 
 buildfor                                        ,	r4dwpn_pass1sc384ac 3456K, 9216, 4
-buildfor                                        ,	r4dwpn_pass1sc384ac 3456K, 9216, 2
+buildfor CORE_64                                ,	r4dwpn_pass1sc384ac 3456K, 9216, 2
 buildfor                        + K8_32         ,	r4dwpn_pass1sc384ac 3456K, 9216, 1
 buildfor                                        ,	r4dwpn_pass1sc384ac 4608K, 12288, 4
 buildfor                                        ,	r4dwpn_pass1sc384ac 5760K, 15360, 4

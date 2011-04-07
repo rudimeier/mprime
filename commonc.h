@@ -2,8 +2,8 @@
 
 /* Constants */
 
-#define VERSION		"26.5"
-#define BUILD_NUM	"5"
+#define VERSION		"26.6"
+#define BUILD_NUM	"3"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
 /* Linux (mprime)  #2 */
@@ -72,22 +72,39 @@
 	      facbench * (1 + LOG2 (maxp/35000000) / 19) / lltime / 1.02) = p
 */
 
-/* These breakeven points we're calculated on a 2.0 GHz P4 Northwood: */
+/* These breakeven points we're calculated on a 2.5 GHz Core 2 using 64-bit prime95 v26.6: */
 
-#define FAC80	516000000L
-#define FAC79	420400000L
-#define FAC78	337400000L
-#define FAC77	264600000L
-#define FAC76	227300000L
-#define FAC75	186400000L
-#define FAC74	147500000L
-#define FAC73	115300000L
+#define FAC80	600000000L	/* The actual FAC80 breakeven point is even higher! */
+#define FAC79	516800000L
+#define FAC78	408400000L
+#define FAC77	322100000L
+#define FAC76	253500000L
+#define FAC75	199500000L
+#define FAC74	153400000L
+#define FAC73	120000000L
 #define FAC72	96830000L
-#define FAC71	75670000L
-#define FAC70	58520000L
-#define FAC69	47450000L
-#define FAC68	37800000L
-#define FAC67	29690000L
+#define FAC71	77910000L
+#define FAC70	60940000L
+#define FAC69	48800000L
+#define FAC68	38300000L
+#define FAC67	29690000L	/* We didn't bother calculating any smaller breakevens */
+
+/* These breakeven points we're calculated on a 2.0 GHz P4 Northwood (using v24?): */
+
+//#define FAC80	516000000L
+//#define FAC79	420400000L
+//#define FAC78	337400000L
+//#define FAC77	264600000L
+//#define FAC76	227300000L
+//#define FAC75	186400000L
+//#define FAC74	147500000L
+//#define FAC73	115300000L
+//#define FAC72	96830000L
+//#define FAC71	75670000L
+//#define FAC70	58520000L
+//#define FAC69	47450000L
+//#define FAC68	37800000L
+//#define FAC67	29690000L
 #define FAC66	23390000L
 
 /* These breakevens we're calculated a long time ago on unknown hardware: */

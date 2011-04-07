@@ -1,4 +1,4 @@
-; Copyright 2009-2010 Mersenne Research, Inc.  All rights reserved
+; Copyright 2009-2011 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -76,7 +76,7 @@ buildfor                                        ,	r4delay_pass1sc448 4480K, 1024
 buildfor         + P4_32                        ,	r4delay_pass1sc448 5600K, 12800, 4
 
 buildfor         + P4_32                + K10   ,	r4delay_pass1sc512 2304K, 4608, 4
-buildfor                 + P4TP                 ,	r4delay_pass1sc512 2304K, 4608, 2
+buildfor CORE_32         + P4TP                 ,	r4delay_pass1sc512 2304K, 4608, 2
 buildfor                                + K10_32,	r4delay_pass1sc512 3M, 6144, 4
 buildfor                 + P4TP                 ,	r4delay_pass1sc512 3M, 6144, 2
 buildfor                                        ,	r4delay_pass1sc512 3840K, 7680, 4

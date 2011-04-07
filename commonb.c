@@ -363,12 +363,22 @@ void generate_affinity_scramble_thread (void *arg)
 	gwthread thread_id;
 	char	buf[128];
 
+/* Get the optional (and rarely needed) AffinityScramble2 string from local.txt */
+
+	IniGetString (LOCALINI_FILE, "AffinityScramble2", scramble, sizeof (scramble), "*");
+
+/* Get the debug flag (0 = no debugging, 1 = output debug info, 2 = bypass auto-detection code) */
+
+	debug = IniGetInt (INI_FILE, "DebugAffinityScramble", 0);
+	if (debug == 2) {
+		AFFINITY_SCRAMBLE_STATE = 0;
+		goto no_auto_detect;
+	}
+
 /* Use the highly accurate RDTSC instruction for timings. */
-/* Get the debug flag. */
 
 	saved_rdtsc_timing = RDTSC_TIMING;
 	RDTSC_TIMING = 13;
-	debug = IniGetInt (INI_FILE, "DebugAffinityScramble", 0);
 
 /* Now search for sets of logical CPUs that comprise a physical CPU */
 
@@ -403,7 +413,7 @@ void generate_affinity_scramble_thread (void *arg)
 		}
 
 		if (debug) {
-			sprintf (buf, "Test clocks: %d\n", (int) best_100000);
+			sprintf (buf, "Test clocks on logical CPU #%d: %d\n", (int) k+1, (int) best_100000);
 			OutputStr (MAIN_THREAD_NUM, buf);
 		}
 
@@ -442,7 +452,7 @@ void generate_affinity_scramble_thread (void *arg)
 				}
 
 				if (debug) {
-					sprintf (buf, "Logical CPU %d clocks: %d\n", (int) k, (int) test_100000);
+					sprintf (buf, "Logical CPU %d clocks: %d\n", (int) k+1, (int) test_100000);
 					OutputStr (MAIN_THREAD_NUM, buf);
 				}
 
@@ -533,8 +543,11 @@ void generate_affinity_scramble_thread (void *arg)
 				OutputStr (MAIN_THREAD_NUM, "Enough information obtained to make a reasonable guess.\n");
 			}
 		}
-		if (AFFINITY_SCRAMBLE_STATE == 0)
-			OutputStr (MAIN_THREAD_NUM, "See AffinityScramble2 in undoc.txt.\n");
+		if (AFFINITY_SCRAMBLE_STATE == 0 && scramble[0] == '*') {
+			OutputStr (MAIN_THREAD_NUM, "Assuming logical CPUs 1 and 2, 3 and 4, etc. are each from one physical CPU core.\n");
+			OutputStr (MAIN_THREAD_NUM, "To the best of my knowledge this assumption is only valid for Microsoft Windows.\n");
+			OutputStr (MAIN_THREAD_NUM, "To override this assumption, see AffinityScramble2 in undoc.txt.\n");
+		}
 	}
 
 /* Output our findings */
@@ -543,18 +556,19 @@ void generate_affinity_scramble_thread (void *arg)
 		for (i = 0; i < NUM_CPUS; i++) {
 			strcpy (buf, "Logical CPUs ");
 			for (j = 0; j < CPU_HYPERTHREADS; j++) {
-				sprintf (buf+strlen(buf), "%d,", (int) AFFINITY_SCRAMBLE[i*CPU_HYPERTHREADS+j]);
+				sprintf (buf+strlen(buf), "%d,", (int) AFFINITY_SCRAMBLE[i*CPU_HYPERTHREADS+j] + 1);
 			}
 			strcpy (buf+strlen(buf)-1, " form one physical CPU.\n");
 			OutputStr (MAIN_THREAD_NUM, buf);
 		}
 	}
 
-/* Get the optional string used to scramble the affinity mask bits to */
-/* new or odd optimizations we had not considered. */
+/* Parse the optional string used to set the affinity mask bits */
+/* on machines where auto-detection does not work. */
 
-	IniGetString (LOCALINI_FILE, "AffinityScramble2", scramble, sizeof (scramble), "*");
+no_auto_detect:
 	if (scramble[0] != '*') {
+		OutputStr (MAIN_THREAD_NUM, "Using AffinityScramble2 settings to set affinity mask.\n");
 		AFFINITY_SCRAMBLE_STATE = 2;
 		for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
 			if (scramble[i] >= '0' && scramble[i] <= '9')
@@ -731,8 +745,8 @@ void SetPriority (
 			for (i = count = 0; i < MAX_NUM_WORKER_THREADS; i++) {
 				if (! maskget (mask, i)) continue;
 				count++;
-				if (count == 1) sprintf (cpu_list, "%d", i);
-				else sprintf (cpu_list + strlen(cpu_list), ",%d", i);
+				if (count == 1) sprintf (cpu_list, "%d", i+1);
+				else sprintf (cpu_list + strlen(cpu_list), ",%d", i+1);
 			}
 			sprintf (buf + strlen(buf), "logical CPU%s%s\n",
 				 (count == 1) ? " #" : "s ", cpu_list);
@@ -3597,7 +3611,8 @@ struct facasm_data {
 	uint32_t cpu_flags;		/* Copy of CPU_FLAGS */
 	uint32_t firstcall;		/* Flag set on first facpasssetup */
 	uint32_t pad[5];
-	uint32_t xmm_data[100];		/* XMM data initialized in C code */
+	uint32_t xmm_data[188];		/* XMM data initialized in C code */
+	uint32_t ymm_data[300];		/* YMM data initialized in C code */
 };
 
 /* This defines the factoring data handled in C code.  The handle */
@@ -3638,6 +3653,11 @@ int factorSetup (
 
 	asm_data->EXPONENT = p;
 	asm_data->cpu_flags = CPU_FLAGS;
+#ifdef X86_64
+	if (!IniGetInt (LOCALINI_FILE, "FactorUsingSSE2", 0)) asm_data->cpu_flags &= ~CPU_SSE2;
+#else
+	if (!IniGetInt (LOCALINI_FILE, "FactorUsingSSE2", 1)) asm_data->cpu_flags &= ~CPU_SSE2;
+#endif
 	asm_data->firstcall = 0;
 
 /* Setup complete */
@@ -3679,7 +3699,6 @@ int factorPassSetup (
 	TWO_TO_FACSIZE_PLUS_62	DQ	0.0
 	SSE2_LOOP_COUNTER	DD	0 */
 
-#ifndef X86_64
 	if (asm_data->cpu_flags & CPU_SSE2) {
 		unsigned long i, p, bits_in_factor;
 		uint32_t *xmm_data;
@@ -3718,7 +3737,6 @@ int factorPassSetup (
 
 		xmm_data[44] = bits_in_factor - 61;
 	}
-#endif
 
 /* Setup complete */
 
@@ -7066,7 +7084,7 @@ int factorBench (
 	unsigned long num_lengths, i, j;
 	double	best_time;
 	char	buf[512];
-	int	bit_lengths[] = {58, 59, 60, 61, 62, 63, 64, 65, 66, 67};
+	int	bit_lengths[] = {61, 62, 63, 64, 65, 66, 67, 75, 76, 77};
 	int	res, stop_reason;
 	double	timers[2];
 

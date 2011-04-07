@@ -5786,7 +5786,7 @@ bingo:	if (stage == 1)
 
 /* If LL testing, free all save files -- including possible LL save files */
 
-	if (w->work_type != WORK_PMINUS1) {
+	if (w->work_type != WORK_PMINUS1 || !IniGetInt (INI_FILE, "KeepPminus1SaveFiles", 1)) {
 		unlinkSaveFiles (filename);
 		filename[0] = 'p';
 		unlinkSaveFiles (filename);
