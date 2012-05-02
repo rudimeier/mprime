@@ -89,6 +89,7 @@ void * large_pages_malloc (
 #if defined (_WIN32) && defined (MEM_LARGE_PAGES)
 	static int first_call = 1;
 	static size_t large_page_size = 0;
+	static DWORD lasterr = 0;
 	LPVOID p;
 
 	if (first_call) {
@@ -103,7 +104,9 @@ void * large_pages_malloc (
 		// Grant large page access
 		OpenProcessToken (GetCurrentProcess(),
 				  TOKEN_ADJUST_PRIVILEGES, &hToken);
+		lasterr = GetLastError ();
 		LookupPrivilegeValue (NULL, "SeLockMemoryPrivilege", &luid);
+		lasterr = GetLastError ();
 
 		tp.PrivilegeCount = 1;
 		tp.Privileges[0].Luid = luid;
@@ -112,6 +115,7 @@ void * large_pages_malloc (
 				       sizeof (TOKEN_PRIVILEGES),
 				       (PTOKEN_PRIVILEGES) NULL,
 				       (PDWORD) NULL);
+		lasterr = GetLastError ();
 
 		// Dynamic link to get large page size
 		// Call succeeds only on Windows Server 2003 SP1 or later
@@ -128,6 +132,7 @@ void * large_pages_malloc (
 	// Now allocate the memory
 	p = VirtualAlloc (NULL, (size + large_page_size - 1) & ~(large_page_size - 1),
 			  MEM_RESERVE | MEM_COMMIT | MEM_LARGE_PAGES, PAGE_READWRITE);
+	lasterr = GetLastError ();
 	return (p);
 #else
 	return (NULL);

@@ -1,4 +1,4 @@
-; Copyright 2000-2010 - Mersenne Research, Inc.  All rights reserved.
+; Copyright 2000-2011 - Mersenne Research, Inc.  All rights reserved.
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -712,7 +712,7 @@ nobase2_split_carry_zpad_word MACRO xmmcarryin, xmmcarryout, xmmtmp, basereg
 	subpd	xmmcarryout, XMM_BIGVAL	;; Next carry = round(carry / base)
 	xload	xmmtmp, XMM_LIMIT_BIGMAX[basereg]
 	mulpd	xmmtmp, xmmcarryout
-	subpd	xmmcarryin, xmmtmp	;; xmmcarryout now contains carry % base
+	subpd	xmmcarryin, xmmtmp	;; xmmcarryin now contains carry % base
 	ENDM
 
 ; The single float version for splitting the high FFT carry.
@@ -849,8 +849,8 @@ zero	xorpd	xmm1, xmm1
 	ENDM
 
 
-; This is the normalization routine when we are computing modulo k*2^n+c
-; with a zero-padded 2^2n FFT.  We do this by multiplying the lower FFT
+; This is the normalization routine when we are computing modulo k*b^n+c
+; with a zero-padded b^2n FFT.  We do this by multiplying the lower FFT
 ; word by k and adding in the upper word times -c.  Of course, this is made
 ; very tedious because we have to carefully avoid any loss of precision.
 ;
@@ -882,23 +882,18 @@ const		xload	xmm0, XMM_K_TIMES_MULCONST_LO
 khi no const	xload	xmm5, XMM_K_HI
 khi const	xload	xmm5, XMM_K_TIMES_MULCONST_HI
 khi no base2	mulpd	xmm5, XMM_LIMIT_INVERSE[rax] ;; Non-base2 rounding needs shifted carry
-khi		mulpd	xmm4, xmm5
+khi		mulpd	xmm5, xmm4
 
 		addpd	xmm0, xmm2		;; x1 = values + carry
 
 c1		mulpd   xmm1, XMM_MINUS_C	;; Do one mul before split rather than two after split
 
-khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm5, xmm2, rax
-no khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm4, xmm2, rax
+	split_upper_zpad_word echk, base2, sse4, xmm1, xmm4, xmm2, rax
 
-khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm5, XMM_MINUS_C
-khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm5, XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-no khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
+const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
 
 	addpd	xmm0, xmm2		;; Add upper FFT word to lower FFT word
 khi	addpd	xmm4, xmm5		;; Add upper FFT word to lower FFT word
@@ -926,23 +921,18 @@ const		xload	xmm0, XMM_K_TIMES_MULCONST_LO
 khi no const	xload	xmm5, XMM_K_HI
 khi const	xload	xmm5, XMM_K_TIMES_MULCONST_HI
 khi no base2	mulpd	xmm5, XMM_LIMIT_INVERSE[rax] ; Non-base2 rounding needs shifted carry
-khi		mulpd	xmm2, xmm5
+khi		mulpd	xmm5, xmm2
 
 		addpd	xmm0, xmm4		;; x1 = values + carry
 
 c1		mulpd   xmm1, XMM_MINUS_C	;; Do one mul before split rather than two after split
 
-khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm5, xmm4, rax
-no khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm2, xmm4, rax
+	split_upper_zpad_word echk, base2, sse4, xmm1, xmm2, xmm4, rax
 
-khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm5, XMM_MINUS_C
-khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm5, XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-no khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
+const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
 
 	addpd	xmm0, xmm4		;; Add upper FFT word to lower FFT word
 khi	addpd	xmm2, xmm5		;; Add upper FFT word to lower FFT word
@@ -964,7 +954,7 @@ ttp	mulpd	xmm0, [rbp+48]		;; new value1 = val * two-to-phi
 ; xmm2,xmm3 = carries
 ; rsi = pointer to the FFT data values
 ; rbp = pointer two-to-phi multipliers
-; rdi = big vs. litle array pointer
+; rdi = big vs. little array pointer
 ; These registers are destroyed!
 
 xnorm012_1d_mid MACRO ttp, zero, base2
@@ -1092,7 +1082,7 @@ zero	subsd	xmm3, xmm3
 ; xmm3 = carry #2 (previous high FFT data - not yet mul'ed by K)
 ; rbx = pointer to the FFT data values
 ; rdx = pointer two-to-phi multipliers
-; rdi = big vs. litle array pointer
+; rdi = big vs. little array pointer
 
 xnorm012_1d_mid_zpad MACRO const, base2
 	LOCAL	notfunny, funnyaddr1, funny1done
@@ -1230,7 +1220,7 @@ funny1done:
 ; xmm2,xmm3 = carries
 ; rsi = pointer to the FFT data values
 ; rbp = pointer two-to-phi multipliers
-; rdi = big vs. litle array pointer
+; rdi = big vs. little array pointer
 ; NOTE: If RATIONAL_FFT we could eliminate 8 multiplies.
 ; Input arguments are destroyed!
 
@@ -1358,7 +1348,7 @@ zero	subsd	xmm2, xmm2
 ; xmm3 = carry #2 (previous high FFT data - not yet mul'ed by K)
 ; rsi = pointer to the FFT data values
 ; rbp = pointer two-to-phi multipliers
-; rdi = big vs. litle array pointer
+; rdi = big vs. little array pointer
 ; NOTE: If RATIONAL_FFT we could eliminate 8 multiplies.
 
 xnorm012_1d_zpad MACRO const, base2
@@ -2242,23 +2232,18 @@ const		xload	xmm0, XMM_K_TIMES_MULCONST_LO
 khi no const	xload	xmm5, XMM_K_HI
 khi const	xload	xmm5, XMM_K_TIMES_MULCONST_HI
 khi no base2	mulpd	xmm5, XMM_LIMIT_INVERSE[rax] ;; Non-base2 rounding needs shifted carry
-khi		mulpd	xmm4, xmm5
+khi		mulpd	xmm5, xmm4
  
 		addpd	xmm0, [rbp+0*16]	;; x1 = values + carry
 
 c1		mulpd   xmm1, XMM_MINUS_C	;; Do one mul before split rather than two after split
 
-khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm5, xmm2, rax
-no khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm4, xmm2, rax
+	split_upper_zpad_word echk, base2, sse4, xmm1, xmm4, xmm2, rax
 
-khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm5, XMM_MINUS_C
-khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm5, XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-no khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
+const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
 
 	addpd	xmm0, xmm2		;; Add upper FFT word to lower FFT word
 khi	addpd	xmm4, xmm5		;; Add upper FFT word to lower FFT word
@@ -2291,23 +2276,18 @@ const		xload	xmm0, XMM_K_TIMES_MULCONST_LO
 khi no const	xload	xmm5, XMM_K_HI
 khi const	xload	xmm5, XMM_K_TIMES_MULCONST_HI
 khi no base2	mulpd	xmm5, XMM_LIMIT_INVERSE[rax] ;; Non-base2 rounding needs shifted carry
-khi		mulpd	xmm2, xmm5
+khi		mulpd	xmm5, xmm2
 
 		addpd	xmm0, [rbp+1*16]	;; x2 = values + carry
 
 c1		mulpd   xmm1, XMM_MINUS_C	;; Do one mul before split rather than two after split
 
-khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm5, xmm4, rax
-no khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm2, xmm4, rax
+	split_upper_zpad_word echk, base2, sse4, xmm1, xmm2, xmm4, rax
 
-khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm5, XMM_MINUS_C
-khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm5, XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-no khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
+const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
 
 	addpd	xmm0, xmm4		;; Add upper FFT word to lower FFT word
 khi	addpd	xmm2, xmm5		;; Add upper FFT word to lower FFT word
@@ -2352,21 +2332,16 @@ const		xload	xmm0, XMM_K_TIMES_MULCONST_LO
 khi no const	xload	xmm4, XMM_K_HI
 khi const	xload	xmm4, XMM_K_TIMES_MULCONST_HI
 khi no base2	mulpd	xmm4, XMM_LIMIT_INVERSE[rax] ;; Non-base2 rounding needs shifted carry
-khi		mulpd	xmm4, xmm5
+khi		mulpd	xmm5, xmm4
  
 c1		mulpd   xmm1, XMM_MINUS_C	;; Do one mul before split rather than two after split
 
-khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm5, xmm2, rax
-no khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm4, xmm2, rax
+	split_upper_zpad_word echk, base2, sse4, xmm1, xmm4, xmm2, rax
 
-khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm5, XMM_MINUS_C
-khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm5, XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-no khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
+const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
 
 	addpd	xmm0, xmm2		;; Add upper FFT word to lower FFT word
 khi	addpd	xmm4, xmm5		;; Add upper FFT word to lower FFT word
@@ -2392,21 +2367,16 @@ const		xload	xmm8, XMM_K_TIMES_MULCONST_LO
 khi no const	xload	xmm12, XMM_K_HI
 khi const	xload	xmm12, XMM_K_TIMES_MULCONST_HI
 khi no base2	mulpd	xmm12, XMM_LIMIT_INVERSE[rcx] ;; Non-base2 rounding needs shifted carry
-khi		mulpd	xmm12, xmm13
+khi		mulpd	xmm13, xmm12
 
 c1		mulpd   xmm9, XMM_MINUS_C	;; Do one mul before split rather than two after split
 
-khi	split_upper_zpad_word echk, base2, sse4, xmm9, xmm13, xmm10, rcx
-no khi	split_upper_zpad_word echk, base2, sse4, xmm9, xmm12, xmm10, rcx
+	split_upper_zpad_word echk, base2, sse4, xmm9, xmm12, xmm10, rcx
 
-khi no const no c1 no cm1	mulpd	xmm10, XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm13, XMM_MINUS_C
-khi const			mulpd	xmm10, XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm13, XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm10, XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm12, XMM_MINUS_C
-no khi const			mulpd	xmm10, XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm12, XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm10, XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm12, XMM_MINUS_C
+const			mulpd	xmm10, XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm12, XMM_MINUS_C_TIMES_MULCONST
 
 	addpd	xmm8, xmm10		;; Add upper FFT word to lower FFT word
 khi	addpd	xmm12, xmm13		;; Add upper FFT word to lower FFT word
@@ -2588,20 +2558,56 @@ kok:
 ; eax = big vs. little word flag #1
 
 xnorm012_2d_part1 MACRO
-	movsd	xmm6, Q [rbx-40]	;; Load 2 carries from last row
-	movsd	xmm7, Q [rbx-8]		;; Second carry is very last carry
-	subsd	xmm7, XMM_BIGVAL
-	mulsd	xmm7, XMM_MINUS_C	;; Negate the carry
-	addsd	xmm7, XMM_BIGVAL
+	LOCAL	shufsec, shuflp, shufdn, done
+
+	cmp	THIS_BLOCK, 0		;; Are we carrying into the first data block?
+	jne	done			;; If not, skip wrapping carries and negating the last carry
+
+	mov	eax, count3		;; Load 3 section counts
+
+shufsec:
+	mov	rdi, rsi		;; Save section start
+	mov	rbx, rax		;; Form count for this section
+	and	rbx, 07FFh
+	jz	shufdn			;; No cache lines to do.  We're all done!
+	shr	rax, 11			;; Move counts list along
+
+shuflp:	movsd	xmm4, Q [rsi+0*16]	;; Load low carry word
+	movsd	Q [rsi+0*16], xmm0	;; Save prev cache line's high carry in low word
+	movsd	xmm0, Q [rsi+0*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+0*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+1*16]	;; Load low carry word
+	movsd	Q [rsi+1*16], xmm1	;; Save prev cache line's high carry in low word
+	movsd	xmm1, Q [rsi+1*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+1*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+2*16]	;; Load low carry word
+	movsd	Q [rsi+2*16], xmm2	;; Save prev cache line's high carry in low word
+	movsd	xmm2, Q [rsi+2*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+2*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+3*16]	;; Load low carry word
+	movsd	Q [rsi+3*16], xmm3	;; Save prev cache line's high carry in low word
+	movsd	xmm3, Q [rsi+3*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+3*16+8], xmm4	;; Move this cache line's low carry to high word
+	bump	rsi, 64			;; Next carry cache line
+	dec	rbx			;; Test loop counter
+	jnz	short shuflp		;; Next carry row in section
+
+	movsd	Q [rdi+1*16], xmm0	;; Do extra shuffling of section's last cache line
+	movsd	xmm0, xmm1
+	movsd	Q [rdi+3*16], xmm2
+	movsd	xmm2, xmm3
+	jmp	shufsec			;; Next section
+
+shufdn:	subsd	xmm2, XMM_BIGVAL
+	mulsd	xmm2, XMM_MINUS_C	;; Negate the very last carry
+	addsd	xmm2, XMM_BIGVAL
+	mov	rsi, carries		;; Reload carries array pointer
+	movsd	Q [rsi+0*16], xmm2	;; Move last cache line's high carries into first cache line
+	movsd	Q [rsi+2*16], xmm0
+
+done:
 	ENDM
-xnorm012_2d_part2 MACRO
-	movsd	xmm0, xmm7		; Copy 2 carries from prev section
-	movsd	xmm2, xmm6
-	movsd	xmm1, Q [rbx-56]	; Load 2 carries from end this section
-	movsd	xmm3, Q [rbx-24]
-	movsd	xmm6, Q [rbx-8]		; Remember 2 carries for next section
-	movsd	xmm7, Q [rbx-40]
-	ENDM
+
 xnorm012_2d MACRO base2
 	LOCAL	hard, done
 
@@ -2614,36 +2620,46 @@ xnorm012_2d MACRO base2
 
 	movzx	rax, BYTE PTR [rdi+0]	;; Load big vs. little flag
 	movzx	rcx, BYTE PTR [rdi+4]
-	movhpd	xmm0, Q [rsi+0*16]	;; Load high word of carry XMM reg
+	xload	xmm0, [rbp+0*16]	;; FFT data
+	xload	xmm6, [rbx+0*32]	;; col two-to-minus-phi
+	mulpd	xmm6, XMM_NORM012_FF	;; Mul by FFTLEN/2
+	mulpd	xmm0, [rdx+0*32]	;; mul by grp two-to-minus-phi
+	mulpd	xmm0, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm0, xmm6		;; mul by col two-to-minus-phi
+	addpd	xmm0, [rsi+0*16]	;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm0, xmm5, xmm4, rax
 	subpd	xmm5, XMM_BIGVAL
-	xload	xmm4, [rdx+0*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm4, xmm0		;; low carry *= two-to-phi
-	movsd	xmm0, Q [rsi+0*16+8]	;; Load carry for next row
-	addpd	xmm4, [rbp+0*16]	;; Add low carry and FFT data
-	xstore	[rbp+0*16], xmm4	;; Save FFT data
-	xload	xmm4, [rbx+48]		;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rcx];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+0*32+16]	;; high carry *= grp two-to-phi
-	mulpd	xmm5, xmm4		;; high carry *= fudged col two-to-phi
-	addpd	xmm5, [rbp+4*16]	;; Add high carry and FFT data
+	xload	xmm7, [rdx+0*32+16]	;; grp two-to-phi
+	mulpd	xmm0, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm0, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	xload	xmm2, [rbx+0*32+16]	;; col two-to-phi
+	mulpd	xmm0, xmm2		;; value *= col two-to-phi
+	xstore	[rbp+0*16], xmm0	;; Save FFT data
+	mulpd	xmm5, xmm7		;; carry *= grp two-to-phi
+	mulpd	xmm5, XMM_TTP_FUDGE[rcx];; carry *= fudge two-to-phi
+	xload	xmm3, [rbx+1*32+16]	;; col two-to-phi
+	mulpd	xmm5, xmm3		;; carry *= col two-to-phi
+	addpd	xmm5, [rbp+4*16]	;; Add carry and FFT data
 	xstore	[rbp+4*16], xmm5	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+1]	;; Load big vs. little flag
 	movzx	rcx, BYTE PTR [rdi+5]
-	movhpd	xmm1, Q [rsi+1*16]	;; Load high word of carry XMM reg
+	xload	xmm1, [rbp+1*16]	;; FFT data
+	mulpd	xmm1, [rdx+1*32]	;; mul by grp two-to-minus-phi
+	mulpd	xmm1, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm1, xmm6		;; mul by col two-to-minus-phi
+	addpd	xmm1, [rsi+1*16]	;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm1, xmm5, xmm4, rax
 	subpd	xmm5, XMM_BIGVAL
-	xload	xmm4, [rdx+1*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm4, xmm1		;; low carry *= two-to-phi
-	movsd	xmm1, Q [rsi+1*16+8]	;; Load carry for next row
-	addpd	xmm4, [rbp+1*16]	;; Add low carry and FFT data
-	xstore	[rbp+1*16], xmm4	;; Save FFT data
-	xload	xmm4, [rbx+48]		;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rcx];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+1*32+16]	;; high carry *= grp two-to-phi
-	mulpd	xmm5, xmm4		;; high carry *= fudged col two-to-phi
-	addpd	xmm5, [rbp+5*16]	;; Add high carry and FFT data
+	xload	xmm7, [rdx+1*32+16]	;; grp two-to-phi
+	mulpd	xmm1, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm1, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm1, xmm2		;; value *= col two-to-phi
+	xstore	[rbp+1*16], xmm1	;; Save FFT data
+	mulpd	xmm5, xmm7		;; carry *= grp two-to-phi
+	mulpd	xmm5, XMM_TTP_FUDGE[rcx];; carry *= fudge two-to-phi
+	mulpd	xmm5, xmm3		;; carry *= col two-to-phi
+	addpd	xmm5, [rbp+5*16]	;; Add carry and FFT data
 	xstore	[rbp+5*16], xmm5	;; Save FFT data
 
 	;; If we are zeroing the high words, we skip adding the carries
@@ -2654,155 +2670,197 @@ xnorm012_2d MACRO base2
 
 	movzx	rax, BYTE PTR [rdi+2]	;; Load big vs. little flag
 	movzx	rcx, BYTE PTR [rdi+6]
-	movhpd	xmm2, Q [rsi+2*16]	;; Load high word of carry XMM reg
-	rounding exec, base2, noexec, noexec, xmm2, xmm5, xmm4, rax
+	xload	xmm0, [rbp+2*16]	;; FFT data
+	mulpd	xmm0, [rdx+2*32]	;; mul by grp two-to-minus-phi
+	mulpd	xmm0, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm0, xmm6		;; mul by col two-to-minus-phi
+	addpd	xmm0, [rsi+2*16]	;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm0, xmm5, xmm4, rax
 	subpd	xmm5, XMM_BIGVAL
-	xload	xmm4, [rdx+2*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm4, xmm2		;; low carry *= two-to-phi
-	movsd	xmm2, Q [rsi+2*16+8]	;; Load carry for next row
-	addpd	xmm4, [rbp+2*16]	;; Add low carry and FFT data
-	xstore	[rbp+2*16], xmm4	;; Save FFT data
-	xload	xmm4, [rbx+48]		;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rcx];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+2*32+16]	;; high carry *= grp two-to-phi
-	mulpd	xmm5, xmm4		;; high carry *= fudged col two-to-phi
-	addpd	xmm5, [rbp+6*16]	;; Add high carry and FFT data
+	xload	xmm7, [rdx+2*32+16]	;; grp two-to-phi
+	mulpd	xmm0, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm0, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm0, xmm2		;; value *= col two-to-phi
+	xstore	[rbp+2*16], xmm0	;; Save FFT data
+	mulpd	xmm5, xmm7		;; carry *= grp two-to-phi
+	mulpd	xmm5, XMM_TTP_FUDGE[rcx];; carry *= fudge two-to-phi
+	mulpd	xmm5, xmm3		;; carry *= col two-to-phi
+	addpd	xmm5, [rbp+6*16]	;; Add carry and FFT data
 	xstore	[rbp+6*16], xmm5	;; Save FFT data
-   
+
 	movzx	rax, BYTE PTR [rdi+3]	;; Load big vs. little flag
 	movzx	rcx, BYTE PTR [rdi+7]
-	movhpd	xmm3, Q [rsi+3*16]	;; Load high word of carry XMM reg
-	rounding exec, base2, noexec, noexec, xmm3, xmm5, xmm4, rax
+	xload	xmm1, [rbp+3*16]	;; FFT data
+	mulpd	xmm1, [rdx+3*32]	;; mul by grp two-to-minus-phi
+	mulpd	xmm1, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm1, xmm6		;; mul by col two-to-minus-phi
+	addpd	xmm1, [rsi+3*16]	;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm1, xmm5, xmm4, rax
 	subpd	xmm5, XMM_BIGVAL
-	xload	xmm4, [rdx+3*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm4, xmm3		;; low carry *= two-to-phi
-	movsd	xmm3, Q [rsi+3*16+8]	;; Load carry for next row
-	addpd	xmm4, [rbp+3*16]	;; Add low carry and FFT data
-	xstore	[rbp+3*16], xmm4	;; Save FFT data
-	xload	xmm4, [rbx+48]		;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rcx];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+3*32+16]	;; high carry *= grp two-to-phi
-	mulpd	xmm5, xmm4		;; high carry *= fudged col two-to-phi
-	addpd	xmm5, [rbp+7*16]	;; Add high carry and FFT data
+	xload	xmm7, [rdx+3*32+16]	;; grp two-to-phi
+	mulpd	xmm1, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm1, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm1, xmm2		;; value *= col two-to-phi
+	xstore	[rbp+3*16], xmm1	;; Save FFT data
+	mulpd	xmm5, xmm7		;; carry *= grp two-to-phi
+	mulpd	xmm5, XMM_TTP_FUDGE[rcx];; carry *= fudge two-to-phi
+	mulpd	xmm5, xmm3	;; carry *= col two-to-phi
+	addpd	xmm5, [rbp+7*16]	;; Add carry and FFT data
 	xstore	[rbp+7*16], xmm5	;; Save FFT data
 	jmp	done
 
 ;; Same as above, but spread carry over 6 words
 
 hard:	movzx	rax, BYTE PTR [rdi+0]	;; Load big vs. little flag
-	movhpd	xmm0, Q [rsi+0*16]	;; Load high word of carry XMM reg
+	xload	xmm0, [rbp+0*16]	;; FFT data
+	xload	xmm6, [rdx+0*32]	;; grp two-to-minus-phi
+	mulpd	xmm6, XMM_NORM012_FF	;; Mul by FFTLEN/2
+	mulpd	xmm0, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm0, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm0, [rbx+0*32]	;; mul by col two-to-minus-phi
+	addpd	xmm0, [rsi+0*16]	;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm0, xmm5, xmm4, rax
-	mulpd	xmm0, [rdx+0*32+16]	;; mul by grp two-to-phi
-	addpd	xmm0, [rbp+0*16]	;; Add low carry and FFT data
+	xload	xmm7, [rdx+0*32+16]	;; grp two-to-phi
+	mulpd	xmm0, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm0, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm0, [rbx+0*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+0*16], xmm0	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+4]	;; Load big vs. little flag
-	rounding exec, base2, noexec, noexec, xmm5, xmm0, xmm4, rax
-	xload	xmm4, [rbx+1*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+0*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm5, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm5, [rbp+4*16]	;; Add low carry and FFT data
-	xstore	[rbp+4*16], xmm5	;; Save FFT data
+	xload	xmm0, [rbp+4*16]	;; FFT data
+	mulpd	xmm0, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm0, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm0, [rbx+1*32]	;; mul by col two-to-minus-phi
+	addpd	xmm0, xmm5		;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm0, xmm5, xmm4, rax
+	mulpd	xmm0, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm0, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm0, [rbx+1*32+16]	;; value *= col two-to-phi
+	xstore	[rbp+4*16], xmm0	;; Save FFT data
 
 	mov	ecx, BIGLIT_INCR2	;; Different clm values step through
 					;; big/lit array differently
 	movzx	rax, BYTE PTR [rdi+rcx]	;; Load big vs. little flag
+	xload	xmm0, [rbp+8*16]	;; FFT data
+	mulpd	xmm0, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm0, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm0, [rbx+2*32]	;; mul by col two-to-minus-phi
+	addpd	xmm0, xmm5		;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm0, xmm5, xmm4, rax
-	xload	xmm4, [rbx+2*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm0, [rdx+0*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm0, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm0, [rbp+8*16]	;; Add low carry and FFT data
+	mulpd	xmm0, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm0, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm0, [rbx+2*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+8*16], xmm0	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+rcx+4] ;; Load big vs. little flag
-	rounding exec, base2, noexec, noexec, xmm5, xmm0, xmm4, rax
-	xload	xmm4, [rbx+3*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+0*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm5, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm5, [rbp+12*16]	;; Add low carry and FFT data
-	xstore	[rbp+12*16], xmm5	;; Save FFT data
+	xload	xmm0, [rbp+12*16]	;; FFT data
+	mulpd	xmm0, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm0, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm0, [rbx+3*32]	;; mul by col two-to-minus-phi
+	addpd	xmm0, xmm5		;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm0, xmm5, xmm4, rax
+	mulpd	xmm0, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm0, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm0, [rbx+3*32+16]	;; value *= col two-to-phi
+	xstore	[rbp+12*16], xmm0	;; Save FFT data
 
 	mov	ecx, BIGLIT_INCR4	;; Different clm values step through
 					;; big/lit array differently
 	movzx	rax, BYTE PTR [rdi+rcx]	;; Load big vs. little flag
+	xload	xmm0, [rbp+16*16]	;; FFT data
+	mulpd	xmm0, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm0, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm0, [rbx+4*32]	;; mul by col two-to-minus-phi
+	addpd	xmm0, xmm5		;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm0, xmm5, xmm4, rax
-	xload	xmm4, [rbx+4*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm0, [rdx+0*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm0, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm0, [rbp+16*16]	;; Add low carry and FFT data
+	mulpd	xmm0, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm0, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm0, [rbx+4*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+16*16], xmm0	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+rcx+4]
 	subpd	xmm5, XMM_BIGVAL
-	xload	xmm4, [rbx+5*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+0*32+16]	;; high carry *= grp two-to-phi
-	mulpd	xmm5, xmm4		;; high carry *= fudged col two-to-phi
-	addpd	xmm5, [rbp+20*16]	;; Add high carry and FFT data
+	mulpd	xmm5, xmm7		;; carry *= grp two-to-phi
+	mulpd	xmm5, XMM_TTP_FUDGE[rax];; carry *= fudge two-to-phi
+	mulpd	xmm5, [rbx+5*32+16]	;; carry *= col two-to-phi
+	addpd	xmm5, [rbp+20*16]	;; Add carry and FFT data
 	xstore	[rbp+20*16], xmm5	;; Save FFT data
-	movsd	xmm0, Q [rsi+0*16+8]	;; Load carry for next row
 
 
 	movzx	rax, BYTE PTR [rdi+1]	;; Load big vs. little flag
-	movhpd	xmm1, Q [rsi+1*16]	;; Load high word of carry XMM reg
+	xload	xmm1, [rbp+1*16]	;; FFT data
+	xload	xmm6, [rdx+1*32]	;; grp two-to-minus-phi
+	mulpd	xmm6, XMM_NORM012_FF	;; Mul by FFTLEN/2
+	mulpd	xmm1, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm1, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm1, [rbx+0*32]	;; mul by col two-to-minus-phi
+	addpd	xmm1, [rsi+1*16]	;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm1, xmm5, xmm4, rax
-	mulpd	xmm1, [rdx+1*32+16]	;; mul by grp two-to-phi
-	addpd	xmm1, [rbp+1*16]	;; Add low carry and FFT data
+	xload	xmm7, [rdx+1*32+16]	;; grp two-to-phi
+	mulpd	xmm1, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm1, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm1, [rbx+0*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+1*16], xmm1	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+5]	;; Load big vs. little flag
-	rounding exec, base2, noexec, noexec, xmm5, xmm1, xmm4, rax
-	xload	xmm4, [rbx+1*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+1*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm5, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm5, [rbp+5*16]	;; Add low carry and FFT data
-	xstore	[rbp+5*16], xmm5	;; Save FFT data
+	xload	xmm1, [rbp+5*16]	;; FFT data
+	mulpd	xmm1, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm1, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm1, [rbx+1*32]	;; mul by col two-to-minus-phi
+	addpd	xmm1, xmm5		;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm1, xmm5, xmm4, rax
+	mulpd	xmm1, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm1, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm1, [rbx+1*32+16]	;; value *= col two-to-phi
+	xstore	[rbp+5*16], xmm1	;; Save FFT data
 
 	mov	ecx, BIGLIT_INCR2	;; Different clm values step through
 					;; big/lit array differently
 	movzx	rax, BYTE PTR [rdi+rcx+1] ;; Load big vs. little flag
+	xload	xmm1, [rbp+9*16]	;; FFT data
+	mulpd	xmm1, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm1, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm1, [rbx+2*32]	;; mul by col two-to-minus-phi
+	addpd	xmm1, xmm5		;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm1, xmm5, xmm4, rax
-	xload	xmm4, [rbx+2*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm1, [rdx+1*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm1, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm1, [rbp+9*16]	;; Add low carry and FFT data
+	mulpd	xmm1, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm1, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm1, [rbx+2*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+9*16], xmm1	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+rcx+5] ;; Load big vs. little flag
-	rounding exec, base2, noexec, noexec, xmm5, xmm1, xmm4, rax
-	xload	xmm4, [rbx+3*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+1*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm5, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm5, [rbp+13*16]	;; Add low carry and FFT data
-	xstore	[rbp+13*16], xmm5	;; Save FFT data
+	xload	xmm1, [rbp+13*16]	;; FFT data
+	mulpd	xmm1, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm1, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm1, [rbx+3*32]	;; mul by col two-to-minus-phi
+	addpd	xmm1, xmm5		;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm1, xmm5, xmm4, rax
+	mulpd	xmm1, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm1, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm1, [rbx+3*32+16]	;; value *= col two-to-phi
+	xstore	[rbp+13*16], xmm1	;; Save FFT data
 
 	mov	ecx, BIGLIT_INCR4	;; Different clm values step through
 					;; big/lit array differently
 	movzx	rax, BYTE PTR [rdi+rcx+1] ;; Load big vs. little flag
+	xload	xmm1, [rbp+17*16]	;; FFT data
+	mulpd	xmm1, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm1, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm1, [rbx+4*32]	;; mul by col two-to-minus-phi
+	addpd	xmm1, xmm5		;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm1, xmm5, xmm4, rax
-	xload	xmm4, [rbx+4*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm1, [rdx+1*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm1, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm1, [rbp+17*16]	;; Add low carry and FFT data
+	mulpd	xmm1, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm1, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm1, [rbx+4*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+17*16], xmm1	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+rcx+5]
 	subpd	xmm5, XMM_BIGVAL
-	xload	xmm4, [rbx+5*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+1*32+16]	;; high carry *= grp two-to-phi
-	mulpd	xmm5, xmm4		;; high carry *= fudged col two-to-phi
-	addpd	xmm5, [rbp+21*16]	;; Add high carry and FFT data
+	mulpd	xmm5, xmm7		;; carry *= grp two-to-phi
+	mulpd	xmm5, XMM_TTP_FUDGE[rax];; carry *= fudge two-to-phi
+	mulpd	xmm5, [rbx+5*32+16]	;; carry *= col two-to-phi
+	addpd	xmm5, [rbp+21*16]	;; Add carry and FFT data
 	xstore	[rbp+21*16], xmm5	;; Save FFT data
-	movsd	xmm1, Q [rsi+1*16+8]	;; Load carry for next row
 
 	;; If we are zeroing the high words, we skip adding the carries
 	;; into the high words.
@@ -2811,119 +2869,155 @@ hard:	movzx	rax, BYTE PTR [rdi+0]	;; Load big vs. little flag
 	je	done			;; Yes, skip high words
 
 	movzx	rax, BYTE PTR [rdi+2]	;; Load big vs. little flag
-	movhpd	xmm2, Q [rsi+2*16]	;; Load high word of carry XMM reg
+	xload	xmm2, [rbp+2*16]	;; FFT data
+	xload	xmm6, [rdx+2*32]	;; grp two-to-minus-phi
+	mulpd	xmm6, XMM_NORM012_FF	;; Mul by FFTLEN/2
+	mulpd	xmm2, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm2, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm2, [rbx+0*32]	;; mul by col two-to-minus-phi
+	addpd	xmm2, [rsi+2*16]	;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm2, xmm5, xmm4, rax
-	mulpd	xmm2, [rdx+2*32+16]	;; mul by grp two-to-phi
-	addpd	xmm2, [rbp+2*16]	;; Add low carry and FFT data
+	xload	xmm7, [rdx+2*32+16]	;; grp two-to-phi
+	mulpd	xmm2, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm2, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm2, [rbx+0*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+2*16], xmm2	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+6]	;; Load big vs. little flag
-	rounding exec, base2, noexec, noexec, xmm5, xmm2, xmm4, rax
-	xload	xmm4, [rbx+1*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+2*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm5, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm5, [rbp+6*16]	;; Add low carry and FFT data
-	xstore	[rbp+6*16], xmm5	;; Save FFT data
+	xload	xmm2, [rbp+6*16]	;; FFT data
+	mulpd	xmm2, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm2, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm2, [rbx+1*32]	;; mul by col two-to-minus-phi
+	addpd	xmm2, xmm5		;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm2, xmm5, xmm4, rax
+	mulpd	xmm2, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm2, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm2, [rbx+1*32+16]	;; value *= col two-to-phi
+	xstore	[rbp+6*16], xmm2	;; Save FFT data
 
 	mov	ecx, BIGLIT_INCR2	;; Different clm values step through
 					;; big/lit array differently
 	movzx	rax, BYTE PTR [rdi+rcx+2] ;; Load big vs. little flag
+	xload	xmm2, [rbp+10*16]	;; FFT data
+	mulpd	xmm2, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm2, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm2, [rbx+2*32]	;; mul by col two-to-minus-phi
+	addpd	xmm2, xmm5		;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm2, xmm5, xmm4, rax
-	xload	xmm4, [rbx+2*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm2, [rdx+2*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm2, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm2, [rbp+10*16]	;; Add low carry and FFT data
+	mulpd	xmm2, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm2, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm2, [rbx+2*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+10*16], xmm2	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+rcx+6] ;; Load big vs. little flag
-	rounding exec, base2, noexec, noexec, xmm5, xmm2, xmm4, rax
-	xload	xmm4, [rbx+3*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+2*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm5, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm5, [rbp+14*16]	;; Add low carry and FFT data
-	xstore	[rbp+14*16], xmm5	;; Save FFT data
+	xload	xmm2, [rbp+14*16]	;; FFT data
+	mulpd	xmm2, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm2, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm2, [rbx+3*32]	;; mul by col two-to-minus-phi
+	addpd	xmm2, xmm5		;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm2, xmm5, xmm4, rax
+	mulpd	xmm2, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm2, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm2, [rbx+3*32+16]	;; value *= col two-to-phi
+	xstore	[rbp+14*16], xmm2	;; Save FFT data
 
 	mov	ecx, BIGLIT_INCR4	;; Different clm values step through
 					;; big/lit array differently
 	movzx	rax, BYTE PTR [rdi+rcx+2] ;; Load big vs. little flag
+	xload	xmm2, [rbp+18*16]	;; FFT data
+	mulpd	xmm2, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm2, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm2, [rbx+4*32]	;; mul by col two-to-minus-phi
+	addpd	xmm2, xmm5		;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm2, xmm5, xmm4, rax
-	xload	xmm4, [rbx+4*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm2, [rdx+2*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm2, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm2, [rbp+18*16]	;; Add low carry and FFT data
+	mulpd	xmm2, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm2, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm2, [rbx+4*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+18*16], xmm2	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+rcx+6]
 	subpd	xmm5, XMM_BIGVAL
-	xload	xmm4, [rbx+5*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+2*32+16]	;; high carry *= grp two-to-phi
-	mulpd	xmm5, xmm4		;; high carry *= fudged col two-to-phi
-	addpd	xmm5, [rbp+22*16]	;; Add high carry and FFT data
+	mulpd	xmm5, xmm7		;; carry *= grp two-to-phi
+	mulpd	xmm5, XMM_TTP_FUDGE[rax];; carry *= fudge two-to-phi
+	mulpd	xmm5, [rbx+5*32+16]	;; carry *= col two-to-phi
+	addpd	xmm5, [rbp+22*16]	;; Add carry and FFT data
 	xstore	[rbp+22*16], xmm5	;; Save FFT data
-	movsd	xmm2, Q [rsi+2*16+8]	;; Load carry for next row
 
 
 	movzx	rax, BYTE PTR [rdi+3]	;; Load big vs. little flag
-	movhpd	xmm3, Q [rsi+3*16]	;; Load high word of carry XMM reg
+	xload	xmm3, [rbp+3*16]	;; FFT data
+	xload	xmm6, [rdx+3*32]	;; grp two-to-minus-phi
+	mulpd	xmm6, XMM_NORM012_FF	;; Mul by FFTLEN/2
+	mulpd	xmm3, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm3, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm3, [rbx+0*32]	;; mul by col two-to-minus-phi
+	addpd	xmm3, [rsi+3*16]	;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm3, xmm5, xmm4, rax
-	mulpd	xmm3, [rdx+3*32+16]	;; mul by grp two-to-phi
-	addpd	xmm3, [rbp+3*16]	;; Add low carry and FFT data
+	xload	xmm7, [rdx+3*32+16]	;; grp two-to-phi
+	mulpd	xmm3, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm3, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm3, [rbx+0*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+3*16], xmm3	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+7]	;; Load big vs. little flag
-	rounding exec, base2, noexec, noexec, xmm5, xmm3, xmm4, rax
-	xload	xmm4, [rbx+1*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+3*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm5, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm5, [rbp+7*16]	;; Add low carry and FFT data
-	xstore	[rbp+7*16], xmm5	;; Save FFT data
+	xload	xmm3, [rbp+7*16]	;; FFT data
+	mulpd	xmm3, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm3, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm3, [rbx+1*32]	;; mul by col two-to-minus-phi
+	addpd	xmm3, xmm5		;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm3, xmm5, xmm4, rax
+	mulpd	xmm3, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm3, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm3, [rbx+1*32+16]	;; value *= col two-to-phi
+	xstore	[rbp+7*16], xmm3	;; Save FFT data
 
 	mov	ecx, BIGLIT_INCR2	;; Different clm values step through
 					;; big/lit array differently
 	movzx	rax, BYTE PTR [rdi+rcx+3] ;; Load big vs. little flag
+	xload	xmm3, [rbp+11*16]	;; FFT data
+	mulpd	xmm3, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm3, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm3, [rbx+2*32]	;; mul by col two-to-minus-phi
+	addpd	xmm3, xmm5		;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm3, xmm5, xmm4, rax
-	xload	xmm4, [rbx+2*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm3, [rdx+3*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm3, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm3, [rbp+11*16]	;; Add low carry and FFT data
+	mulpd	xmm3, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm3, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm3, [rbx+2*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+11*16], xmm3	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+rcx+7] ;; Load big vs. little flag
-	rounding exec, base2, noexec, noexec, xmm5, xmm3, xmm4, rax
-	xload	xmm4, [rbx+3*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+3*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm5, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm5, [rbp+15*16]	;; Add low carry and FFT data
-	xstore	[rbp+15*16], xmm5	;; Save FFT data
+	xload	xmm3, [rbp+15*16]	;; FFT data
+	mulpd	xmm3, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm3, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm3, [rbx+3*32]	;; mul by col two-to-minus-phi
+	addpd	xmm3, xmm5		;; Add in the carry
+	rounding exec, base2, noexec, noexec, xmm3, xmm5, xmm4, rax
+	mulpd	xmm3, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm3, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm3, [rbx+3*32+16]	;; value *= col two-to-phi
+	xstore	[rbp+15*16], xmm3	;; Save FFT data
 
 	mov	ecx, BIGLIT_INCR4	;; Different clm values step through
 					;; big/lit array differently
 	movzx	rax, BYTE PTR [rdi+rcx+3] ;; Load big vs. little flag
+	xload	xmm3, [rbp+19*16]	;; FFT data
+	mulpd	xmm3, xmm6		;; mul by grp two-to-minus-phi
+	mulpd	xmm3, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm3, [rbx+4*32]	;; mul by col two-to-minus-phi
+	addpd	xmm3, xmm5		;; Add in the carry
 	rounding exec, base2, noexec, noexec, xmm3, xmm5, xmm4, rax
-	xload	xmm4, [rbx+4*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm3, [rdx+3*32+16]	;; mul by grp two-to-phi
-	mulpd	xmm3, xmm4		;; mul by fudged col two-to-phi
-	addpd	xmm3, [rbp+19*16]	;; Add low carry and FFT data
+	mulpd	xmm3, xmm7		;; value *= grp two-to-phi
+	mulpd	xmm3, XMM_TTP_FUDGE[rax];; value *= fudge two-to-phi
+	mulpd	xmm3, [rbx+4*32+16]	;; value *= col two-to-phi
 	xstore	[rbp+19*16], xmm3	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+rcx+7]
 	subpd	xmm5, XMM_BIGVAL
-	xload	xmm4, [rbx+5*32+16]	;; col two-to-phi
-	mulpd	xmm4, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
-	mulpd	xmm5, [rdx+3*32+16]	;; high carry *= grp two-to-phi
-	mulpd	xmm5, xmm4		;; high carry *= fudged col two-to-phi
-	addpd	xmm5, [rbp+23*16]	;; Add high carry and FFT data
+	mulpd	xmm5, xmm7		;; carry *= grp two-to-phi
+	mulpd	xmm5, XMM_TTP_FUDGE[rax];; carry *= fudge two-to-phi
+	mulpd	xmm5, [rbx+5*32+16]	;; carry *= col two-to-phi
+	addpd	xmm5, [rbp+23*16]	;; Add carry and FFT data
 	xstore	[rbp+23*16], xmm5	;; Save FFT data
-	movsd	xmm3, Q [rsi+3*16+8]	;; Load carry for next row
 
 done:	xload	xmm4, XMM_BIGVAL
 	xstore	[rsi+0*16], xmm4	;; Clear carry
@@ -2938,14 +3032,63 @@ done:	xload	xmm4, XMM_BIGVAL
 ;; the FFT words just above the half-way point.
 
 xnorm012_2d_zpad_part1 MACRO
-	LOCAL	b2, done
+	LOCAL	shufsec, shuflp, shufdn, b2, zpaddn, done
+
+	cmp	THIS_BLOCK, 0		;; Are we carrying into the first data block?
+	jne	done			;; If not, skip wrapping carries and negating the last carry
+
+	mov	eax, count3		;; Load 3 section counts
+
+shufsec:
+	mov	rdi, rsi		;; Save section start
+	mov	rbx, rax		;; Form count for this section
+	and	rbx, 07FFh
+	jz	shufdn			;; No cache lines to do.  We're all done!
+	shr	rax, 11			;; Move counts list along
+
+shuflp:	movsd	xmm4, Q [rsi+0*16]	;; Load low carry word
+	movsd	Q [rsi+0*16], xmm0	;; Save prev cache line's high carry in low word
+	movsd	xmm0, Q [rsi+0*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+0*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+1*16]	;; Load low carry word
+	movsd	Q [rsi+1*16], xmm2	;; Save prev cache line's high carry in low word
+	movsd	xmm2, Q [rsi+1*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+1*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+2*16]	;; Load low carry word
+	movsd	Q [rsi+2*16], xmm1	;; Save prev cache line's high carry in low word
+	movsd	xmm1, Q [rsi+2*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+2*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+3*16]	;; Load low carry word
+	movsd	Q [rsi+3*16], xmm3	;; Save prev cache line's high carry in low word
+	movsd	xmm3, Q [rsi+3*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+3*16+8], xmm4	;; Move this cache line's low carry to high word
+	bump	rsi, 64			;; Next carry cache line
+	dec	rbx			;; Test loop counter
+	jnz	short shuflp		;; Next carry row in section
+
+	movsd	Q [rdi+1*16], xmm0	;; Do extra shuffling of section's last cache line
+	movsd	xmm0, xmm2
+	movsd	Q [rdi+3*16], xmm1
+	movsd	xmm1, xmm3
+	jmp	shufsec			;; Next section
+
+shufdn:	mov	rsi, DESTARG		;; Load FFT data pointer
+	mov	rdi, norm_biglit_array	;; Addr of the big/little flags array
+	mov	rbp, norm_col_mults	;; Addr of the group multipliers
 	cmp	B_IS_2, 0		;; Is b = 2?
 	jne	b2			;; Yes, do simpler rounding
 	xnorm012_2d_zpad_part1a noexec	;; No, do harder rounding
-	jmp	done
+	jmp	zpaddn
 b2:	xnorm012_2d_zpad_part1a exec
+
+zpaddn:	mov	rsi, carries		;; Reload carries pointer
+	movsd	xmm7, XMM_BIGVAL	;; Clear two carries just processed by xnorm012_2d_zpad_part1_cmn
+	subsd	xmm6, xmm6
+	movsd	Q [rsi], xmm7
+	movsd	Q [rsi+32], xmm6
 done:
 	ENDM
+
 xnorm012_2d_zpad_part1a MACRO base2
 	LOCAL	noncon, done
 	cmp	const_fft, 0		;; Are we also multiplying by a constant?
@@ -2955,11 +3098,9 @@ xnorm012_2d_zpad_part1a MACRO base2
 noncon:	xnorm012_2d_zpad_part1_cmn noexec, base2
 done:
 	ENDM
+
 xnorm012_2d_zpad_part1_cmn MACRO const, base2
 	LOCAL	smallk, mediumk, div_k_done
-
-	movsd	xmm2, Q [rbx-40]	;; Load 2 carries from last row
-	movsd	xmm3, Q [rbx-8]		;; Second carry is very last carry
 
 	;; Strip BIGVAL from the traditional carry, we'll add the traditional
 	;; carry in later when we are working on the ZPAD0 - ZPAD6 values.
@@ -3458,18 +3599,8 @@ div_k_done:
 	mulsd	xmm2, Q [rbp+7*32+16]	;; new value7 = val * two-to-phi
 	addsd	xmm2, Q [rsi+7*64]	;; Add in FFT data
 	movsd	Q [rsi+7*64], xmm2	;; Save value7
+	ENDM
 
-	subsd	xmm6, xmm6		;; Clear 2 carries from last row
-	movsd	xmm7, XMM_BIGVAL
-	ENDM
-xnorm012_2d_zpad_part2 MACRO
-	movsd	xmm0, xmm7		;; Copy 2 carries from prev section
-	movsd	xmm2, xmm6
-	movsd	xmm1, Q [rbx-56]	;; Load 2 carries from end this section
-	movsd	xmm3, Q [rbx-24]
-	movsd	xmm6, Q [rbx-8]		;; Remember 2 carries for next section
-	movsd	xmm7, Q [rbx-40]
-	ENDM
 xnorm012_2d_zpad MACRO
 	LOCAL	b2, done
 	cmp	B_IS_2, 0		;; Is b = 2?
@@ -3488,12 +3619,16 @@ xnorm012_2d_zpada MACRO base2
 noncon:	xnorm012_2d_zpad_cmn noexec, base2
 done:
 	ENDM
+
 xnorm012_2d_zpad_cmn MACRO const, base2
 	movzx	rax, BYTE PTR [rdi+0]	;; Load big vs. little flag
-	movhpd	xmm0, Q [rsi+0*16]	;; Load high word of carry XMM reg
-	movhpd	xmm2, Q [rsi+2*16]	;; Load high word of FFT hi data carry
+	xload	xmm0, [rsi+0*16]	;; Load carry
+	xload	xmm2, [rsi+2*16]	;; Load FFT hi data carry
 	xload	xmm4, [rbp+0*64]	;; Load FFT data
 	mulpd	xmm4, [rdx+0*32]	;; mul by grp two-to-minus-phi
+	mulpd	xmm4, [rbx+0*32]	;; mul by col two-to-minus-phi
+	mulpd	xmm4, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm4, XMM_NORM012_FF	;; Mul by FFTLEN/2
 	addpd	xmm0, xmm4		;; x1 = values1 + carry
 	split_carry_zpad_word base2, xmm2, xmm6, xmm4, rax
 no const xload	xmm4, XMM_K_LO		;; Calc high FFT carry times k
@@ -3507,6 +3642,8 @@ const	xload	xmm5, XMM_K_TIMES_MULCONST_HI
 	rounding exec, base2, noexec, noexec, xmm0, xmm2, xmm4, rax
 	addpd	xmm2, xmm5		;; Carry += high_FFT_carry * shifted k_hi
 	mulpd	xmm0, [rdx+0*32+16]	;; mul by grp two-to-phi
+	mulpd	xmm0, [rbx+0*32+16]	;; mul by col two-to-phi
+	mulpd	xmm0, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
 	xstore	[rbp+0*64], xmm0	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+4]	;; Load big vs. little flag
@@ -3621,14 +3758,14 @@ const	xload	xmm4, XMM_K_TIMES_MULCONST_HI
 	addpd	xmm2, [rbp+5*64]	;; Load FFT data
 	xstore	[rbp+5*64], xmm2	;; Save FFT data
 
-	movsd	xmm0, Q [rsi+0*16+8]	;; Load carry for next row
-	movsd	xmm2, Q [rsi+2*16+8]	;; Load carry for next row
-
 	movzx	rax, BYTE PTR [rdi+1]	;; Load big vs. little flag
-	movhpd	xmm1, Q [rsi+1*16]	;; Load high word of carry XMM reg
-	movhpd	xmm3, Q [rsi+3*16]	;; Load high word of FFT hi data carry
+	xload	xmm1, [rsi+1*16]	;; Load carry
+	xload	xmm3, [rsi+3*16]	;; Load FFT hi data carry
 	xload	xmm4, [rbp+0*64+16]	;; Load FFT data
 	mulpd	xmm4, [rdx+1*32]	;; mul by grp two-to-minus-phi
+	mulpd	xmm4, [rbx+0*32]	;; mul by col two-to-minus-phi
+	mulpd	xmm4, XMM_TTMP_FUDGE[rax];; mul by fudge two-to-minus-phi
+	mulpd	xmm4, XMM_NORM012_FF	;; Mul by FFTLEN/2
 	addpd	xmm1, xmm4		;; x1 = values1 + carry
 	split_carry_zpad_word base2, xmm3, xmm6, xmm4, rax
 no const xload	xmm4, XMM_K_LO		;; Calc high FFT carry times k
@@ -3642,6 +3779,8 @@ const	xload	xmm5, XMM_K_TIMES_MULCONST_HI
 	rounding exec, base2, noexec, noexec, xmm1, xmm3, xmm4, rax
 	addpd	xmm3, xmm5		;; Carry += high_FFT_carry * shifted k_hi
 	mulpd	xmm1, [rdx+1*32+16]	;; mul by grp two-to-phi
+	mulpd	xmm1, [rbx+0*32+16]	;; mul by col two-to-phi
+	mulpd	xmm1, XMM_TTP_FUDGE[rax];; mul by fudge two-to-phi
 	xstore	[rbp+0*64+16], xmm1	;; Save FFT data
 
 	movzx	rax, BYTE PTR [rdi+5]	;; Load big vs. little flag
@@ -3755,9 +3894,6 @@ const	xload	xmm4, XMM_K_TIMES_MULCONST_HI
 	mulpd	xmm3, xmm4		;; data *= fudged col two-to-phi
 	addpd	xmm3, [rbp+5*64+16]	;; Load FFT data
 	xstore	[rbp+5*64+16], xmm3	;; Save FFT data
-
-	movsd	xmm1, Q [rsi+1*16+8]	;; Load carry for next row
-	movsd	xmm3, Q [rsi+3*16+8]	;; Load carry for next row
 
 	xload	xmm4, XMM_BIGVAL
 	xstore	[rsi+0*16], xmm4	;; Clear carry
@@ -4012,23 +4148,18 @@ const		xload	xmm0, XMM_K_TIMES_MULCONST_LO
 khi no const	xload	xmm5, XMM_K_HI
 khi const	xload	xmm5, XMM_K_TIMES_MULCONST_HI
 khi no base2	mulpd	xmm5, XMM_LIMIT_INVERSE[rax*4] ;; Non-base2 rounding needs shifted carry
-khi		mulpd	xmm4, xmm5
+khi		mulpd	xmm5, xmm4
  
 		addpd	xmm0, [rbp+0*16]	;; x1 = values + carry
 
 c1		mulpd   xmm1, XMM_MINUS_C	;; Do one mul before split rather than two after split
 
-khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm5, xmm2, rax*4
-no khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm4, xmm2, rax*4
+	split_upper_zpad_word echk, base2, sse4, xmm1, xmm4, xmm2, rax*4
 
-khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm5, XMM_MINUS_C
-khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm5, XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-no khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
+const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
 
 	addpd	xmm0, xmm2		;; Add upper FFT word to lower FFT word
 khi	addpd	xmm4, xmm5		;; Add upper FFT word to lower FFT word
@@ -4055,23 +4186,18 @@ const		xload	xmm0, XMM_K_TIMES_MULCONST_LO
 khi no const	xload	xmm5, XMM_K_HI
 khi const	xload	xmm5, XMM_K_TIMES_MULCONST_HI
 khi no base2	mulpd	xmm5, XMM_LIMIT_INVERSE[rax*4+16] ;; Non-base2 rounding needs shifted carry
-khi		mulpd	xmm2, xmm5
+khi		mulpd	xmm5, xmm2
 
 		addpd	xmm0, [rbp+1*16]	;; x2 = values + carry
 
 c1		mulpd   xmm1, XMM_MINUS_C	;; Do one mul before split rather than two after split
 
-khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm5, xmm4, rax*4+16
-no khi	split_upper_zpad_word echk, base2, sse4, xmm1, xmm2, xmm4, rax*4+16
+	split_upper_zpad_word echk, base2, sse4, xmm1, xmm2, xmm4, rax*4+16
 
-khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm5, XMM_MINUS_C
-khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm5, XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
-no khi const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm4, XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm2, XMM_MINUS_C
+const			mulpd	xmm4, XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm2, XMM_MINUS_C_TIMES_MULCONST
 
 	addpd	xmm0, xmm4		;; Add upper FFT word to lower FFT word
 khi	addpd	xmm2, xmm5		;; Add upper FFT word to lower FFT word
@@ -4147,7 +4273,7 @@ khi const base2 echk			xload	xmm4, XMM_K_TIMES_MULCONST_HI
 khi const base2 no echk no sse4		xload	xmm4, XMM_K_TIMES_MULCONST_HI
 khi const base2 no echk sse4		xcopy	xmm4, xmm6	;; XMM_K_TIMES_MULCONST_HI
 khi no base2				mulpd	xmm4, XMM_LIMIT_INVERSE[rax*4] ;; Non-base2 rounding needs shifted carry
-khi					mulpd	xmm4, xmm5
+khi					mulpd	xmm5, xmm4
 
 khi no const no base2 echk		xload	xmm11, XMM_K_HI
 khi no const no base2 no echk		xcopy	xmm11, xmm6	;; XMM_K_HI
@@ -4160,30 +4286,21 @@ khi const base2 echk			xload	xmm11, XMM_K_TIMES_MULCONST_HI
 khi const base2 no echk no sse4		xload	xmm11, XMM_K_TIMES_MULCONST_HI
 khi const base2 no echk sse4		xcopy	xmm11, xmm6	;; XMM_K_TIMES_MULCONST_HI
 khi no base2				mulpd	xmm11, XMM_LIMIT_INVERSE[rax*4+16] ;; Non-base2 rounding needs shifted carry
-khi					mulpd	xmm11, xmm12
+khi					mulpd	xmm12, xmm11
 
 c1	mulpd   xmm1, xmm14		;; XMM_MINUS_C	;; Do one mul before split rather than two after split
 c1	mulpd   xmm8, xmm14		;; XMM_MINUS_C	;; Do one mul before split rather than two after split
 
-khi	split_upper_zpad_word_interleaved echk, base2, sse4, xmm1, xmm5, xmm2, rax*4, xmm8, xmm12, xmm9, rax*4+16
-no khi	split_upper_zpad_word_interleaved echk, base2, sse4, xmm1, xmm4, xmm2, rax*4, xmm8, xmm11, xmm9, rax*4+16
+	split_upper_zpad_word_interleaved echk, base2, sse4, xmm1, xmm4, xmm2, rax*4, xmm8, xmm11, xmm9, rax*4+16
 
-khi no const no c1 no cm1	mulpd	xmm2, xmm14	;; XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm5, xmm14	;; XMM_MINUS_C
-khi const			mulpd	xmm2, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm5, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm2, xmm14	;; XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm4, xmm14	;; XMM_MINUS_C
-no khi const			mulpd	xmm2, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm4, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
-khi no const no c1 no cm1	mulpd	xmm9, xmm14	;; XMM_MINUS_C
-khi no const no c1 no cm1	mulpd	xmm12, xmm14	;; XMM_MINUS_C
-khi const			mulpd	xmm9, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
-khi const			mulpd	xmm12, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
-no khi no const no c1 no cm1	mulpd	xmm9, xmm14	;; XMM_MINUS_C
-no khi no const no c1 no cm1	mulpd	xmm11, xmm14	;; XMM_MINUS_C
-no khi const			mulpd	xmm9, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
-no khi const			mulpd	xmm11, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm2, xmm14	;; XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm4, xmm14	;; XMM_MINUS_C
+const			mulpd	xmm2, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm4, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
+no const no c1 no cm1	mulpd	xmm9, xmm14	;; XMM_MINUS_C
+no const no c1 no cm1	mulpd	xmm11, xmm14	;; XMM_MINUS_C
+const			mulpd	xmm9, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
+const			mulpd	xmm11, xmm14	;; XMM_MINUS_C_TIMES_MULCONST
 
 	addpd	xmm0, xmm2		;; Add upper FFT word to lower FFT word
 khi	addpd	xmm4, xmm5		;; Add upper FFT word to lower FFT word
@@ -4217,14 +4334,40 @@ ENDIF
 ; ecx = big vs. little word flag #2
 ; eax = big vs. little word flag #1
 
+; Rotate the carries array
 xnorm012_wpn_part1 MACRO
-	movsd	xmm0, Q [rbx-8]		;; The very last carry
-	subsd	xmm0, XMM_BIGVAL
-	mulsd	xmm0, XMM_MINUS_C	;; Negate the carry
-	addsd	xmm0, XMM_BIGVAL
-	movsd	xmm1, Q [rbx-56]	;; Load 3 other carries from last row
-	movsd	xmm2, Q [rbx-40]
-	movsd	xmm3, Q [rbx-24]
+	LOCAL	shuflp, done
+	cmp	THIS_BLOCK, 0		;; Are we carrying into the first data block?
+	jne	done			;; If not, skip wrapping carries and negating the last carry
+	mov	eax, addcount1		;; Load count of cache lines in the carries array
+shuflp:	movsd	xmm4, Q [rsi+0*16]	;; Load low carry word
+	movsd	Q [rsi+0*16], xmm0	;; Save prev cache line's high carry in low word
+	movsd	xmm0, Q [rsi+0*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+0*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+1*16]	;; Load low carry word
+	movsd	Q [rsi+1*16], xmm1	;; Save prev cache line's high carry in low word
+	movsd	xmm1, Q [rsi+1*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+1*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+2*16]	;; Load low carry word
+	movsd	Q [rsi+2*16], xmm2	;; Save prev cache line's high carry in low word
+	movsd	xmm2, Q [rsi+2*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+2*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+3*16]	;; Load low carry word
+	movsd	Q [rsi+3*16], xmm3	;; Save prev cache line's high carry in low word
+	movsd	xmm3, Q [rsi+3*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+3*16+8], xmm4	;; Move this cache line's low carry to high word
+	bump	rsi, 64			;; Next carry cache line
+	dec	rax			;; Decement count of cache lines
+	jnz	short shuflp
+	subsd	xmm3, XMM_BIGVAL
+	mulsd	xmm3, XMM_MINUS_C	;; Negate the very last carry
+	addsd	xmm3, XMM_BIGVAL
+	mov	rsi, carries		;; Reload carries array pointer
+	movsd	Q [rsi+0*16], xmm3	;; Move last cache line's high carries into first cache line
+	movsd	Q [rsi+1*16], xmm0
+	movsd	Q [rsi+2*16], xmm1
+	movsd	Q [rsi+3*16], xmm2
+done:
 	ENDM
 
 xnorm012_wpn MACRO base2
@@ -4240,9 +4383,9 @@ xnorm012_wpn MACRO base2
 	movzx	rax, BYTE PTR [rdi+1]	;; Load 4 big vs. little flags
 	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 1,2
 	and	rcx, 0f0h
-	movhpd	xmm0, Q [rsi+0*16]	;; Load high word of carry XMM reg
 	xload	xmm4, [rbp+0*16]	;; FFT data
 	mulpd	xmm4, [rdx+0*XMM_GMD][rcx] ;; mul by fudged grp two-to-minus-phi
+	xload	xmm0, [rsi+0*16]	;; Load carry
 	addpd	xmm0, xmm4		;; carry + FFT data
 	rounding exec, base2, noexec, noexec, xmm0, xmm5, xmm4, rax*4
 	subpd	xmm5, XMM_BIGVAL
@@ -4253,11 +4396,10 @@ xnorm012_wpn MACRO base2
 	addpd	xmm5, [rbp+4*16]	;; Add high carry and FFT data
 	xstore	[rbp+0*16], xmm0	;; Save FFT data
 	xstore	[rbp+4*16], xmm5	;; Save FFT data
-	movsd	xmm0, Q [rsi+0*16+8]	;; Load carry for next row
 
-	movhpd	xmm1, Q [rsi+1*16]	;; Load high word of carry XMM reg
 	xload	xmm4, [rbp+1*16]	;; FFT data
 	mulpd	xmm4, [rdx+1*XMM_GMD][rcx] ;; mul by fudged grp two-to-minus-phi
+	xload	xmm1, [rsi+1*16]	;; Load carry
 	addpd	xmm1, xmm4		;; carry + FFT data
 	rounding exec, base2, noexec, noexec, xmm1, xmm5, xmm4, rax*4+16
 	subpd	xmm5, XMM_BIGVAL
@@ -4266,7 +4408,6 @@ xnorm012_wpn MACRO base2
 	addpd	xmm5, [rbp+5*16]	;; Add high carry and FFT data
 	xstore	[rbp+1*16], xmm1	;; Save FFT data
 	xstore	[rbp+5*16], xmm5	;; Save FFT data
-	movsd	xmm1, Q [rsi+1*16+8]	;; Load carry for next row
 
 	;; If we are zeroing the high words, we skip adding the carries
 	;; into the high words.
@@ -4276,9 +4417,9 @@ xnorm012_wpn MACRO base2
 
 	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 3,4
 	and	rcx, 0fh
-	movhpd	xmm2, Q [rsi+2*16]	;; Load high word of carry XMM reg
 	xload	xmm4, [rbp+2*16]	;; FFT data
 	mulpd	xmm4, [rdx+2*XMM_GMD][rcx*8] ;; mul by fudged grp two-to-minus-phi
+	xload	xmm2, [rsi+2*16]	;; Load carry
 	addpd	xmm2, xmm4		;; carry + FFT data
 	rounding exec, base2, noexec, noexec, xmm2, xmm5, xmm4, rax*4+32
 	subpd	xmm5, XMM_BIGVAL
@@ -4289,11 +4430,10 @@ xnorm012_wpn MACRO base2
 	addpd	xmm5, [rbp+6*16]	;; Add high carry and FFT data
 	xstore	[rbp+2*16], xmm2	;; Save FFT data
 	xstore	[rbp+6*16], xmm5	;; Save FFT data
-   	movsd	xmm2, Q [rsi+2*16+8]	;; Load carry for next row
 
-	movhpd	xmm3, Q [rsi+3*16]	;; Load high word of carry XMM reg
 	xload	xmm4, [rbp+3*16]	;; FFT data
 	mulpd	xmm4, [rdx+3*XMM_GMD][rcx*8] ;; mul by fudged grp two-to-minus-phi
+	xload	xmm3, [rsi+3*16]	;; Load carry
 	addpd	xmm3, xmm4		;; carry + FFT data
 	rounding exec, base2, noexec, noexec, xmm3, xmm5, xmm4, rax*4+48
 	subpd	xmm5, XMM_BIGVAL
@@ -4302,7 +4442,6 @@ xnorm012_wpn MACRO base2
 	addpd	xmm5, [rbp+7*16]	;; Add high carry and FFT data
 	xstore	[rbp+3*16], xmm3	;; Save FFT data
 	xstore	[rbp+7*16], xmm5	;; Save FFT data
-	movsd	xmm3, Q [rsi+3*16+8]	;; Load carry for next row
 	jmp	done
 
 ;; Same as above, but spread carry over 6 words
@@ -4310,9 +4449,9 @@ xnorm012_wpn MACRO base2
 hard:	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 1,2
 	and	rcx, 0f0h
 	movzx	rax, BYTE PTR [rdi+1]	;; Load 4 big vs. little flags
-	movhpd	xmm0, Q [rsi+0*16]	;; Load high word of carry XMM reg
 	xload	xmm4, [rbp+0*16]	;; FFT data
 	mulpd	xmm4, [rdx+0*XMM_GMD][rcx] ;; mul by fudged grp two-to-minus-phi
+	xload	xmm0, [rsi+0*16]	;; Load carry
 	addpd	xmm0, xmm4		;; carry + FFT data
 	rounding exec, base2, noexec, noexec, xmm0, xmm5, xmm4, rax*4
 	mulpd	xmm0, [rdx+0*XMM_GMD+XMM_GMD/2][rcx] ;; mul by fudged grp two-to-phi
@@ -4368,15 +4507,14 @@ hard:	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 1,2
 	mulpd	xmm5, [rdx+0*XMM_GMD+XMM_GMD/2][rcx] ;; high carry *= fudged grp two-to-phi
 	addpd	xmm5, [rbp+20*16]	;; Add high carry and FFT data
 	xstore	[rbp+20*16], xmm5	;; Save FFT data
-	movsd	xmm0, Q [rsi+0*16+8]	;; Load carry for next row
 
 
 	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 1,2
 	and	rcx, 0f0h
 	movzx	rax, BYTE PTR [rdi+1]	;; Load 4 big vs. little flags
-	movhpd	xmm1, Q [rsi+1*16]	;; Load high word of carry XMM reg
 	xload	xmm4, [rbp+1*16]	;; FFT data
 	mulpd	xmm4, [rdx+1*XMM_GMD][rcx] ;; mul by fudged grp two-to-minus-phi
+	xload	xmm1, [rsi+1*16]	;; Load carry
 	addpd	xmm1, xmm4		;; carry + FFT data
 	rounding exec, base2, noexec, noexec, xmm1, xmm5, xmm4, rax*4+16
 	mulpd	xmm1, [rdx+1*XMM_GMD+XMM_GMD/2][rcx] ;; mul by fudged grp two-to-phi
@@ -4432,7 +4570,6 @@ hard:	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 1,2
 	mulpd	xmm5, [rdx+1*XMM_GMD+XMM_GMD/2][rcx] ;; high carry *= fudged grp two-to-phi
 	addpd	xmm5, [rbp+21*16]	;; Add high carry and FFT data
 	xstore	[rbp+21*16], xmm5	;; Save FFT data
-	movsd	xmm1, Q [rsi+1*16+8]	;; Load carry for next row
 
 	;; If we are zeroing the high words, we skip adding the carries
 	;; into the high words.
@@ -4443,9 +4580,9 @@ hard:	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 1,2
 	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 3,4
 	and	rcx, 0fh
 	movzx	rax, BYTE PTR [rdi+1]	;; Load 4 big vs. little flags
-	movhpd	xmm2, Q [rsi+2*16]	;; Load high word of carry XMM reg
 	xload	xmm4, [rbp+2*16]	;; FFT data
 	mulpd	xmm4, [rdx+2*XMM_GMD][rcx*8] ;; mul by fudged grp two-to-minus-phi
+	xload	xmm2, [rsi+2*16]	;; Load carry
 	addpd	xmm2, xmm4		;; carry + FFT data
 	rounding exec, base2, noexec, noexec, xmm2, xmm5, xmm4, rax*4+32
 	mulpd	xmm2, [rdx+2*XMM_GMD+XMM_GMD/2][rcx*8] ;; mul by fudged grp two-to-phi
@@ -4501,15 +4638,14 @@ hard:	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 1,2
 	mulpd	xmm5, [rdx+2*XMM_GMD+XMM_GMD/2][rcx*8] ;; high carry *= fudged grp two-to-phi
 	addpd	xmm5, [rbp+22*16]	;; Add high carry and FFT data
 	xstore	[rbp+22*16], xmm5	;; Save FFT data
-	movsd	xmm2, Q [rsi+2*16+8]	;; Load carry for next row
 
 
 	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 3,4
 	and	rcx, 0fh
 	movzx	rax, BYTE PTR [rdi+1]	;; Load 4 big vs. little flags
-	movhpd	xmm3, Q [rsi+3*16]	;; Load high word of carry XMM reg
 	xload	xmm4, [rbp+3*16]	;; FFT data
 	mulpd	xmm4, [rdx+3*XMM_GMD][rcx*8] ;; mul by fudged grp two-to-minus-phi
+	xload	xmm3, [rsi+3*16]	;; Load carry
 	addpd	xmm3, xmm4		;; carry + FFT data
 	rounding exec, base2, noexec, noexec, xmm3, xmm5, xmm4, rax*4+48
 	mulpd	xmm3, [rdx+3*XMM_GMD+XMM_GMD/2][rcx*8] ;; mul by fudged grp two-to-phi
@@ -4565,7 +4701,6 @@ hard:	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flags 1,2
 	mulpd	xmm5, [rdx+3*XMM_GMD+XMM_GMD/2][rcx*8] ;; high carry *= fudged grp two-to-phi
 	addpd	xmm5, [rbp+23*16]	;; Add high carry and FFT data
 	xstore	[rbp+23*16], xmm5	;; Save FFT data
-	movsd	xmm3, Q [rsi+3*16+8]	;; Load carry for next row
 
 done:	xload	xmm4, XMM_BIGVAL
 	xstore	[rsi+0*16], xmm4	;; Clear carry
@@ -4580,14 +4715,52 @@ done:	xload	xmm4, XMM_BIGVAL
 ;; the FFT words just above the half-way point.
 
 xnorm012_wpn_zpad_part1 MACRO
-	LOCAL	b2, done
+	LOCAL	shuflp, b2, zpaddn, done
+	cmp	THIS_BLOCK, 0		;; Are we carrying into the first data block?
+	jne	done			;; If not, skip wrapping carries and negating the last carry
+	mov	eax, addcount1		;; Load count of cache lines in the carries array
+shuflp:	movsd	xmm4, Q [rsi+0*16]	;; Load low carry word
+	movsd	Q [rsi+0*16], xmm0	;; Save prev cache line's high carry in low word
+	movsd	xmm0, Q [rsi+0*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+0*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+1*16]	;; Load low carry word
+	movsd	Q [rsi+1*16], xmm2	;; Save prev cache line's high carry in low word
+	movsd	xmm2, Q [rsi+1*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+1*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+2*16]	;; Load low carry word
+	movsd	Q [rsi+2*16], xmm1	;; Save prev cache line's high carry in low word
+	movsd	xmm1, Q [rsi+2*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+2*16+8], xmm4	;; Move this cache line's low carry to high word
+	movsd	xmm4, Q [rsi+3*16]	;; Load low carry word
+	movsd	Q [rsi+3*16], xmm3	;; Save prev cache line's high carry in low word
+	movsd	xmm3, Q [rsi+3*16+8]	;; Load high carry for next cache line
+	movsd	Q [rsi+3*16+8], xmm4	;; Move this cache line's low carry to high word
+	bump	rsi, 64			;; Next carry cache line
+	dec	rax			;; Decement count of cache lines
+	jnz	short shuflp
+	mov	rsi, carries		;; Reload carries array pointer
+;;	movsd	Q [rsi+0*16], xmm3	;; Move last cache line's high carries into first cache line
+	movsd	Q [rsi+1*16], xmm0
+;;	movsd	Q [rsi+2*16], xmm2
+	movsd	Q [rsi+3*16], xmm1
+
+	mov	rsi, DESTARG		;; Addr of the FFT data
+	mov	rdi, norm_biglit_array	;; Addr of the big/little flags array
+
 	cmp	B_IS_2, 0		;; Is b = 2?
 	jne	b2			;; Yes, do simpler rounding
 	xnorm012_wpn_zpad_part1a noexec	;; No, do harder rounding
-	jmp	done
+	jmp	zpaddn
 b2:	xnorm012_wpn_zpad_part1a exec
+
+zpaddn:	mov	rsi, carries		;; Reload carries pointer
+	movsd	xmm0, XMM_BIGVAL	;; Clear two carries just processed by xnorm012_wpn_zpad_part1_cmn
+	subsd	xmm2, xmm2
+	movsd	Q [rsi], xmm0
+	movsd	Q [rsi+32], xmm2
 done:
 	ENDM
+
 xnorm012_wpn_zpad_part1a MACRO base2
 	LOCAL	noncon, done
 	cmp	const_fft, 0		;; Are we also multiplying by a constant?
@@ -4597,11 +4770,10 @@ xnorm012_wpn_zpad_part1a MACRO base2
 noncon:	xnorm012_wpn_zpad_part1_cmn noexec, base2
 done:
 	ENDM
+
+;; On input, xmm2 and xmm3 contain high carries from the last carries array row
 xnorm012_wpn_zpad_part1_cmn MACRO const, base2
 	LOCAL	smallk, mediumk, div_k_done
-
-	movsd	xmm2, Q [rbx-40]	;; Load 2 carries from last row
-	movsd	xmm3, Q [rbx-8]		;; Second carry is very last carry
 
 	;; Strip BIGVAL from the traditional carry, we'll add the traditional
 	;; carry in later when we are working on the ZPAD0 - ZPAD6 values.
@@ -5061,11 +5233,6 @@ div_k_done:
 	subsd	xmm2, XMM_BIGVAL	;; Remove rounding constant
 	addsd	xmm2, Q [rsi+7*64]	;; Add in FFT data
 	movsd	Q [rsi+7*64], xmm2	;; Save value7
-
-	movsd	xmm0, XMM_BIGVAL	;; Copy 2 carries from prev section
-	subsd	xmm2, xmm2
-	movsd	xmm1, Q [rbx-56]	;; Load 2 carries from end this section
-	movsd	xmm3, Q [rbx-24]
 	ENDM
 
 xnorm012_wpn_zpad MACRO
@@ -5089,8 +5256,8 @@ done:
 xnorm012_wpn_zpad_cmn MACRO const, base2
 	movzx	rcx, BYTE PTR [rdi]	;; Load fudge factor flag
 	and	rcx, 0f0h
-	movhpd	xmm0, Q [rsi+0*16]	;; Load high word of carry XMM reg
-	movhpd	xmm2, Q [rsi+2*16]	;; Load high word of FFT hi data carry
+	xload	xmm0, [rsi+0*16]	;; Load carry
+	xload	xmm2, [rsi+2*16]	;; Load hi data carry
 	xload	xmm4, [rbp+0*64]	;; Load FFT data
 	mulpd	xmm4, [rdx+0*XMM_GMD][rcx] ;; mul by fudged grp two-to-minus-phi
 	addpd	xmm0, xmm4		;; x1 = values1 + carry
@@ -5203,14 +5370,11 @@ const	xload	xmm4, XMM_K_TIMES_MULCONST_HI
 	addpd	xmm2, [rbp+5*64]	;; Load FFT data
 	xstore	[rbp+5*64], xmm2	;; Save FFT data
 
-	movsd	xmm0, Q [rsi+0*16+8]	;; Load carry for next row
-	movsd	xmm2, Q [rsi+2*16+8]	;; Load carry for next row
-
 	movzx	rax, BYTE PTR [rdi+1]	;; Load big vs. little flag
 	movzx	rcx, BYTE PTR [rdi]	;; Load big vs. little flag
 	and	rcx, 0f0h
-	movhpd	xmm1, Q [rsi+1*16]	;; Load high word of carry XMM reg
-	movhpd	xmm3, Q [rsi+3*16]	;; Load high word of FFT hi data carry
+	xload	xmm1, [rsi+1*16]	;; Load carry
+	xload	xmm3, [rsi+3*16]	;; Load hi data carry
 	xload	xmm4, [rbp+0*64+16]	;; Load FFT data
 	mulpd	xmm4, [rdx+1*XMM_GMD][rcx] ;; mul by fudged grp two-to-minus-phi
 	addpd	xmm1, xmm4		;; x1 = values1 + carry
@@ -5322,9 +5486,6 @@ const	xload	xmm4, XMM_K_TIMES_MULCONST_HI
 	addpd	xmm3, [rbp+5*64+16]	;; Add FFT data
 	xstore	[rbp+5*64+16], xmm3	;; Save FFT data
 
-	movsd	xmm1, Q [rsi+1*16+8]	;; Load carry for next row
-	movsd	xmm3, Q [rsi+3*16+8]	;; Load carry for next row
-
 	xload	xmm4, XMM_BIGVAL
 	xstore	[rsi+0*16], xmm4	;; Clear carry
 	xstore	[rsi+1*16], xmm4
@@ -5429,22 +5590,6 @@ xnorm_op_1d_mid_cleanup MACRO
 	shufpd	xmm3, xmm3, 1		;; Rotate carry
 	movhpd	xmm3, XMM_BIGVAL
 	ENDM
-
-xnorm_op_1d_cleanup MACRO
-	xnorm_top_carry_cmn rsi, xmm3, 0 ;; Adjust top carry if necessary
-	movsd	xmm0, Q [rsi]		;; Load values1
-	movsd	xmm1, Q [rsi+32]	;; Load values2
-	subsd	xmm3, XMM_BIGVAL	;; Remove BIGVAL from carries
-	subsd	xmm2, XMM_BIGVAL
-	mulsd	xmm3, XMM_MINUS_C	;; Mul wrap-around carry by -c
-	mulsd	xmm3, Q [rbx+16]	;; carry *= two-to-phi
-	mulsd	xmm2, Q [rbx+80]	;; carry *= two-to-phi
-	addsd	xmm0, xmm3		;; value1 = values + carry
-	addsd	xmm1, xmm2		;; value2 = values + carry
-	movsd	Q [rsi], xmm0		;; Save new value1
-	movsd	Q [rsi+32], xmm1	;; Save new value2
-	ENDM
-
 
 ; *************** 1D normalized add/sub macro ******************
 ; This macro adds and subtracts, then "normalizes" eight FFT
@@ -5617,7 +5762,7 @@ xnorm_addsub_1d_cleanup MACRO
 	ENDM
 
 ; *************** 1D normalized smalladd macro ******************
-; This macro adds by a small constant, then propagates the carry
+; This macro adds a small constant, then propagates the carry
 ; xmm7 = addin value
 ; rsi = pointer to destination
 ; rbp = pointer two-to-phi multipliers
@@ -5724,16 +5869,16 @@ xnorm_smallmul_1d_cleanup MACRO base2
 	sub	rax, rax
 	xnorm012_1d noexec, base2
 	jmp	done
-zpad:	xnorm_smallmul_1d_zpad base2	;; Do the special zpad carry
+zpad:	xnorm_smallmul_1d_zpad_cleanup base2	;; Do the special zpad carry
 done:
 	ENDM
 
 ; This macro is similar to xnorm012_1d_zpad for handling zpad carries
 ; rsi = pointer to the FFT data values
 ; rbp = pointer two-to-phi multipliers
-; rdi = big vs. litle array pointer
+; rdi = big vs. little array pointer
 
-xnorm_smallmul_1d_zpad MACRO base2
+xnorm_smallmul_1d_zpad_cleanup MACRO base2
 	LOCAL	smallk, mediumk, div_k_done, funnyaddr2, funny2done
 
 	;; Copy and integerize data from 7 words above halfway point to ZPAD0-ZPAD6

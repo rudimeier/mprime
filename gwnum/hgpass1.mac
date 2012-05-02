@@ -1,4 +1,4 @@
-; Copyright 2001-2010 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2012 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -30,21 +30,10 @@
 
 hg_pass1levels5pfa5 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, c0b, c1b, c2b, c3b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 4 pass2_11_levels_complex
@@ -53,11 +42,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 4,5
 ;; On input the 64-byte cache lines hold these data values:
@@ -130,7 +119,8 @@ pfing	bump	rbp, -2*blkdst+2*64	 ;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -146,6 +136,10 @@ pfing	bump	rbp, -2*blkdst+2*64	 ;; Restore prefetching offset
 ;;	10K
 ;;	...
 ;;	14K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 8 five_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 8K
@@ -217,7 +211,7 @@ pfing	bump	rbp, -4*blkdst+2*64	 ;; Restore prefetching offset
 ;; Work on next 4 sets of 20 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -226,21 +220,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels5pfa6 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, c0b, c1b, c2b, c3b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 5 pass2_11_levels_complex
@@ -249,11 +232,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 4,5
 ;; On input the 64-byte cache lines hold these data values:
@@ -332,7 +315,8 @@ pfing	bump	rbp, -4*blkdst+2*64	 ;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -345,6 +329,10 @@ pfing	bump	rbp, -4*blkdst+2*64	 ;; Restore prefetching offset
 ;;	2K	...
 ;;	16K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 8 six_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 8K
@@ -424,7 +412,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 24 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -433,21 +421,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels5complex3 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, c0b, c1b, c3b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 6 pass2_11_levels_complex
@@ -456,11 +433,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 4,5
 ;; On input the 64-byte cache lines hold these data values:
@@ -529,7 +506,8 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -542,6 +520,10 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;;	2K	...
 ;;	16K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 8 three_complex_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 8K
@@ -616,7 +598,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 24 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -625,21 +607,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels5pfa7 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3a, b3b, c0b, c1b, c2b, c3b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 6 pass2_11_levels_complex
@@ -648,11 +619,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 4,5
 ;; On input the 64-byte cache lines hold these data values:
@@ -732,7 +703,8 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -752,6 +724,10 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;;	26K
 ;;	...
 ;;	30K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 8 seven_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 8K
@@ -841,7 +817,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 28 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -850,21 +826,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels5pfa8 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, c0b, c1b, c2b, c3b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 7 pass2_11_levels_complex
@@ -873,11 +838,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 4,5
 ;; On input the 64-byte cache lines hold these data values:
@@ -956,7 +921,8 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -972,6 +938,10 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 ;;	6K	...
 ;;	32K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 8 eight_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 8K
@@ -1052,7 +1022,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 32 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -1061,21 +1031,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels5complex4 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b3b, c0b, c1b, c3b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 8 pass2_11_levels_complex
@@ -1084,11 +1043,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 4,5
 ;; On input the 64-byte cache lines hold these data values:
@@ -1158,7 +1117,8 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -1174,6 +1134,10 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 ;;	6K	...
 ;;	32K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 8 four_complex_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 8K
@@ -1241,7 +1205,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 32 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -1250,21 +1214,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels6pfa5 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b4b, b5b, c0b, c1b, c2b, c3b, c4b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 9 pass2_11_levels_complex
@@ -1273,11 +1226,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6
 ;; On input and output the 64-byte cache lines hold these data values:
@@ -1401,7 +1354,8 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -1419,6 +1373,10 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 ;;	18K
 ;;	...
 ;;	30K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 16 five_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 16K
@@ -1551,7 +1509,7 @@ pfing	bump	rbp, -2*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 40 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -1560,21 +1518,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels6pfa6 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b4b, b5b, c0b, c1b, c2b, c3b, c4b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 11 pass2_11_levels_complex
@@ -1583,11 +1530,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6
 ;; On input and output the 64-byte cache lines hold these data values:
@@ -1714,7 +1661,8 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -1731,6 +1679,10 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 ;;	34K
 ;;	...
 ;;	46K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 16 six_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 16K
@@ -1869,7 +1821,7 @@ pfing	bump	rbp, -2*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 48 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -1878,21 +1830,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels6complex3 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b5b, c0b, c1b, c3b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 12 pass2_11_levels_complex
@@ -1901,11 +1842,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 5,6
 ;; On input the 64-byte cache lines hold these data values:
@@ -2016,7 +1957,8 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -2033,6 +1975,10 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 ;;	34K
 ;;	...
 ;;	46K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 16 three_complex_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 16K
@@ -2155,7 +2101,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 48 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -2164,21 +2110,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels6pfa7 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3a, b3b, b4b, b5b, c0b, c1b, c2b, c3b, c4b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 13 pass2_11_levels_complex
@@ -2187,11 +2122,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6
 ;; On input and output the 64-byte cache lines hold these data values:
@@ -2319,7 +2254,8 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -2345,6 +2281,10 @@ pfing	bump	rbp, -8*blkdst+2*64	;; Restore prefetching offset
 ;;	50K
 ;;	...
 ;;	62K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 16 seven_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 16K
@@ -2500,7 +2440,7 @@ pfing	bump	rbp, -2*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 56 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -2509,21 +2449,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels6pfa8 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b4b, b5b, c0b, c1b, c2b, c3b, c4b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 15 pass2_11_levels_complex
@@ -2532,11 +2461,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6
 ;; On input and output the 64-byte cache lines hold these data values:
@@ -2663,7 +2592,8 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -2679,6 +2609,10 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 ;;	14K	...
 ;;	64K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 16 eight_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 16K
@@ -2814,7 +2748,7 @@ pfing	bump	rbp, -2*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 64 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -2823,21 +2757,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels6complex4 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b3b, b5b, c0b, c1b, c3b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 16 pass2_11_levels_complex
@@ -2846,11 +2769,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 5,6
 ;; On input the 64-byte cache lines hold these data values:
@@ -2962,7 +2885,8 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -2978,6 +2902,10 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 ;;	14K	...
 ;;	64K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 16 four_complex_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 16K
@@ -3088,7 +3016,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 64 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -3097,21 +3025,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels7pfa5 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b4b, b5b, c0b, c1b, c2b, c3b, c4b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 19 pass2_11_levels_complex
@@ -3120,11 +3037,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6,7
 ;; On input the 64-byte cache lines hold these data values:
@@ -3269,7 +3186,8 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -3291,6 +3209,10 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 ;;	34K
 ;;	...
 ;;	62K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 32 five_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 32K
@@ -3429,7 +3351,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 80 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -3438,21 +3360,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels7pfa6 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b4b, b5b, c0b, c1b, c2b, c3b, c4b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 23 pass2_11_levels_complex
@@ -3461,11 +3372,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6,7
 ;; On input the 64-byte cache lines hold these data values:
@@ -3607,7 +3518,8 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -3624,6 +3536,10 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 ;;	66K
 ;;	...
 ;;	94K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 32 six_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 32K
@@ -3767,7 +3683,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 96 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -3776,21 +3692,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels7complex3 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b5b, c0b, c1b, c3b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 24 pass2_11_levels_complex
@@ -3799,11 +3704,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6,7
 ;; On input the 64-byte cache lines hold these data values:
@@ -3915,7 +3820,8 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -3932,6 +3838,10 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 ;;	66K
 ;;	...
 ;;	94K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 32 three_complex_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 32K
@@ -4056,7 +3966,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 96 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -4065,21 +3975,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels7pfa7 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3a, b3b, b4b, b5b, c0b, c1b, c2b, c3b, c4b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 27 pass2_11_levels_complex
@@ -4088,11 +3987,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6,7
 ;; On input the 64-byte cache lines hold these data values:
@@ -4251,7 +4150,8 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -4281,6 +4181,10 @@ pfing	bump	rbp, -16*blkdst+2*64	;; Restore prefetching offset
 ;;	98K
 ;;	...
 ;;	126K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 32 seven_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 32K
@@ -4443,7 +4347,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 112 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -4452,21 +4356,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels7pfa8 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b4b, b5b, c0b, c1b, c2b, c3b, c4b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 31 pass2_11_levels_complex
@@ -4475,11 +4368,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6,7
 ;; On input the 64-byte cache lines hold these data values:
@@ -4621,7 +4514,8 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -4637,6 +4531,10 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 ;;	30K	...
 ;;	128K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 32 eight_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 32K
@@ -4779,7 +4677,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 128 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -4788,21 +4686,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels7complex4 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b3b, b5b, c0b, c1b, c3b, c5b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 32 pass2_11_levels_complex
@@ -4811,11 +4698,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 6,7
 ;; On input the 64-byte cache lines hold these data values:
@@ -4928,7 +4815,8 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -4944,6 +4832,10 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 ;;	30K	...
 ;;	128K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 32 four_complex_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 32K
@@ -5055,7 +4947,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 128 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -5065,21 +4957,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1levels8pfa5 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2b, c3b, c4b, c5b, c6b, c7b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 39 pass2_11_levels_complex
@@ -5088,11 +4969,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -5293,7 +5174,8 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -5315,6 +5197,10 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 ;;	66K
 ;;	...
 ;;	126K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 64 five_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 64K
@@ -5514,7 +5400,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 160 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -5524,21 +5410,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1levels8pfa6 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2b, c3b, c4b, c5b, c6b, c7b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 47 pass2_11_levels_complex
@@ -5547,11 +5422,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -5749,7 +5624,8 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -5766,6 +5642,10 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 ;;	130K
 ;;	...
 ;;	190K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 64 six_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 64K
@@ -5970,7 +5850,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 192 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -5979,21 +5859,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels8complex3 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b5b, b7b, c0b, c1b, c3b, c5b, c7b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 48 pass2_11_levels_complex
@@ -6002,11 +5871,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -6158,7 +6027,8 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -6175,6 +6045,10 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 ;;	130K
 ;;	...
 ;;	190K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 64 three_complex_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 64K
@@ -6337,7 +6211,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 192 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -6347,21 +6221,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1levels8pfa7 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2a, b2b, b3a, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2b, c3b, c4b, c5b, c6b, c7b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 55 pass2_11_levels_complex
@@ -6370,11 +6233,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -6579,7 +6442,8 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -6609,6 +6473,10 @@ pfing	bump	rbp, -32*blkdst+2*64	;; Restore prefetching offset
 ;;	194K
 ;;	...
 ;;	254K
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 64 seven_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 64K
@@ -6831,7 +6699,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 224 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -6841,21 +6709,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1levels8pfa8 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2b, c3b, c4b, c5b, c6b, c7b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 63 pass2_11_levels_complex
@@ -6864,11 +6721,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -7066,7 +6923,8 @@ pfing	bump	rbp, -64*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -7082,6 +6940,10 @@ pfing	bump	rbp, -64*blkdst+2*64	;; Restore prefetching offset
 ;;	62K	...
 ;;	256K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 64 eight_reals_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 64K
@@ -7285,7 +7147,7 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 256 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -7294,21 +7156,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 
 hg_pass1levels8complex4 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1b, b3b, b5b, b7b, c0b, c1b, c3b, c5b, c7b
-	LOCAL	pass2, endlp
+	LOCAL	pass1, pass2, endlp, done
 
 	set_FFT_constants fftname, 1, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 64 pass2_11_levels_complex
@@ -7317,11 +7168,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -7474,7 +7325,8 @@ pfing	bump	rbp, -64*blkdst+2*64	;; Restore prefetching offset
 
 ;; Normalize these values
 
-	pass1_normalize 0, endlp
+	pass1_normalize 0, b0b
+	jmp	endlp
 
 ;; Do FFT levels 1,2,3
 ;;
@@ -7490,6 +7342,10 @@ pfing	bump	rbp, -64*blkdst+2*64	;; Restore prefetching offset
 ;;	62K	...
 ;;	256K	...
 ;;	...
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Do 64 four_complex_first_fft macros (FFT levels 1,2,3)
 ;;	distance between fft data elements is 64K
@@ -7644,6 +7500,6 @@ pfing	bump	rbp, -4*blkdst+2*64	;; Restore prefetching offset
 ;; Work on next 4 sets of 256 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 

@@ -1,9 +1,9 @@
-/* Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved */
+/* Copyright 1995-2012 Mersenne Research, Inc.  All rights reserved */
 
 /* Constants */
 
-#define VERSION		"26.6"
-#define BUILD_NUM	"3"
+#define VERSION		"27.6"
+#define BUILD_NUM	"4"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
 /* Linux (mprime)  #2 */

@@ -1,6 +1,6 @@
-/* GWNUM -- IBDWT FFT package for large numbers.
+/* ECM stage 1 using GWNUM -- for use by GMP-ECM
 
-  Copyright 1996-2009 Mersenne Research, Inc.
+  Copyright 1996-2011 Mersenne Research, Inc.
 
   This program is free software; you can redistribute it and/or modify it
   under the terms of the GNU General Public License as published by the
@@ -80,10 +80,10 @@ int isPrime (
 #define MAX_PRIMES	6542
 static	unsigned int *primes = NULL;
 static	struct sieve_info {
-	unsigned long first_number;
+	uint64_t first_number;
 	unsigned int bit_number;
 	unsigned int num_primes;
-	unsigned long start;
+	uint64_t start;
 	char	array[4096];
 } si = {0};
 
@@ -130,7 +130,7 @@ void fill_sieve (void)
 /* Start sieve by allocate a sieve info structure */
 
 void start_sieve (
-	unsigned long start)
+	uint64_t start)
 {
 	unsigned int i;
 
@@ -145,7 +145,7 @@ void start_sieve (
 	if (si.first_number &&
 	    start >= si.first_number &&
 	    start < si.first_number + sizeof (si.array) * 8 * 2) {
-		si.bit_number = (start - si.first_number) / 2;
+		si.bit_number = (unsigned int) (start - si.first_number) / 2;
 		return;
 	}
 
@@ -166,7 +166,7 @@ void start_sieve (
 
 /* Return next prime from the sieve */
 
-unsigned long sieve (void)
+uint64_t sieve (void)
 {
 	if (si.start == 2) {
 		si.start = 3;
@@ -421,14 +421,15 @@ void ell_add_fft_last (
 #define swap(a,b)	{t=a;a=b;b=t;}
 
 unsigned long lucas_cost (
-	unsigned long n,
+	uint64_t n,
 	double	v)
 {
-	unsigned long c, d, e, t, dmod3, emod3;
+	uint64_t d, e, t, dmod3, emod3;
+	unsigned long c;
 
 	c = 0;
 	while (n != 1) {
-	    d = (unsigned long) (n/v+0.5); e = n - d;
+	    d = (uint64_t) (n/v+0.5); e = n - d;
 	    d = d - e;
 
 	    c += 12;
@@ -484,10 +485,10 @@ unsigned long lucas_cost (
 void lucas_mul (
 	gwnum	xx,
 	gwnum	zz,
-	unsigned long n,
+	uint64_t n,
 	double	v)
 {
-	unsigned long d, e, t, dmod3, emod3;
+	uint64_t d, e, t, dmod3, emod3;
 	gwnum	xA, zA, xB, zB, xC, zC, xs, zs, xt, zt;
 
 	xA = gwalloc (&gwdata);
@@ -506,7 +507,7 @@ void lucas_mul (
 	    ell_dbl_fft (xA, zA, xB, zB);			/* B = 2*A */
 	    gwcopy (&gwdata, xA, xC); gwcopy (&gwdata, zA, zC);	/* C = A */
 
-	    d = (unsigned long) (n/v+0.5); e = n - d;
+	    d = (uint64_t) (n/v+0.5); e = n - d;
 	    d = d - e;
 
 	    while (d != e) {
@@ -591,9 +592,10 @@ void lucas_mul (
 void bin_ell_mul (
 	gwnum	xx,
 	gwnum	zz,
-	unsigned long n)
+	uint64_t n)
 {
-	unsigned long c, zeros;
+	uint64_t c;
+	unsigned long zeros;
 	gwnum	xorg, zorg, xs, zs;
 
 	xorg = gwalloc (&gwdata);
@@ -606,7 +608,7 @@ void bin_ell_mul (
 	if (n > 1) {
 		ell_begin_fft (xx, zz, xorg, zorg);
 
-		c = (unsigned long)(1<<31);
+		c = 1; c <<= 63;
 		while ((c&n) == 0) c >>= 1;
 		c >>= 1;
 
@@ -626,16 +628,13 @@ void bin_ell_mul (
 		do {
 			if (c&n) {
 				if (c == 1) {
-					ell_add_fft_last (xs, zs, xx, zz,
-							  xorg, zorg, xx, zz);
+					ell_add_fft_last (xs, zs, xx, zz, xorg, zorg, xx, zz);
 				} else {
-					ell_add_fft (xs, zs, xx, zz,
-						     xorg, zorg, xx, zz);
+					ell_add_fft (xs, zs, xx, zz, xorg, zorg, xx, zz);
 					ell_dbl_fft (xs, zs, xs, zs);
 				}
 			} else {
-				ell_add_fft (xx, zz, xs, zs,
-					     xorg, zorg, xs, zs);
+				ell_add_fft (xx, zz, xs, zs, xorg, zorg, xs, zs);
 				ell_dbl_fft (xx, zz, xx, zz);
 			}
 			c >>= 1;
@@ -658,7 +657,7 @@ void bin_ell_mul (
 void ell_mul (
 	gwnum	xx,
 	gwnum	zz,
-	unsigned long n)
+	uint64_t n)
 {
 	unsigned long zeros;
 
@@ -790,33 +789,34 @@ int normalize (
 
 /**************************************************************
  *
- *	Main ECM Function
+ *	ECM Function for 32-bit inputs...
  *
  **************************************************************/
 
 /* Do ECM stage 1 for GMP-ECM using gwnum library.  See gwnum.h for */
 /* a detailed explanation of inputs and outputs. */
 
-int gwnum_ecmStage1 (
+int gwnum_ecmStage1_u32 (
 	double	k,			/* K in K*B^N+C */
 	unsigned long b,		/* B in K*B^N+C */
 	unsigned long n,		/* N in K*B^N+C */
 	signed long c,			/* C in K*B^N+C */
-	unsigned long *num_being_factored_array, /* Number to factor */
+	uint32_t *num_being_factored_array, /* Number to factor */
 	unsigned long num_being_factored_array_len,
-	unsigned long B1,		/* Stage 1 bound */
-	unsigned long *B1_done,		/* Stage 1 that is already done */
-	unsigned long *A_array,		/* A - caller derives it from sigma */
+	uint64_t B1,			/* Stage 1 bound */
+	uint64_t *B1_done,		/* Stage 1 that is already done */
+	uint32_t *A_array,		/* A - caller derives it from sigma */
 	unsigned long A_array_len,
-	unsigned long *x_array,		/* X value of point */
+	uint32_t *x_array,		/* X value of point */
 	unsigned long *x_array_len,
-	unsigned long *z_array,		/* Z value of point */
+	uint32_t *z_array,		/* Z value of point */
 	unsigned long *z_array_len,
 	int	(*stop_check_proc)(int),/* Ptr to proc that returns TRUE */
 					/* if user interrupts processing */
 	unsigned long options)
 {
-	unsigned long bits, SQRT_B1, prime;
+	unsigned long bits, SQRT_B1;
+	uint64_t prime;
 	int	res;
 	long	reslong;
 	gwnum	x, z;
@@ -825,8 +825,7 @@ int gwnum_ecmStage1 (
 /* FFTing.  Note: We allocate 60 extra bits to handle any possible k value. */
 
 	if (b) 
-		bits = (unsigned long)
-			(n * log ((double) b) / log ((double) 2.0)) + 60;
+		bits = (unsigned long) (n * log ((double) b) / log ((double) 2.0)) + 60;
 	else
 		bits = num_being_factored_array_len * sizeof (unsigned long);
 
@@ -837,15 +836,13 @@ int gwnum_ecmStage1 (
 	if (b)
 		res = gwsetup (&gwdata, k, b, n, c);
 	else if (sizeof (unsigned long) == sizeof (uint32_t))
-		res = gwsetup_general_mod (
-			&gwdata,
-			(uint32_t *) num_being_factored_array,
-			num_being_factored_array_len);
+		res = gwsetup_general_mod (&gwdata,
+					   (uint32_t *) num_being_factored_array,
+					   num_being_factored_array_len);
 	else
-		res = gwsetup_general_mod (
-			&gwdata,
-			(uint32_t *) num_being_factored_array,
-			num_being_factored_array_len * 2);
+		res = gwsetup_general_mod (&gwdata,
+					   (uint32_t *) num_being_factored_array,
+					   num_being_factored_array_len * 2);
 	if (res == GWERROR_MALLOC) return (ES1_MEMORY);
 	if (res) return (ES1_CANNOT_DO_IT);
 	StopCheckRoutine = stop_check_proc;
@@ -873,8 +870,7 @@ int gwnum_ecmStage1 (
 	if (N == NULL) goto no_mem;
 	if (num_being_factored_array != NULL && num_being_factored_array_len) {
 		giantstruct tmp;
-		tmp.sign = num_being_factored_array_len *
-			   sizeof (unsigned long) / sizeof (uint32_t);
+		tmp.sign = num_being_factored_array_len;
 		tmp.n = (uint32_t *) num_being_factored_array;
 		while (tmp.sign && tmp.n[tmp.sign-1] == 0) tmp.sign--;
 		gtog (&tmp, N);
@@ -888,7 +884,7 @@ int gwnum_ecmStage1 (
 /* Convert the input A value to a gwnum.  For extra speed we precompute */
 /* A * 4 and FFT that value. */
 
-	binarylongstogw (&gwdata, A_array, A_array_len, Ad4);
+	binarytogw (&gwdata, A_array, A_array_len, Ad4);
 	gwaddsmall (&gwdata, Ad4, 2);	/* Compute A+2 */
 	modinv (Ad4);
 	if (FAC != NULL) goto bingo;
@@ -899,13 +895,13 @@ int gwnum_ecmStage1 (
 
 /* Convert the input x value to a gwnum */
 
-	binarylongstogw (&gwdata, x_array, *x_array_len, x);
+	binarytogw (&gwdata, x_array, *x_array_len, x);
 
 /* Convert the input z value to a gwnum.  If the input z value was not */
 /* given, then assume z is one. */
 
 	if (z_array != NULL && z_array_len != NULL && *z_array_len)
-		binarylongstogw (&gwdata, z_array, *z_array_len, z);
+		binarytogw (&gwdata, z_array, *z_array_len, z);
 	else
 		dbltogw (&gwdata, 1.0, z);
 
@@ -934,7 +930,7 @@ int gwnum_ecmStage1 (
 
 		ell_mul (x, z, prime);
 		if (prime <= SQRT_B1) {
-			unsigned long mult, max;
+			uint64_t mult, max;
 			mult = prime;
 			max = B1 / prime;
 			for ( ; ; ) {
@@ -958,20 +954,17 @@ int gwnum_ecmStage1 (
 				StopCheckRoutine = NULL;
 				normalize (x, z);
 				if (FAC != NULL) goto bingo;
-				reslong = gwtobinarylongs (&gwdata,
-						x, x_array, (bits >> 5) + 1);
+				reslong = gwtobinary (&gwdata, x, x_array, (bits >> 5) + 1);
 				if (reslong < 0) goto error;
 				*x_array_len = reslong;
 			}
 
 			else {
-				reslong = gwtobinarylongs (&gwdata,
-						x, x_array, (bits >> 5) + 1);
+				reslong = gwtobinary (&gwdata, x, x_array, (bits >> 5) + 1);
 				if (reslong < 0) goto error;
 				*x_array_len = reslong;
 
-				reslong = gwtobinarylongs (&gwdata,
-						z, z_array, (bits >> 5) + 1);
+				reslong = gwtobinary (&gwdata, z, z_array, (bits >> 5) + 1);
 				if (reslong < 0) goto error;
 				*z_array_len = reslong;
 			}
@@ -988,15 +981,15 @@ int gwnum_ecmStage1 (
 		StopCheckRoutine = NULL;
 		normalize (x, z);
 		if (FAC != NULL) goto bingo;
-		reslong = gwtobinarylongs (&gwdata, x, x_array, (bits >> 5) + 1);
+		reslong = gwtobinary (&gwdata, x, x_array, (bits >> 5) + 1);
 		if (reslong < 0) goto error;
 		*x_array_len = reslong;
 	} else {
-		reslong = gwtobinarylongs (&gwdata, x, x_array, (bits >> 5) + 1);
+		reslong = gwtobinary (&gwdata, x, x_array, (bits >> 5) + 1);
 		if (reslong < 0) goto error;
 		*x_array_len = reslong;
 
-		reslong = gwtobinarylongs (&gwdata, z, z_array, (bits >> 5) + 1);
+		reslong = gwtobinary (&gwdata, z, z_array, (bits >> 5) + 1);
 		if (reslong < 0) goto error;
 		*z_array_len = reslong;
 	}
@@ -1011,7 +1004,244 @@ int gwnum_ecmStage1 (
 bingo:	//printf ("ECM found a factor\n");
 	if (!testFactor (FAC)) goto error;
 	gianttogw (&gwdata, FAC, x);
-	reslong = gwtobinarylongs (&gwdata, x, x_array, (bits >> 5) + 1);
+	reslong = gwtobinary (&gwdata, x, x_array, (bits >> 5) + 1);
+	if (reslong < 0) goto error;
+	*x_array_len = reslong;
+	if (z_array != NULL) {
+		z_array[0] = 1;
+		*z_array_len = 1;
+	}
+	return (ES1_FACTOR_FOUND);
+
+/* Return a hardware error occurred code */
+
+error:	ecm_cleanup ();
+	return (ES1_HARDWARE_ERROR);
+
+/* Return out-of-memory error */
+
+no_mem:	ecm_cleanup ();
+	return (ES1_MEMORY);
+}
+
+/**************************************************************
+ *
+ *	ECM Function for 64-bit inputs...
+ *
+ **************************************************************/
+
+/* Do ECM stage 1 for GMP-ECM using gwnum library.  See gwnum.h for */
+/* a detailed explanation of inputs and outputs. */
+
+int gwnum_ecmStage1_u64 (
+	double	k,			/* K in K*B^N+C */
+	unsigned long b,		/* B in K*B^N+C */
+	unsigned long n,		/* N in K*B^N+C */
+	signed long c,			/* C in K*B^N+C */
+	uint64_t *num_being_factored_array, /* Number to factor */
+	unsigned long num_being_factored_array_len,
+	uint64_t B1,			/* Stage 1 bound */
+	uint64_t *B1_done,		/* Stage 1 that is already done */
+	uint64_t *A_array,	/* A - caller derives it from sigma */
+	unsigned long A_array_len,
+	uint64_t *x_array,	/* X value of point */
+	unsigned long *x_array_len,
+	uint64_t *z_array,	/* Z value of point */
+	unsigned long *z_array_len,
+	int	(*stop_check_proc)(int),/* Ptr to proc that returns TRUE */
+					/* if user interrupts processing */
+	unsigned long options)
+{
+	unsigned long bits, SQRT_B1;
+	uint64_t prime;
+	int	res;
+	long	reslong;
+	gwnum	x, z;
+
+/* Calculate an upper bound on the number of bits in the numbers we will be */
+/* FFTing.  Note: We allocate 60 extra bits to handle any possible k value. */
+
+	if (b) 
+		bits = (unsigned long) (n * log ((double) b) / log ((double) 2.0)) + 60;
+	else
+		bits = num_being_factored_array_len * sizeof (unsigned long);
+
+/* Setup the assembly code */
+
+	guessCpuType ();
+	gwinit (&gwdata);
+
+	if (b)
+		res = gwsetup (&gwdata, k, b, n, c);
+	else
+		res = gwsetup_general_mod_64 (&gwdata,
+					      (uint64_t *) num_being_factored_array,
+					      num_being_factored_array_len);
+
+	if (res == GWERROR_MALLOC) return (ES1_MEMORY);
+	if (res) return (ES1_CANNOT_DO_IT);
+	StopCheckRoutine = stop_check_proc;
+
+/* If we cannot handle this very efficiently, let caller know it */
+
+	if (gwdata.GENERAL_MOD && ! (options & ES1_DO_SLOW_CASE)) {
+		ecm_cleanup ();
+		return (ES1_CANNOT_DO_QUICKLY);
+	}
+
+/* Allocate memory */
+
+	Ad4 = gwalloc (&gwdata);
+	if (Ad4 == NULL) goto no_mem;
+	x = gwalloc (&gwdata);
+	if (x == NULL) goto no_mem;
+	z = gwalloc (&gwdata);
+	if (z == NULL) goto no_mem;
+
+/* Turn the input number we are factoring into a giant.  Either use the */
+/* number we were passed in or calculate k*b^n+c */
+
+	N = allocgiant ((bits >> 5) + 1);
+	if (N == NULL) goto no_mem;
+	if (num_being_factored_array != NULL && num_being_factored_array_len) {
+		int	i;
+		for (i = 0; i < (int) (num_being_factored_array_len * 2); i += 2) {
+			N->n[i] = (uint32_t) num_being_factored_array[i/2];  /* bottom half of the 64-bit value */
+			N->n[i+1] = (uint32_t) (num_being_factored_array[i/2] >> 32); /* top half of the 64-bit value */
+		}
+		N->sign = num_being_factored_array_len * 2;
+		while (N->sign && N->n[N->sign-1] == 0) N->sign--;
+	} else {
+		ultog (b, N);
+		power (N, n);
+		dblmulg (k, N);
+		iaddg (c, N);
+	}
+
+/* Convert the input A value to a gwnum.  For extra speed we precompute */
+/* A * 4 and FFT that value. */
+
+	binary64togw (&gwdata, A_array, A_array_len, Ad4);
+	gwaddsmall (&gwdata, Ad4, 2);	/* Compute A+2 */
+	modinv (Ad4);
+	if (FAC != NULL) goto bingo;
+
+	dbltogw (&gwdata, 4.0, x);	/* For extra speed, precompute 4 / (A+2) */
+	gwmul (&gwdata, x, Ad4);
+	gwfft (&gwdata, Ad4, Ad4);	/* Even more speed, save FFT of Ad4 */
+
+/* Convert the input x value to a gwnum */
+
+	binary64togw (&gwdata, x_array, *x_array_len, x);
+
+/* Convert the input z value to a gwnum.  If the input z value was not */
+/* given, then assume z is one. */
+
+	if (z_array != NULL && z_array_len != NULL && *z_array_len)
+		binary64togw (&gwdata, z_array, *z_array_len, z);
+	else
+		dbltogw (&gwdata, 1.0, z);
+
+/* Set other constants */
+
+	SQRT_B1 = (unsigned long) sqrt ((double) B1);
+
+/* Output a startup message */
+
+//	{
+//		char	fft_desc[100];
+//		gwfft_description (fft_desc);
+//		sprintf (buf, "Using %s\n", fft_desc);
+//		OutputStr (buf);
+//	}
+
+/* Do ECM stage 1 */
+
+	start_sieve (B1_done != NULL ? *B1_done + 1 : 2);
+	for ( ; ; ) {
+		prime = sieve ();
+		if (prime > B1) break;
+
+/* Apply as many powers of prime as long as prime^n <= B */
+/* MEMUSED: 3 gwnums (x, z, AD4) + 10 for ell_mul */
+
+		ell_mul (x, z, prime);
+		if (prime <= SQRT_B1) {
+			uint64_t mult, max;
+			mult = prime;
+			max = B1 / prime;
+			for ( ; ; ) {
+				ell_mul (x, z, prime);
+				mult *= prime;
+				if (mult > max) break;
+			}
+		}
+
+/* Check for errors */
+
+		if (gw_test_for_error (&gwdata)) goto error;
+
+/* Check for interrupt.  If one occurs return normalized x OR x,z pair. */
+
+		if (stop_check_proc != NULL && (*stop_check_proc)(0)) {
+			if (B1_done != NULL)
+				*B1_done = prime;
+
+			if (z_array == NULL) {
+				StopCheckRoutine = NULL;
+				normalize (x, z);
+				if (FAC != NULL) goto bingo;
+				reslong = gwtobinary64 (&gwdata, x, x_array, (bits >> 5) + 1);
+				if (reslong < 0) goto error;
+				*x_array_len = reslong;
+			}
+
+			else {
+				reslong = gwtobinary64 (&gwdata, x, x_array, (bits >> 5) + 1);
+				if (reslong < 0) goto error;
+				*x_array_len = reslong;
+
+				reslong = gwtobinary64 (&gwdata, z, z_array, (bits >> 5) + 1);
+				if (reslong < 0) goto error;
+				*z_array_len = reslong;
+			}
+
+			ecm_cleanup ();
+			return (ES1_INTERRUPT);
+		}
+	}
+	*B1_done = B1;
+
+/* Normalize the x value OR return the x,z pair */
+
+	if (z_array == NULL) {
+		StopCheckRoutine = NULL;
+		normalize (x, z);
+		if (FAC != NULL) goto bingo;
+		reslong = gwtobinary64 (&gwdata, x, x_array, (bits >> 5) + 1);
+		if (reslong < 0) goto error;
+		*x_array_len = reslong;
+	} else {
+		reslong = gwtobinary64 (&gwdata, x, x_array, (bits >> 5) + 1);
+		if (reslong < 0) goto error;
+		*x_array_len = reslong;
+
+		reslong = gwtobinary64 (&gwdata, z, z_array, (bits >> 5) + 1);
+		if (reslong < 0) goto error;
+		*z_array_len = reslong;
+	}
+
+/* Free memory and return */
+
+	ecm_cleanup ();
+	return (ES1_SUCCESS);
+
+/* Print a message if we found a factor! */
+
+bingo:	//printf ("ECM found a factor\n");
+	if (!testFactor (FAC)) goto error;
+	gianttogw (&gwdata, FAC, x);
+	reslong = gwtobinary64 (&gwdata, x, x_array, (bits >> 5) + 1);
 	if (reslong < 0) goto error;
 	*x_array_len = reslong;
 	if (z_array != NULL) {

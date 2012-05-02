@@ -1,0 +1,70 @@
+; Copyright 2011-2012 - Mersenne Research, Inc.  All rights reserved
+; Author:  George Woltman
+; Email: woltman@alum.mit.edu
+;
+
+;
+; Expand the command line architecture definition into its names and features
+;
+
+IF @INSTR(,%ARCH,<BLEND>) NE 0
+	yarch	TEXTEQU	<BLEND>
+	PREFETCHING = 64
+	TLB_PRIMING = 0
+ELSEIF @INSTR(,%ARCH,<CORE>) NE 0
+	yarch	TEXTEQU	<CORE>
+	PREFETCHING = 64
+	TLB_PRIMING = 0
+ELSEIF @INSTR(,%ARCH,<BULL>) NE 0
+	yarch	TEXTEQU	<BULL>
+	PREFETCHING = 64
+	TLB_PRIMING = 0
+ELSE
+	arch_not_given_on_command_line	
+ENDIF
+
+;
+; Macros used to conditionally eliminate some FFT implementations.
+; Using macros allows us change our minds and include these implementations
+; for a test build.
+;
+
+CORE	= 01h			; Assemble this FFT for CORE architecture
+BULL	= 02h			; Assemble this FFT for Bulldozer architecture
+
+IFDEF X86_64
+	CORE_32	= 0
+	BULL_32	= 0
+	CORE_64	= CORE
+	BULL_64	= BULL
+ELSE
+	CORE_32	= CORE
+	BULL_32	= BULL
+	CORE_64	= 0
+	BULL_64	= 0
+ENDIF
+
+;; Used to conditionally assemble FFT implementations for various CPU architectures
+buildfor MACRO archs, ops:vararg
+	IFB <archs>
+		local_archs = 0
+	ELSE
+		local_archs = archs
+	ENDIF
+	;; Here is where we can force assembling all implementations.
+	;; Used when we are benchmarking to find the best FFT implementations.
+	IFDEF IMPL_ALL_CORE
+		local_archs = local_archs OR CORE
+	ENDIF
+	IFDEF IMPL_ALL_BULL
+		local_archs = local_archs OR BULL
+	ENDIF
+	;; Conditionally assemble this FFT implementation
+	IF (@INSTR(,%yarch,<CORE>) NE 0) AND (local_archs AND CORE) NE 0
+	&ops
+	ENDIF
+	IF (@INSTR(,%yarch,<BULL>) NE 0) AND (local_archs AND BULL) NE 0
+	&ops
+	ENDIF
+	ENDM
+

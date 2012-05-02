@@ -1,4 +1,4 @@
-; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2012 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -130,7 +130,6 @@ ilp1:	mov	ebx, norm_col_mults	; Addr of the column multipliers
 iskip:	dec	ecx			; Test loop counter
 	jnz	ilp1			; Next carry row in section
 	fcompp				; Pop last 2 carries
-	mov	zero_fft, 0		; Clear zero-high-words-fft flag
 	jmp	cdn			; Jump to common exit code
 
 gw_carries_zpad:
@@ -167,7 +166,6 @@ c2d:	mov	ebx, cache_line_multiplier ; Cache lines in each pass1 loop
 zskip:	dec	loopcount1		; Test loop counter
 	jnz	zlp1			; Next carry row in section
 	fcompp				; Pop last 2 carries
-	mov	const_fft, 0		; Clear mul-by-const-fft flag
 
 cdn:	int_epilog 4,0,0
 gw_carries ENDP
@@ -198,12 +196,12 @@ gw_finish_mult:
 ; Set FFT-started flag
 
 	mov	esi, DESTARG		; Addr of FFT data
-	mov	eax, POSTFFT		; Set FFT started flag
-	mov	DWORD PTR [esi-28], eax
+	mov	al, POSTFFT		; Set FFT started flag
+	mov	BYTE PTR [esi-28], al
 
 ; Normalize SUMOUT value by multiplying by 1 / (fftlen/2).
 
-	fld	XMM_SUMOUT
+	fld	SUMOUT
 	fmul	ttmp_ff_inv
 	fstp	QWORD PTR [esi-24]	; Save sum of FFT outputs
 

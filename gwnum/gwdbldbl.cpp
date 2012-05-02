@@ -9,7 +9,7 @@
  *  This is the only C++ routine in the gwnum library.  Since gwnum is
  *  a C based library, we declare all routines here as extern "C".
  * 
- *  Copyright 2005-2010 Mersenne Research, Inc.  All rights reserved.
+ *  Copyright 2005-2012 Mersenne Research, Inc.  All rights reserved.
  *
  **************************************************************/
 
@@ -65,8 +65,9 @@ struct gwdbldbl_constants {
 	dd_real gw__over_fftlen;
 	double	gwdbl__b;
 	double	gwdbl__b_inverse;
-	double	gwdbl__num_b_per_word;
+	double	gwdbl__fractional_b_per_word;
 	double	gwdbl__logb_abs_c_div_fftlen;
+	unsigned long integral_b_per_word;
 	unsigned long last_inv_sloppy_j;
 	double	last_inv_sloppy_result;
 	double	fast_inv_sloppy_multiplier;
@@ -272,10 +273,11 @@ void gwsincos5 (
 }
 
 extern "C"
-void gwsincos1by2 (
+void gwsincos1by (
 	unsigned long x,
 	unsigned long N,
-	double	*results)
+	double	*results,
+	int	incr)
 {
 	dd_real sine, cosine;
 
@@ -283,15 +285,16 @@ void gwsincos1by2 (
 	sincos (dd_real::_2pi * (double) x / (double) N, sine, cosine);
 	results[0] = sine;
 	results[0] += epsilon;		/* Protect against divide by zero */
-	results[2] = cosine / results[0];
+	results[incr] = cosine / results[0];
 	END_x86_FIX
 }
 
 extern "C"
-void gwsincos12by2 (
+void gwsincos12by (
 	unsigned long x,
 	unsigned long N,
-	double	*results)
+	double	*results,
+	int	incr)
 {
 	dd_real arg1, sine, cosine, sine2, cosine2;
 
@@ -300,21 +303,23 @@ void gwsincos12by2 (
 	sincos (arg1, sine, cosine);
 	results[0] = sine;
 	results[0] += epsilon;		/* Protect against divide by zero */
-	results[2] = cosine / results[0];
+	results[incr] = cosine / results[0];
+	results += incr + incr;
 
 	sine2 = sine * cosine * 2.0;
 	cosine2 = sqr (cosine) - sqr (sine);
-	results[4] = sine2;
-	results[4] += epsilon;		/* Protect against divide by zero */
-	results[6] = cosine2 / results[4];
+	results[0] = sine2;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine2 / results[0];
 	END_x86_FIX
 }
 
 extern "C"
-void gwsincos13by2 (
+void gwsincos13by (
 	unsigned long x,
 	unsigned long N,
-	double	*results)
+	double	*results,
+	int	incr)
 {
 	dd_real arg1, sine, cosine, sine2, cosine2, sine3, cosine3;
 
@@ -323,24 +328,26 @@ void gwsincos13by2 (
 	sincos (arg1, sine, cosine);
 	results[0] = sine;
 	results[0] += epsilon;		/* Protect against divide by zero */
-	results[2] = cosine / results[0];
+	results[incr] = cosine / results[0];
+	results += incr + incr;
 
 	sine2 = sine * cosine * 2.0;
 	cosine2 = sqr (cosine) - sqr (sine);
 
 	sine3 = sine * cosine2 + sine2 * cosine;
 	cosine3 = cosine * cosine2 - sine * sine2;
-	results[4] = sine3;
-	results[4] += epsilon;		/* Protect against divide by zero */
-	results[6] = cosine3 / results[4];
+	results[0] = sine3;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine3 / results[0];
 	END_x86_FIX
 }
 
 extern "C"
-void gwsincos15by2 (
+void gwsincos15by (
 	unsigned long x,
 	unsigned long N,
-	double	*results)
+	double	*results,
+	int	incr)
 {
 	dd_real arg1, sine, cosine, sine2, cosine2, sine4, cosine4, sine5, cosine5;
 
@@ -349,7 +356,8 @@ void gwsincos15by2 (
 	sincos (arg1, sine, cosine);
 	results[0] = sine;
 	results[0] += epsilon;		/* Protect against divide by zero */
-	results[2] = cosine / results[0];
+	results[incr] = cosine / results[0];
+	results += incr + incr;
 
 	sine2 = sine * cosine * 2.0;
 	cosine2 = sqr (cosine) - sqr (sine);
@@ -360,17 +368,66 @@ void gwsincos15by2 (
 	sine5 = sine * cosine4 + sine4 * cosine;
 	cosine5 = cosine * cosine4 - sine * sine4;
 
-	results[4] = sine5;
-	results[4] += epsilon;		/* Protect against divide by zero */
-	results[6] = cosine5 / results[4];
+	results[0] = sine5;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine5 / results[0];
 	END_x86_FIX
 }
 
 extern "C"
-void gwsincos125by2 (
+void gwsincos15913by (
 	unsigned long x,
 	unsigned long N,
-	double	*results)
+	double	*results,
+	int	incr)
+{
+	dd_real arg1, sine, cosine, sine2, cosine2, sine4, cosine4, sine5, cosine5, sine9, cosine9, sine13, cosine13;
+
+	x86_FIX
+	arg1 = dd_real::_2pi * (double) x / (double) N;
+	sincos (arg1, sine, cosine);
+	results[0] = sine;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine / results[0];
+	results += incr + incr;
+
+	sine2 = sine * cosine * 2.0;
+	cosine2 = sqr (cosine) - sqr (sine);
+
+	sine4 = sine2 * cosine2 * 2.0;
+	cosine4 = sqr (cosine2) - sqr (sine2);
+
+	sine5 = sine * cosine4 + sine4 * cosine;
+	cosine5 = cosine * cosine4 - sine * sine4;
+
+	results[0] = sine5;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine5 / results[0];
+	results += incr + incr;
+
+	sine9 = sine5 * cosine4 + sine4 * cosine5;
+	cosine9 = cosine5 * cosine4 - sine5 * sine4;
+
+	results[0] = sine9;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine9 / results[0];
+	results += incr + incr;
+
+	sine13 = sine9 * cosine4 + sine4 * cosine9;
+	cosine13 = cosine9 * cosine4 - sine9 * sine4;
+
+	results[0] = sine13;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine13 / results[0];
+	END_x86_FIX
+}
+
+extern "C"
+void gwsincos125by (
+	unsigned long x,
+	unsigned long N,
+	double	*results,
+	int	incr)
 {
 	dd_real arg1, sine, cosine, sine2, cosine2, sine4, cosine4, sine5, cosine5;
 
@@ -379,14 +436,16 @@ void gwsincos125by2 (
 	sincos (arg1, sine, cosine);
 	results[0] = sine;
 	results[0] += epsilon;		/* Protect against divide by zero */
-	results[2] = cosine / results[0];
+	results[incr] = cosine / results[0];
+	results += incr + incr;
 
 	sine2 = sine * cosine * 2.0;
 	cosine2 = sqr (cosine) - sqr (sine);
 
-	results[4] = sine2;
-	results[4] += epsilon;		/* Protect against divide by zero */
-	results[6] = cosine2 / results[4];
+	results[0] = sine2;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine2 / results[0];
+	results += incr + incr;
 
 	sine4 = sine2 * cosine2 * 2.0;
 	cosine4 = sqr (cosine2) - sqr (sine2);
@@ -394,19 +453,59 @@ void gwsincos125by2 (
 	sine5 = sine * cosine4 + sine4 * cosine;
 	cosine5 = cosine * cosine4 - sine * sine4;
 
-	results[8] = sine5;
-	results[8] += epsilon;		/* Protect against divide by zero */
-	results[10] = cosine5 / results[8];
+	results[0] = sine5;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine5 / results[0];
+	END_x86_FIX
+}
+
+extern "C"
+void gwsincos1234by (
+	unsigned long x,
+	unsigned long N,
+	double	*results,
+	int	incr)
+{
+	dd_real arg1, sine, cosine, sine2, cosine2, sine3, cosine3, sine4, cosine4;
+
+	x86_FIX
+	arg1 = dd_real::_2pi * (double) x / (double) N;
+	sincos (arg1, sine, cosine);
+	results[0] = sine;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine / results[0];
+	results += incr + incr;
+
+	sine2 = sine * cosine * 2.0;
+	cosine2 = sqr (cosine) - sqr (sine);
+	results[0] = sine2;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine2 / results[0];
+	results += incr + incr;
+
+	sine3 = sine * cosine2 + sine2 * cosine;
+	cosine3 = cosine * cosine2 - sine * sine2;
+	results[0] = sine3;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine3 / results[0];
+	results += incr + incr;
+
+	sine4 = sine2 * cosine2 * 2.0;
+	cosine4 = sqr (cosine2) - sqr (sine2);
+	results[0] = sine4;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine4 / results[0];
 	END_x86_FIX
 }
 
 
 extern "C"
-void gwsincos1plus0123by2 (
+void gwsincos1plus0123by (
 	unsigned long x,
 	unsigned long inc,
 	unsigned long N,
-	double	*results)
+	double	*results,
+	int	incr)
 {
 	dd_real twopi_over_N, sineinc, cosineinc, sine0, cosine0, sine1, cosine1, sine2, cosine2, sine3, cosine3;
 
@@ -426,28 +525,32 @@ void gwsincos1plus0123by2 (
 
 	results[0] = sine0;
 	results[0] += epsilon;		/* Protect against divide by zero */
-	results[2] = cosine0 / results[0];
+	results[incr] = cosine0 / results[0];
+	results += incr + incr;
 
-	results[4] = sine1;
-	results[4] += epsilon;		/* Protect against divide by zero */
-	results[6] = cosine1 / results[4];
+	results[0] = sine1;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine1 / results[0];
+	results += incr + incr;
 
-	results[8] = sine2;
-	results[8] += epsilon;		/* Protect against divide by zero */
-	results[10] = cosine2 / results[8];
+	results[0] = sine2;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine2 / results[0];
+	results += incr + incr;
 
-	results[12] = sine3;
-	results[12] += epsilon;		/* Protect against divide by zero */
-	results[14] = cosine3 / results[12];
+	results[0] = sine3;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine3 / results[0];
 	END_x86_FIX
 }
 
 extern "C"
-void gwsincos1plus01234567by2 (
+void gwsincos1plus01234567by (
 	unsigned long x,
 	unsigned long inc,
 	unsigned long N,
-	double	*results)
+	double	*results,
+	int	incr)
 {
 	dd_real twopi_over_N, sineinc, cosineinc, sine0, cosine0, sine1, cosine1, sine2, cosine2, sine3, cosine3;
 	dd_real sine4, cosine4, sine5, cosine5, sine6, cosine6, sine7, cosine7;
@@ -487,37 +590,45 @@ void gwsincos1plus01234567by2 (
 
 	results[0] = sine0;
 	results[0] += epsilon;		/* Protect against divide by zero */
-	results[2] = cosine0 / results[0];
+	results[incr] = cosine0 / results[0];
+	results += incr + incr;
 
-	results[4] = sine1;
-	results[4] += epsilon;		/* Protect against divide by zero */
-	results[6] = cosine1 / results[4];
+	results[0] = sine1;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine1 / results[0];
+	results += incr + incr;
 
-	results[8] = sine2;
-	results[8] += epsilon;		/* Protect against divide by zero */
-	results[10] = cosine2 / results[8];
+	results[0] = sine2;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine2 / results[0];
+	results += incr + incr;
 
-	results[12] = sine3;
-	results[12] += epsilon;		/* Protect against divide by zero */
-	results[14] = cosine3 / results[12];
+	results[0] = sine3;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine3 / results[0];
+	results += incr + incr;
 
-	results[16] = sine4;
-	results[16] += epsilon;		/* Protect against divide by zero */
-	results[18] = cosine4 / results[16];
+	results[0] = sine4;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine4 / results[0];
+	results += incr + incr;
 
-	results[20] = sine5;
-	results[20] += epsilon;		/* Protect against divide by zero */
-	results[22] = cosine5 / results[20];
+	results[0] = sine5;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine5 / results[0];
+	results += incr + incr;
 
-	results[24] = sine6;
-	results[24] += epsilon;		/* Protect against divide by zero */
-	results[26] = cosine6 / results[24];
+	results[0] = sine6;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine6 / results[0];
+	results += incr + incr;
 
-	results[28] = sine7;
-	results[28] += epsilon;		/* Protect against divide by zero */
-	results[30] = cosine7 / results[28];
+	results[0] = sine7;
+	results[0] += epsilon;		/* Protect against divide by zero */
+	results[incr] = cosine7 / results[0];
 	END_x86_FIX
 }
+
 
 //
 // Utility routines to compute fft weights
@@ -536,6 +647,11 @@ void gwsincos1plus01234567by2 (
 dd_real gwceil (dd_real val)
 {
 	return (dd_real (ceil (double (val))));
+}
+
+dd_real gwfloor (dd_real val)
+{
+	return (dd_real (floor (double (val))));
 }
 
 extern "C"
@@ -577,7 +693,8 @@ void gwfft_weight_setup (
 	}
 	dd_data->gwdbl__b = (double) b;
 	dd_data->gwdbl__b_inverse = 1.0 / (double) b;
-	dd_data->gwdbl__num_b_per_word = (double) dd_data->gw__num_b_per_word;
+	dd_data->integral_b_per_word = (unsigned long) double (gwfloor (dd_data->gw__num_b_per_word));
+	dd_data->gwdbl__fractional_b_per_word = (double) (dd_data->gw__num_b_per_word - gwfloor (dd_data->gw__num_b_per_word));
 	dd_data->gwdbl__logb_abs_c_div_fftlen = (double) dd_data->gw__logb_abs_c_div_fftlen;
 	dd_data->last_inv_sloppy_j = 0;
 	dd_data->last_inv_sloppy_result = 1.0;
@@ -605,6 +722,8 @@ double gwfft_weight (
 }
 
 // Like the above, but faster and does not guarantee quite as much accuracy.
+// We cannot be very sloppy as these weights are used to set FFT data values
+// when reading save files.  If we are too sloppy we get roundoff errors > 0.5.
 
 extern "C"
 double gwfft_weight_sloppy (
@@ -619,53 +738,6 @@ double gwfft_weight_sloppy (
 	if (! dd_data->gw__c_is_one) bpower += dd_data->gw__logb_abs_c_div_fftlen * (double) j;
 	END_x86_FIX
 	return (pow (dd_data->gwdbl__b, double (bpower)));
-
-// We cannot be very sloppy as these weights are used to set FFT data values
-// when reading save files.  If we are too sloppy we get roundoff errors > 0.5.
-
-#ifdef VERY_SLOPPY
-	double	temp, bpower, result;
-
-// Our sequential sloppy optimizations won't work if abs(c) is not one.
-// This is because the result is not in the range 1.0 to 2.0.
-
-	if (! dd_data->gw__c_is_one) {
-		temp = (double) j * dd_data->gwdbl__num_b_per_word;
-		bpower = ceil (temp) - temp;
-		if (bpower < 0.001 || bpower > 0.999)
-			return (gwfft_weight (dd_data_arg, j));
-		bpower += dd_data->gwdbl__logb_abs_c_div_fftlen * (double) j;
-		return (pow (dd_data->gwdbl__b, bpower));
-	}
-
-// Compute weight from previous weight, but don't do too many of
-// these in a row as floating point roundoff errors will accumulate
-
-	if (j == dd_data->last_sloppy_j + 1 && (j & 0x7F)) {
-		result = dd_data->last_sloppy_result * dd_data->fast_sloppy_multiplier;
-		if (result >= dd_data->gwdbl__b) result = result * dd_data->gwdbl__b_inverse;
-	}
-
-// Use a slower sloppy technique
-
-	else {
-		temp = (double) j * dd_data->gwdbl__num_b_per_word;
-		bpower = ceil (temp) - temp;
-		result = pow (dd_data->gwdbl__b, double (bpower));
-	}
-
-// Just to be safe, if result is at all close to the boundaries return
-// the carefully computed weight.
-
-	if (result < 1.00001 || result > dd_data->gwdbl__b - 0.00001)
-		result = gwfft_weight (dd_data_arg, j);
-			 
-// Save the result for faster sequential sloppy calls
-
-	dd_data->last_sloppy_j  = j;
-	dd_data->last_sloppy_result = result;
-	return (result);
-#endif
 }
 
 // Compute the inverse of the fft weight
@@ -702,10 +774,9 @@ double gwfft_weight_inverse_sloppy (
 // This is because the result is not in the range 0.5 to 1.0.
 
 	if (! dd_data->gw__c_is_one) {
-		temp = (double) j * dd_data->gwdbl__num_b_per_word;
+		temp = (double) j * dd_data->gwdbl__fractional_b_per_word;
 		bpower = ceil (temp) - temp;
-		if (bpower < 0.001 || bpower > 0.999)
-			return (gwfft_weight_inverse (dd_data_arg, j));
+		if (bpower < 0.001 || bpower > 0.999) return (gwfft_weight_inverse (dd_data_arg, j));
 		bpower += dd_data->gwdbl__logb_abs_c_div_fftlen * (double) j;
 		return (pow (dd_data->gwdbl__b, - bpower));
 	}
@@ -716,21 +787,19 @@ double gwfft_weight_inverse_sloppy (
 	if (j == dd_data->last_inv_sloppy_j + 1 && (j & 0x7F)) {
 		result = dd_data->last_inv_sloppy_result * dd_data->fast_inv_sloppy_multiplier;
 		if (result <= dd_data->gwdbl__b_inverse) result = result * dd_data->gwdbl__b;
-	}
-
-// Use a slower sloppy technique
-
-	else {
-		temp = (double) j * dd_data->gwdbl__num_b_per_word;
-		bpower = ceil (temp) - temp;
-		result = pow (dd_data->gwdbl__b, - bpower);
-	}
 
 // Just to be safe, if result is at all close to the boundaries return
 // the carefully computed weight.
 
-	if (result < dd_data->gwdbl__b_inverse + 0.00001 || result > 0.99999)
+		if (result < dd_data->gwdbl__b_inverse + 0.001 || result > 0.999)
+			result = gwfft_weight_inverse (dd_data_arg, j);
+	}
+
+// Get an accurate value to start off a series of computing next weights
+
+	else {
 		result = gwfft_weight_inverse (dd_data_arg, j);
+	}
 
 // Save the result for faster sequential sloppy calls
 
@@ -801,11 +870,11 @@ double gwfft_weight_exponent (
 // For speed, try this with plain old doubles first
 
 	if (j == 0) return (0);
-	tempdbl = (double) j * dd_data->gwdbl__num_b_per_word;
+	tempdbl = (double) j * dd_data->gwdbl__fractional_b_per_word;
 	bpowerdbl = ceil (tempdbl) - tempdbl;
 	if (bpowerdbl > 0.001 && bpowerdbl < 0.999) return (bpowerdbl);
 
-// If at all uncertain of the result, use doubledoubles to do the calculation
+// We cannot be certain of the ceiling result, use doubledoubles to do the calculation
 
 	x86_FIX
 	temp = (double) j * dd_data->gw__num_b_per_word;
@@ -838,13 +907,13 @@ unsigned long gwfft_base (
 // For speed, try this with plain old doubles first
 
 	if (j == 0) return (0);
-	tempdbl = (double) j * dd_data->gwdbl__num_b_per_word;
+	tempdbl = (double) j * dd_data->gwdbl__fractional_b_per_word;
 	ceildbl = ceil (tempdbl);
 	diffdbl = ceildbl - tempdbl;
 	if (diffdbl > 0.001 && diffdbl < 0.999)
-		return ((unsigned long) ceildbl);
+		return ((unsigned long) ceildbl + j * dd_data->integral_b_per_word);
 
-// If at all uncertain of the result, use doubledoubles to do the calculation
+// We cannot be certain of the ceiling result, use doubledoubles to do the calculation
 
 	x86_FIX
 	temp = (double) j * dd_data->gw__num_b_per_word;
@@ -854,16 +923,18 @@ unsigned long gwfft_base (
 }
 
 extern "C"
-void gwsincos12by2_weighted (
+void gwsincos012by_weighted (
 	void	*dd_data_arg,
 	unsigned long x,
-	unsigned long upper_x,
+	unsigned long upper_x_incr,
 	unsigned long N,
 	unsigned long col,
-	double	*results)
+	double	*results,
+	int	incr)
 {
 	dd_real twopi_over_N, sine, cosine, sine2, cosine2;
 	dd_real temp, bpower, weight, inv_weight;
+	int	i;
 
 	x86_FIX
 	temp = (double) col * dd_data->gw__num_b_per_word;
@@ -872,58 +943,64 @@ void gwsincos12by2_weighted (
 	weight = exp (dd_data->gw__logb * bpower);
 	inv_weight = dd_data->gw__over_fftlen / weight;
 
+	// This hack causes SSE2 code to get duplicated weight and inv_weight values, while
+	// AVX code does not (it uses the vbroadcastsd instruction to reduce memory usage)
+	if (incr >= 4) {
+		results[24] = weight;
+		results[25] = inv_weight;
+	} else {
+		for (i = 0; i < incr; i++) {
+			results[i] = weight;
+			results[incr+i] = inv_weight;
+		}
+		results += 2*incr;
+	}
+
+	// Now output the weighted sin/cos data
 	twopi_over_N = dd_real::_2pi / (double) N;
-	sincos (twopi_over_N * (double) x, sine, cosine);
+	for (i = 0; i < incr; i++) {
+		sincos (twopi_over_N * (double) (x + i * upper_x_incr), sine, cosine);
 
-	sine2 = sine * cosine * 2.0;
-	cosine2 = sqr (cosine) - sqr (sine);
+		sine2 = sine * cosine * 2.0;
+		cosine2 = sqr (cosine) - sqr (sine);
 
-	sine = sine + epsilon;		// Hack to avoid divide-by-zero errors
-	sine2 = sine2 + epsilon;
+		sine = sine + epsilon;		// Hack to avoid divide-by-zero errors
+		sine2 = sine2 + epsilon;
 
-	results[0] = weight;
-	results[2] = inv_weight;
-
-	results[4] = sine * weight;
-	results[6] = cosine / sine;
-	results[8] = sine * inv_weight;
-
-	results[10] = sine2 * weight;
-	results[12] = cosine2 / sine2;
-	results[14] = sine2 * inv_weight;
-
-	sincos (twopi_over_N * (double) upper_x, sine, cosine);
-
-	sine2 = sine * cosine * 2.0;
-	cosine2 = sqr (cosine) - sqr (sine);
-
-	sine = sine + epsilon;		// Hack to avoid divide-by-zero errors
-	sine2 = sine2 + epsilon;
-
-	results[1] = weight;
-	results[3] = inv_weight;
-
-	results[5] = sine * weight;
-	results[7] = cosine / sine;
-	results[9] = sine * inv_weight;
-
-	results[11] = sine2 * weight;
-	results[13] = cosine2 / sine2;
-	results[15] = sine2 * inv_weight;
+		// This hack outputs the weights in a different order for SSE2 and AVX.
+		// We changed the AVX output order for better grouping of data in the cache lines.
+		if (incr < 4) {
+			results[i] = sine * weight;
+			results[incr+i] = cosine / sine;
+			results[2*incr+i] = sine * inv_weight;
+			results[3*incr+i] = sine2 * weight;
+			results[4*incr+i] = cosine2 / sine2;
+			results[5*incr+i] = sine2 * inv_weight;
+		} else {
+			results[i] = cosine / sine;
+			results[incr+i] = cosine2 / sine2;
+			results[2*incr+i] = sine * weight;
+			results[3*incr+i] = sine2 * weight;
+			results[4*incr+i] = sine * inv_weight;
+			results[5*incr+i] = sine2 * inv_weight;
+		}
+	}
 	END_x86_FIX
 }
 
 extern "C"
-void gwsincos15by2_weighted (
+void gwsincos15by_weighted (
 	void	*dd_data_arg,
 	unsigned long x,
-	unsigned long upper_x,
+	unsigned long upper_x_incr,
 	unsigned long N,
 	unsigned long col,
-	double	*results)
+	double	*results,
+	int	incr)
 {
 	dd_real twopi_over_N, sine, cosine, sine2, cosine2, sine4, cosine4, sine5, cosine5;
 	dd_real temp, bpower, weight, inv_weight;
+	int	i;
 
 	x86_FIX
 	temp = (double) col * dd_data->gw__num_b_per_word;
@@ -933,49 +1010,39 @@ void gwsincos15by2_weighted (
 	inv_weight = dd_data->gw__over_fftlen / weight;
 
 	twopi_over_N = dd_real::_2pi / (double) N;
-	sincos (twopi_over_N * (double) x, sine, cosine);
+	for (i = 0; i < incr; i++) {
+		sincos (twopi_over_N * (double) (x + i * upper_x_incr), sine, cosine);
 
-	sine2 = sine * cosine * 2.0;
-	cosine2 = sqr (cosine) - sqr (sine);
+		sine2 = sine * cosine * 2.0;
+		cosine2 = sqr (cosine) - sqr (sine);
 
-	sine4 = sine2 * cosine2 * 2.0;
-	cosine4 = sqr (cosine2) - sqr (sine2);
+		sine4 = sine2 * cosine2 * 2.0;
+		cosine4 = sqr (cosine2) - sqr (sine2);
 
-	sine5 = sine * cosine4 + sine4 * cosine;
-	cosine5 = cosine * cosine4 - sine * sine4;
+		sine5 = sine * cosine4 + sine4 * cosine;
+		cosine5 = cosine * cosine4 - sine * sine4;
 
-	sine = sine + epsilon;		// Hack to avoid divide-by-zero errors
-	sine5 = sine5 + epsilon;
+		sine = sine + epsilon;		// Hack to avoid divide-by-zero errors
+		sine5 = sine5 + epsilon;
 
-	results[0] = sine * weight;
-	results[2] = cosine / sine;
-	results[4] = sine * inv_weight;
-
-	results[6] = sine5 * weight;
-	results[8] = cosine5 / sine5;
-	results[10] = sine5 * inv_weight;
-
-	sincos (twopi_over_N * (double) upper_x, sine, cosine);
-
-	sine2 = sine * cosine * 2.0;
-	cosine2 = sqr (cosine) - sqr (sine);
-
-	sine4 = sine2 * cosine2 * 2.0;
-	cosine4 = sqr (cosine2) - sqr (sine2);
-
-	sine5 = sine * cosine4 + sine4 * cosine;
-	cosine5 = cosine * cosine4 - sine * sine4;
-
-	sine = sine + epsilon;		// Hack to avoid divide-by-zero errors
-	sine5 = sine5 + epsilon;
-
-	results[1] = sine * weight;
-	results[3] = cosine / sine;
-	results[5] = sine * inv_weight;
-
-	results[7] = sine5 * weight;
-	results[9] = cosine5 / sine5;
-	results[11] = sine5 * inv_weight;
+		// This hack outputs the weights in a different order for SSE2 and AVX.
+		// We changed the AVX output order for better grouping of data in the cache lines.
+		if (incr < 4) {
+			results[i] = sine * weight;
+			results[incr+i] = cosine / sine;
+			results[2*incr+i] = sine * inv_weight;
+			results[3*incr+i] = sine5 * weight;
+			results[4*incr+i] = cosine5 / sine5;
+			results[5*incr+i] = sine5 * inv_weight;
+		} else {
+			results[i] = cosine / sine;
+			results[incr+i] = cosine5 / sine5;
+			results[2*incr+i] = sine * weight;
+			results[3*incr+i] = sine5 * weight;
+			results[4*incr+i] = sine * inv_weight;
+			results[5*incr+i] = sine5 * inv_weight;
+		}
+	}
 	END_x86_FIX
 }
 
@@ -1099,7 +1166,7 @@ double gwfft_partial_weight_inverse_sloppy (
 {
 	double	temp, j_bpower, col_bpower, bpower, result;
 
-	temp = (double) j * dd_data->gwdbl__num_b_per_word;
+	temp = (double) j * dd_data->gwdbl__fractional_b_per_word;
 	j_bpower = ceil (temp) - temp;
 	if (j_bpower < 0.001 || j_bpower > 0.999) {
 		dd_real	dd_temp, dd_bpower;
@@ -1111,7 +1178,7 @@ double gwfft_partial_weight_inverse_sloppy (
 	}
 	if (! dd_data->gw__c_is_one) j_bpower += dd_data->gwdbl__logb_abs_c_div_fftlen * (double) j;
 
-	temp = (double) col * dd_data->gwdbl__num_b_per_word;
+	temp = (double) col * dd_data->gwdbl__fractional_b_per_word;
 	col_bpower = ceil (temp) - temp;
 	if (col_bpower < 0.001 || col_bpower > 0.999) {
 		dd_real	dd_temp, dd_col_bpower;

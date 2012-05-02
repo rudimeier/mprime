@@ -10,10 +10,6 @@
 
 
 
-;; BUG:  We need a radix-8 version for pass 2.  The best place is probably the last 3 levels.
-;; BUG:  In which case we'll need the square and mulf versions too.  ---  and maybe
-
-
 ;;
 ;; ************************************* eight-complex-djbfft variants ******************************************
 ;;

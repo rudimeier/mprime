@@ -1,4 +1,4 @@
-/* Copyright 1995-2011 Mersenne Research, Inc. */
+/* Copyright 1995-2012 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -231,7 +231,8 @@ int main (
 
 		case 'V':
 		case 'v':
-			printf ("Mersenne Prime Test Program, Version %s.%d\n", VERSION, PORT);
+			generate_application_string (buf);
+			printf ("Mersenne Prime Test Program: %s\n", buf);
 			return (0); 
 
 /* -W - use a different working directory */

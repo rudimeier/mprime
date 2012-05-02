@@ -1,4 +1,4 @@
-; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -6,7 +6,6 @@
 	TITLE   setup
 
 	.686
-	.XMM
 	.MODEL	FLAT
 
 INCLUDE	unravel.mac
@@ -247,8 +246,8 @@ PROCFL	gwmuls1
 	ad_prolog 0,0,rbx,rbp,rsi,rdi
 	mov	esi, DESTARG		; Address of destination
 	fld	DBLARG			; Load small value
-	fmul	XMM_NORM012_FF		; Mul by two-to-minus-phi fudge
-	fstp	XMM_TMP5		; Save multiplier
+	fmul	NORM012_FF		; Mul by two-to-minus-phi fudge
+	fstp	TMP5			; Save multiplier
 	mov	ebp, FFTLEN		; Load loop counter
 	fld	BIGVAL			; Start process with no carry
 	fld	BIGVAL
@@ -276,49 +275,49 @@ gwmuls1	ENDP
 sub_7_words MACRO
 	fld	QWORD PTR [esi+0*16]	;; Subtract 1st word
 	fld	ZPAD0			;; Load ZPAD data
-	fmul	XMM_NORM012_FF		;; Scale by FFTLEN/2
+	fmul	NORM012_FF		;; Scale by FFTLEN/2
 	fsub	st(1), st
 	faddp	st(2), st		;; Adjust sumout
 	fstp	QWORD PTR [esi+0*16]
 
 	fld	QWORD PTR [esi+1*16]	;; Subtract 2nd word
 	fld	ZPAD1			;; Load ZPAD data
-	fmul	XMM_NORM012_FF		;; Scale by FFTLEN/2
+	fmul	NORM012_FF		;; Scale by FFTLEN/2
 	fsub	st(1), st
 	faddp	st(2), st		;; Adjust sumout
 	fstp	QWORD PTR [esi+1*16]
 
 	fld	QWORD PTR [esi+2*16]	;; Subtract 3rd word
 	fld	ZPAD2			;; Load ZPAD data
-	fmul	XMM_NORM012_FF		;; Scale by FFTLEN/2
+	fmul	NORM012_FF		;; Scale by FFTLEN/2
 	fsub	st(1), st
 	faddp	st(2), st		;; Adjust sumout
 	fstp	QWORD PTR [esi+2*16]
 
 	fld	QWORD PTR [esi+3*16]	;; Subtract 4th word
 	fld	ZPAD3			;; Load ZPAD data
-	fmul	XMM_NORM012_FF		;; Scale by FFTLEN/2
+	fmul	NORM012_FF		;; Scale by FFTLEN/2
 	fsub	st(1), st
 	faddp	st(2), st		;; Adjust sumout
 	fstp	QWORD PTR [esi+3*16]
 
 	fld	QWORD PTR [esi+4*16]	;; Subtract 5th word
 	fld	ZPAD4			;; Load ZPAD data
-	fmul	XMM_NORM012_FF		;; Scale by FFTLEN/2
+	fmul	NORM012_FF		;; Scale by FFTLEN/2
 	fsub	st(1), st
 	faddp	st(2), st		;; Adjust sumout
 	fstp	QWORD PTR [esi+4*16]
 
 	fld	QWORD PTR [esi+5*16]	;; Subtract 6th word
 	fld	ZPAD5			;; Load ZPAD data
-	fmul	XMM_NORM012_FF		;; Scale by FFTLEN/2
+	fmul	NORM012_FF		;; Scale by FFTLEN/2
 	fsub	st(1), st
 	faddp	st(2), st		;; Adjust sumout
 	fstp	QWORD PTR [esi+5*16]
 
 	fld	QWORD PTR [esi+6*16]	;; Subtract 7th word
 	fld	ZPAD6			;; Load ZPAD data
-	fmul	XMM_NORM012_FF		;; Scale by FFTLEN/2
+	fmul	NORM012_FF		;; Scale by FFTLEN/2
 	fsub	st(1), st
 	faddp	st(2), st		;; Adjust sumout
 	fstp	QWORD PTR [esi+6*16]

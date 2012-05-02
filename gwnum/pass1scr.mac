@@ -1,4 +1,4 @@
-; Copyright 1998-2009 - Mersenne Research, Inc.  All rights reserved
+; Copyright 1998-2011 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -53,7 +53,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -402,7 +402,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -759,7 +759,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -1072,7 +1072,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -1421,7 +1421,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -1778,7 +1778,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -2091,7 +2091,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -2448,7 +2448,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -2805,7 +2805,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -3118,7 +3118,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -3475,7 +3475,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -3832,7 +3832,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -4146,7 +4146,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -4575,7 +4575,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -5010,7 +5010,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -5381,7 +5381,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -5810,7 +5810,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -6257,7 +6257,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -6640,7 +6640,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -7081,7 +7081,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -7527,7 +7527,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -7915,7 +7915,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -8356,7 +8356,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -8808,7 +8808,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -9198,7 +9198,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -9739,7 +9739,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -10278,7 +10278,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -10733,7 +10733,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -11274,7 +11274,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers
@@ -11813,7 +11813,7 @@ pass2:	start_timer 0
 
 	start_timer 1
 	fldz				;; Init SUMOUT
-	fstp	XMM_SUMOUT
+	fstp	SUMOUT
 	mov	edx, norm_biglit_array	;; Addr of the big/little flags array
 	mov	norm_ptr1, edx		;; Save ptr
 	mov	edx, norm_col_mults	;; Addr of the column multipliers

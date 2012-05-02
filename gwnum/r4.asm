@@ -1,4 +1,4 @@
-; Copyright 2009-2011 Mersenne Research, Inc.  All rights reserved
+; Copyright 2009-2012 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -24,10 +24,7 @@ INCLUDE r4.mac
 INCLUDE r4pass1sc.mac
 INCLUDE r4pass2.mac
 
-EXTRN	pass1_aux_entry_point_return:PROC
-EXTRN	xgw_finish_fft:PROC
 EXTRN	xgw_carries:PROC
-EXTRN	xgw_finish_mult:PROC
 
 _TEXT SEGMENT
 

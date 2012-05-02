@@ -1,4 +1,4 @@
-; Copyright 2001-2010 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2012 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -55,7 +55,7 @@ XMM_GMD = 160			;; Sizeof a grp two-to-phi/two-to-minus-phi multiplier block in 
 ;
 ;	xfft xfft_type fft_size options xarch
 ;
-; where xfft_type is (only the first 2 are implemented):
+; where xfft_type is (only the first 4 are implemented):
 ;	hg = home-grown (my radix-4 with delayed sin/cos multipliers)
 ;	r4 = radix-4 DJB
 ;	r4delay = radix-4/8 DJB with first levels of pass 1 using common sin/cos values and last levels
@@ -105,79 +105,12 @@ xonepass MACRO fftname, all_complex
 
 ;; Call the macro containing the guts of the FFT
 
+	clear_timers
 	xmacroname
 
 ;; Footer for the routine
 
 	xprocname ENDP	
-	ENDM
-
-;; When doing zero-padded FFTs, the 7 words around the halfway point must
-;; be copied for later processing.  This macro does that.
-
-xcopy_7_words MACRO
-	LOCAL	nozpad
-	cmp	ZERO_PADDED_FFT, 0	;; Is this a zero-padded FFT?
-	je	short nozpad		;; No, skip 7 word copy
-	movsd	xmm0, Q [rsi+rbx+32]	;; Copy 1st word above half-way point
-	movsd	Q [rsi-40], xmm0
-	movsd	xmm1, Q [rsi+rbx+48]	;; Copy 2nd word
-	movsd	Q [rsi-48], xmm1
-	movsd	xmm2, Q [rsi+rbx+96]	;; Copy 3rd word
-	movsd	Q [rsi-56], xmm2
-	movsd	xmm3, Q [rsi+rbx+112]	;; Copy 4th word
-	movsd	Q [rsi-64], xmm3
-	mov	eax, HIGH_WORD1_OFFSET	;; Copy 1st word below half-way
-	add	rax, rsi
-	movsd	xmm0, Q [rax+rbx]
-	movsd	Q [rsi-72], xmm0
-	mov	eax, HIGH_WORD2_OFFSET	;; Copy 2nd word below
-	add	rax, rsi
-	movsd	xmm1, Q [rax+rbx]
-	movsd	Q [rsi-80], xmm1
-	mov	eax, HIGH_WORD3_OFFSET	;; Copy 3rd word below
-	add	rax, rsi
-	movsd	xmm2, Q [rax+rbx]
-	movsd	Q [rsi-88], xmm2
-nozpad:
-	ENDM
-
-;; When doing zero-padded FFTs, the multiplied 7 words around the halfway point
-;; must be subtracted from the bottom of the FFT.  This must be done before
-;; normalization multiplies the FFT data by k.  This macro does that and also
-;; initializes the sumout reg.
-
-xsub_7_words MACRO dist4
-	LOCAL	nozpad
-	subpd	xmm7, xmm7		;; Clear sumout
-	cmp	ZERO_PADDED_FFT, 0	;; Is this a zero-padded FFT?
-	je	nozpad			;; No, skip 7 word subtract
-	mov	rsi, DESTARG
-	xload	xmm0, [rsi]		;; Subtract 1st, 2nd word
-	xload	xmm1, ZPAD0		;; Load ZPAD data
-	mulpd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
-	subpd	xmm0, xmm1
-	addpd	xmm7, xmm1		;; Adjust sumout
-	xstore	[rsi], xmm0
-	xload	xmm0, [rsi+64]		;; Subtract 3rd, 4th word
-	xload	xmm1, ZPAD2		;; Load ZPAD data
-	mulpd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
-	subpd	xmm0, xmm1
-	addpd	xmm7, xmm1		;; Adjust sumout
-	xstore	[rsi+64], xmm0
-	xload	xmm0, [rsi+dist4]	;; Subtract 5th, 6th word
-	xload	xmm1, ZPAD4		;; Load ZPAD data
-	mulpd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
-	subpd	xmm0, xmm1
-	addpd	xmm7, xmm1		;; Adjust sumout
-	xstore	[rsi+dist4], xmm0
-	movsd	xmm0, Q [rsi+dist4+64]	;; Subtract 7th word
-	movsd	xmm1, ZPAD6		;; Load ZPAD data
-	mulsd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
-	subsd	xmm0, xmm1
-	addsd	xmm7, xmm1		;; Adjust sumout
-	movsd	Q [rsi+dist4+64], xmm0
-nozpad:
 	ENDM
 
 
@@ -300,41 +233,51 @@ set_FFT_constants MACRO fftname, in_place, all_complex, p2_levels, clmarg
 
 ; Header and footers for each FFT routine
 
-xfft_header MACRO
+xfft_header MACRO pass1
 	PROCF	xprocname
 	ad_prolog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
 	mov	rsi, DESTARG
 	mov	rbx, DIST_TO_FFTSRCARG
+	clear_timers
+
+	;; Jump to pass 1 forward FFT code unless the FFT has already been started
+
+	cmp	DWORD PTR [rsi-28][rbx], 0 ;; Test FFT-started flag
+	je	pass1			;; Jump if FFT not started
+
+	;; Fall through to start pass 2
+
 	ENDM
 
 xfft_footer MACRO
+	ad_epilog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
 	xprocname ENDP	
 	ENDM
 
-;; Wake up auxillary threads to help with the forward FFT
+;; Wake up auxiliary threads to help with the forward FFT
 
-pass1_forward_fft_setup MACRO endlp
+pass1_forward_fft_setup MACRO loopaddr
 	mov	NEXT_BLOCK, 0		;; Flag indicating forward fft setup
-	mov	rax, OFFSET endlp	;; Auxillary thread entry point
+	mov	rax, OFFSET loopaddr	;; Auxiliary thread entry point
 	mov	THREAD_WORK_ROUTINE, rax ;; save addr for C code to call
 	c_call	PASS1_WAKE_UP_THREADS	;; C callback routine
 	ENDM
 
-;; Wake up auxillary threads to help with the inverse FFT
+;; Wake up auxiliary threads to help with the inverse FFT
 
-pass1_inverse_fft_setup MACRO endlp
+pass1_inverse_fft_setup MACRO loopaddr
 	start_timer 1
 	mov	NEXT_BLOCK, 1		;; Flag indicating inverse fft setup
-	mov	rax, OFFSET endlp	;; Auxillary thread entry point
+	mov	rax, OFFSET loopaddr	;; Auxiliary thread entry point
 	mov	THREAD_WORK_ROUTINE, rax ;; save addr for C code to call
 	c_call	PASS1_WAKE_UP_THREADS	;; C callback routine
 	ENDM
 
 ;; Do a normalization and carry propagation.
 
-pass1_normalize MACRO scratch, jmplabel
+pass1_normalize MACRO scratch, do_forward_fft
 
-	c_call	PASS1_WAIT_FOR_CARRIES	;; Wait until prev block normalized
+	c_call	PASS1_PRE_CARRIES	;; Make pre-normalization callback
 
 	start_timer 28
 	IF scratch EQ 1
@@ -346,17 +289,12 @@ pass1_normalize MACRO scratch, jmplabel
 	call	rax
 	end_timer 28
 
-	c_call	PASS1_DONE_WITH_CARRIES	;; Let next block normalize
+	c_call	PASS1_POST_CARRIES	;; Make post-normalization callback
 
-	IF scratch EQ 1
 	and	al, al			;; Test returned flag
-	jne	jmplabel		;; Do forward FFT if flag set
-	;; Fall through to copy data from scratch area back to FFT data area
-	ELSE
-	and	al, al			;; Test returned flag
-	je	jmplabel		;; Skip forward FFT if flag not set
-	;; Fall through to forward FFT code
-	ENDIF
+	jne	do_forward_fft		;; Do forward FFT if flag set
+	;; Fall through to optionally copy data from scratch area back to FFT data area
+	;; and then jump to loop end to get next block to process
 
 	ENDM
 
@@ -370,11 +308,9 @@ again:	c_call	PASS1_GET_NEXT_BLOCK	;; C callback routine
 	cmp	al, 1			;; Test return code
 	jl	c0b			;; Do another inverse FFT/norm/FFT
 	je	b0b			;; Do another forward FFT
-	cmp	al, 3
-	jl	short done		;; Pass 1 main thread done
-	je	pass1_aux_entry_point_return ;; Pass 1 auxillary thread done
-	cmp	al, 5
-	jl	pass2			;; Start pass 2
+	cmp	al, 4
+	jl	short done		;; Pass 1 main thread done or pass 1 auxiliary thread done
+	je	pass2			;; Start pass 2
 
 ;; Split the carries into high and low carries (so they do not exceed the
 ;; desired number of bits per FFT word.  Then add the carries back to the
@@ -385,10 +321,9 @@ again:	c_call	PASS1_GET_NEXT_BLOCK	;; C callback routine
 	end_timer 29
 	jmp	short again
 
-;; All done, end timer and jump to cleanup code
+;; All done, end timer and fall through to exit code
 
 done:	end_timer 1
-	jmp	xgw_finish_mult&suffix
 	ENDM
 
 ;;
@@ -862,8 +797,8 @@ xpass2gen MACRO levels
 ;; Entry point for real FFTs: do one real and count1 complex blocks, also
 ;; entry point for all-complex FFTs: do count1 complex blocks
 
-	mov	rax, OFFSET get_next	;; Auxillary thread entry point
-	mov	THREAD_WORK_ROUTINE, rax ;; save addr for C code to call
+	mov	rax, OFFSET complex_loop ;; Auxiliary thread entry point
+	mov	THREAD_WORK_ROUTINE, rax ;; Save addr for C code to call
 	c_call	PASS2_WAKE_UP_THREADS	;; C callback routine
 	cmp	ALL_COMPLEX_FFT, 1	;; Test if there is a real-data block
 	je	complex_loop		;; Jump to process all-complex blocks

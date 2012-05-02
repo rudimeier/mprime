@@ -7,7 +7,7 @@ CFLAGS = -I.. -DX86_64 -O2
 CPP = g++
 CPPFLAGS = -I.. -I../qd -DX86_64 -O2
 
-LINUXOBJS = cpuid.o gwnum.o gwthread.o gwutil.o gwdbldbl.o giants.o ecmstag1.o
+LINUXOBJS = cpuid.o gwnum.o gwtables.o gwthread.o gwutil.o gwdbldbl.o giants.o ecmstag1.o
 
 LIB = gwnum.a
 

@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2012 Mersenne Research, Inc.  All rights reserved
 | Author:  George Woltman
 | Email: woltman@alum.mit.edu
 |
@@ -38,28 +38,26 @@ double getHighResTimerFrequency (void);
 
 extern char CPU_BRAND[49];		/* Text description of CPU */
 extern double CPU_SPEED;		/* Actual CPU Speed in MHz */
-#define CPU_RDTSC	0x0001
-#define CPU_CMOV	0x0002
-#define CPU_PREFETCH	0x0004
-#define CPU_SSE		0x0008
-#define CPU_SSE2	0x0010
-#define CPU_MMX		0x0020
-#define CPU_3DNOW	0x0040
-#define CPU_SSE3	0x0080
-#define CPU_SSSE3	0x0100		/* Supplemental SSE3 */
-#define CPU_SSE41	0x0200
-#define CPU_SSE42	0x0400
-#define CPU_TLB_PRIMING	0x0800		/* Prefetching requires TLB priming. */
-					/* Early Pentium 4's require priming. */
-#define CPU_TSC_INVARIANT 0x1000	/* RDTSC does NOT count CPU clocks! */
-#define CPU_AVX		0x2000		/* AVX instructions */
-#define CPU_FMA		0x4000		/* Fused multiply-add instructions */
+#define CPU_RDTSC		0x0001	/* Read timestamp counter supported */
+#define CPU_TSC_INVARIANT	0x0002	/* RDTSC does NOT count actual CPU clocks! */
+#define CPU_CMOV		0x0004	/* CMOV instruction supported */
+#define CPU_PREFETCH		0x0008	/* SSE Prefetch instructions supported */
+#define CPU_TLB_PRIMING		0x0010	/* Prefetching requires TLB priming.  Early Pentium 4's require priming. */
+#define CPU_MMX			0x0020	/* MMX instructions supported */
+#define CPU_3DNOW		0x0040	/* 3DNow! instructions supported */
+#define CPU_3DNOW_PREFETCH	0x0080	/* 3DNow! prefetch and prefetchw instructions supported */
+#define CPU_SSE			0x0100	/* SSE instructions supported */
+#define CPU_SSE2		0x0200	/* SSE2 instructions supported */
+#define CPU_SSE3		0x0400	/* SSE3 instructions supported */
+#define CPU_SSSE3		0x0800	/* Supplemental SSE3 instructions supported */
+#define CPU_SSE41		0x1000	/* SSE4.1 instructions supported */
+#define CPU_SSE42		0x2000	/* SSE4.2 instructions supported */
+#define CPU_AVX			0x4000	/* AVX instructions supported */
+#define CPU_FMA			0x8000	/* Fused multiply-add instructions supported */
 extern unsigned int CPU_FLAGS;		/* Cpu capabilities */
 extern unsigned int CPU_CORES;		/* Number CPU cores */
-extern unsigned int CPU_HYPERTHREADS;	/* Number of virtual processors */
-					/* that each CPU core supports. */
-					/* Total number logical processors */
-					/* is CPU_CORES * CPU_HYPERTHREADS */
+extern unsigned int CPU_HYPERTHREADS;	/* Number of virtual processors that each CPU core supports. */
+					/* Total number logical processors is CPU_CORES * CPU_HYPERTHREADS */
 extern int CPU_L1_CACHE_SIZE;		/* In KB */
 extern int CPU_L2_CACHE_SIZE;		/* In KB */
 extern int CPU_L3_CACHE_SIZE;		/* In KB */
@@ -73,8 +71,7 @@ extern int CPU_L1_SET_ASSOCIATIVE;
 extern int CPU_L2_SET_ASSOCIATIVE;
 extern int CPU_L3_SET_ASSOCIATIVE;
 
-extern unsigned int CPU_SIGNATURE;	/* Vendor-specific family number, */
-					/* model number, stepping ID, etc. */
+extern unsigned int CPU_SIGNATURE;	/* Vendor-specific family number, model number, stepping ID, etc. */
 
 #define CPU_ARCHITECTURE_PRE_SSE2	0
 #define CPU_ARCHITECTURE_PENTIUM_4	1
@@ -86,10 +83,10 @@ extern unsigned int CPU_SIGNATURE;	/* Vendor-specific family number, */
 #define CPU_ARCHITECTURE_INTEL_OTHER	99
 #define CPU_ARCHITECTURE_AMD_K8		100
 #define CPU_ARCHITECTURE_AMD_K10	101
+#define CPU_ARCHITECTURE_AMD_BULLDOZER	102
 #define CPU_ARCHITECTURE_AMD_OTHER	199
 #define CPU_ARCHITECTURE_OTHER		999
-extern int CPU_ARCHITECTURE;		/* Our attempt to derive the CPU */
-					/* architecture. */
+extern int CPU_ARCHITECTURE;		/* Our attempt to derive the CPU architecture. */
 
 /* Assembly language structures and routines */
 

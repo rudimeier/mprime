@@ -15,10 +15,10 @@ CPPFLAGSD = -I.. -I../qd -g -DGDEBUG -m32 -march=i686 -malign-double -fno-except
 CPPFLAGS64 = -I.. -I../qd -O2 -DX86_64 -m64 -fno-exceptions -fno-rtti
 CPPFLAGS64D = -I.. -I../qd -g -DGDEBUG -DX86_64 -m64 -fno-exceptions -fno-rtti
 
-OBJS = release/cpuid.o release/gwnum.o release/gwthread.o release/gwutil.o release/gwdbldbl.o release/giants.o release/ecmstag1.o
-OBJSD = debug/cpuid.o debug/gwnum.o debug/gwthread.o debug/gwutil.o debug/gwdbldbl.o debug/giants.o debug/ecmstag1.o
-OBJS64 = amd64/release/cpuid.o amd64/release/gwnum.o amd64/release/gwthread.o amd64/release/gwutil.o amd64/release/gwdbldbl.o amd64/release/giants.o amd64/release/ecmstag1.o
-OBJS64D = amd64/debug/cpuid.o amd64/debug/gwnum.o amd64/debug/gwthread.o amd64/debug/gwutil.o amd64/debug/gwdbldbl.o amd64/debug/giants.o amd64/debug/ecmstag1.o
+OBJS = release/cpuid.o release/gwnum.o release/gwtables.o release/gwthread.o release/gwutil.o release/gwdbldbl.o release/giants.o release/ecmstag1.o
+OBJSD = debug/cpuid.o debug/gwnum.o debug/gwtables.o debug/gwthread.o debug/gwutil.o debug/gwdbldbl.o debug/giants.o debug/ecmstag1.o
+OBJS64 = amd64/release/cpuid.o amd64/release/gwnum.o amd64/release/gwtables.o amd64/release/gwthread.o amd64/release/gwutil.o amd64/release/gwdbldbl.o amd64/release/giants.o amd64/release/ecmstag1.o
+OBJS64D = amd64/debug/cpuid.o amd64/debug/gwnum.o amd64/debug/gwtables.o amd64/debug/gwthread.o amd64/debug/gwutil.o amd64/debug/gwdbldbl.o amd64/debug/giants.o amd64/debug/ecmstag1.o
 
 LIB = release/gwnum.a
 LIBD = debug/gwnum.a
@@ -58,6 +58,9 @@ release/cpuid.o:
 release/gwnum.o:
 	$(ENVP) $(CC) $(CFLAGS) -c -o release/gwnum.o gwnum.c
 
+release/gwtables.o:
+	$(ENVP) $(CC) $(CFLAGS) -c -o release/gwtables.o gwtables.c
+
 release/gwthread.o:
 	$(ENVP) $(CC) $(CFLAGS) -c -o release/gwthread.o gwthread.c
 
@@ -78,6 +81,9 @@ debug/cpuid.o:
 
 debug/gwnum.o:
 	$(ENVP) $(CC) $(CFLAGSD) -c -o debug/gwnum.o gwnum.c
+
+debug/gwtables.o:
+	$(ENVP) $(CC) $(CFLAGSD) -c -o debug/gwtables.o gwtables.c
 
 debug/gwthread.o:
 	$(ENVP) $(CC) $(CFLAGSD) -c -o debug/gwthread.o gwthread.c
@@ -100,6 +106,9 @@ amd64/release/cpuid.o:
 amd64/release/gwnum.o:
 	$(ENVP) $(CC) $(CFLAGS64) -c -o amd64/release/gwnum.o gwnum.c
 
+amd64/release/gwtables.o:
+	$(ENVP) $(CC) $(CFLAGS64) -c -o amd64/release/gwtables.o gwtables.c
+
 amd64/release/gwthread.o:
 	$(ENVP) $(CC) $(CFLAGS64) -c -o amd64/release/gwthread.o gwthread.c
 
@@ -120,6 +129,9 @@ amd64/debug/cpuid.o:
 
 amd64/debug/gwnum.o:
 	$(ENVP) $(CC) $(CFLAGS64D) -c -o amd64/debug/gwnum.o gwnum.c
+
+amd64/debug/gwtables.o:
+	$(ENVP) $(CC) $(CFLAGS64D) -c -o amd64/debug/gwtables.o gwtables.c
 
 amd64/debug/gwthread.o:
 	$(ENVP) $(CC) $(CFLAGS64D) -c -o amd64/debug/gwthread.o gwthread.c

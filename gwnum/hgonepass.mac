@@ -7695,3 +7695,71 @@ c3b:	x4cl_four_complex_unfft rsi, 64, 64*64, 128*64, rdi
 
 	ret
 	ENDM
+
+;; When doing zero-padded FFTs, the 7 words around the halfway point must
+;; be copied for later processing.  This macro does that.
+
+xcopy_7_words MACRO
+	LOCAL	nozpad
+	cmp	ZERO_PADDED_FFT, 0	;; Is this a zero-padded FFT?
+	je	short nozpad		;; No, skip 7 word copy
+	movsd	xmm0, Q [rsi+rbx+32]	;; Copy 1st word above half-way point
+	movsd	Q [rsi-40], xmm0
+	movsd	xmm1, Q [rsi+rbx+48]	;; Copy 2nd word
+	movsd	Q [rsi-48], xmm1
+	movsd	xmm2, Q [rsi+rbx+96]	;; Copy 3rd word
+	movsd	Q [rsi-56], xmm2
+	movsd	xmm3, Q [rsi+rbx+112]	;; Copy 4th word
+	movsd	Q [rsi-64], xmm3
+	mov	eax, HIGH_WORD1_OFFSET	;; Copy 1st word below half-way
+	add	rax, rsi
+	movsd	xmm0, Q [rax+rbx]
+	movsd	Q [rsi-72], xmm0
+	mov	eax, HIGH_WORD2_OFFSET	;; Copy 2nd word below
+	add	rax, rsi
+	movsd	xmm1, Q [rax+rbx]
+	movsd	Q [rsi-80], xmm1
+	mov	eax, HIGH_WORD3_OFFSET	;; Copy 3rd word below
+	add	rax, rsi
+	movsd	xmm2, Q [rax+rbx]
+	movsd	Q [rsi-88], xmm2
+nozpad:
+	ENDM
+
+;; When doing zero-padded FFTs, the multiplied 7 words around the halfway point
+;; must be subtracted from the bottom of the FFT.  This must be done before
+;; normalization multiplies the FFT data by k.  This macro does that and also
+;; initializes the sumout reg.
+
+xsub_7_words MACRO dist4
+	LOCAL	nozpad
+	subpd	xmm7, xmm7		;; Clear sumout
+	cmp	ZERO_PADDED_FFT, 0	;; Is this a zero-padded FFT?
+	je	nozpad			;; No, skip 7 word subtract
+	mov	rsi, DESTARG
+	xload	xmm0, [rsi]		;; Subtract 1st, 2nd word
+	xload	xmm1, ZPAD0		;; Load ZPAD data
+	mulpd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
+	subpd	xmm0, xmm1
+	addpd	xmm7, xmm1		;; Adjust sumout
+	xstore	[rsi], xmm0
+	xload	xmm0, [rsi+64]		;; Subtract 3rd, 4th word
+	xload	xmm1, ZPAD2		;; Load ZPAD data
+	mulpd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
+	subpd	xmm0, xmm1
+	addpd	xmm7, xmm1		;; Adjust sumout
+	xstore	[rsi+64], xmm0
+	xload	xmm0, [rsi+dist4]	;; Subtract 5th, 6th word
+	xload	xmm1, ZPAD4		;; Load ZPAD data
+	mulpd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
+	subpd	xmm0, xmm1
+	addpd	xmm7, xmm1		;; Adjust sumout
+	xstore	[rsi+dist4], xmm0
+	movsd	xmm0, Q [rsi+dist4+64]	;; Subtract 7th word
+	movsd	xmm1, ZPAD6		;; Load ZPAD data
+	mulsd	xmm1, XMM_NORM012_FF	;; Scale by FFTLEN/2
+	subsd	xmm0, xmm1
+	addsd	xmm7, xmm1		;; Adjust sumout
+	movsd	Q [rsi+dist4+64], xmm0
+nozpad:
+	ENDM

@@ -1,4 +1,4 @@
-; Copyright 1995-2011 Mersenne Research, Inc., all rights reserved
+; Copyright 1995-2012 Mersenne Research, Inc., all rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -1402,7 +1402,7 @@ idone2:	mov	initval0, eax		; Save bits 65-96 of initval
 	adc	ecx, 0			; Add in carry and test for >= 65-bits
 	jz	short not65		; Jump if not >= 65 bits
 	mov	eax, OFFSET tlp80	; 80 bit all cpus version
-	test	CPU_FLAGS, 10h		; Is this an SSE2 machine?
+	test	CPU_FLAGS, 200h		; Is this an SSE2 machine?
 	jz	short cp1		; No, use all purpose code
 	mov	eax, OFFSET tlp86	; 75-86 bit SSE2 version
 	cmp	ecx, 3FFh		; Are we testing 75-bits or greater?
@@ -1413,7 +1413,7 @@ not65:	mov	eax, OFFSET tlp64	; 64 bit all cpus version
 	cmp	edx, 3FFFFFFFh		; Are we testing 63-bits or greater?
 	ja	short cp1		; Yes, jump
 	mov	eax, OFFSET plp		; Pentium Pro version
-	test	CPU_FLAGS, 2		; Is this a Pentium Pro or better?
+	test	CPU_FLAGS, 4		; Is this a Pentium Pro or better?
 	jnz	short cp1		; Yes - CMOV is supported, jump
 	mov	eax, OFFSET ulp		; 486 version
 	test	CPU_FLAGS, 1		; Is this a 486 or AMD K6?

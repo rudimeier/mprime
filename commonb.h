@@ -10,11 +10,11 @@
 
 #include "security.h"
 #ifndef SEC1
-#define SEC1(p)			0
-#define SEC2(p,hi,lo,u,e)	0
-#define SEC3(p)			0
-#define SEC4(p)			0
-#define SEC5(p,b1,b2)		0
+#define SEC1(p)			0UL
+#define SEC2(p,hi,lo,u,e)	0UL
+#define SEC3(p)			0UL
+#define SEC4(p)			0UL
+#define SEC5(p,b1,b2)		0UL
 #endif
 
 /* Common routines */

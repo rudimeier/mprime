@@ -1,4 +1,4 @@
-; Copyright 1995-2011 - Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2012 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -150,36 +150,36 @@ ah_prolog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
 		push_amt = push_amt+8
 	ENDIF
 
-	;; Compute space needed to save XMM registers
+	;; Compute space needed to save XMM and YMM registers
 	xmm_space = 0
-	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm6)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm7)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm8)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm9)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm10)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm11)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm12)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm13)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm14)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm15)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
 
@@ -205,44 +205,44 @@ ah_prolog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
 		push_amt = push_amt + stack_space
 	ENDIF
 
-	;; Save the XMM registers in the stack space we just allocated
-	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+	;; Save the XMM registers or lower half of YMM registers in the stack space we just allocated
+	IF (@INSTR (,@CATSTR (regs),mm6)) NE 0
 		save_xmm128 xmm6, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm7)) NE 0
 		save_xmm128 xmm7, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm8)) NE 0
 		save_xmm128 xmm8, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm9)) NE 0
 		save_xmm128 xmm9, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm10)) NE 0
 		save_xmm128 xmm10, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm11)) NE 0
 		save_xmm128 xmm11, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm12)) NE 0
 		save_xmm128 xmm12, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm13)) NE 0
 		save_xmm128 xmm13, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm14)) NE 0
 		save_xmm128 xmm14, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm15)) NE 0
 		save_xmm128 xmm15, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
@@ -410,34 +410,34 @@ ah_epilog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
 	ENDIF
 
 	xmm_space = 0
-	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm6)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm7)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm8)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm9)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm10)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm11)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm12)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm13)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm14)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm15)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
 
@@ -453,45 +453,45 @@ ah_epilog MACRO num_C_args, space_needed, calls_C_code, regs:vararg
 		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
 	ENDIF
 
-	;; Restore the saved XMM registers
+	;; Restore the saved XMM (and lower half of YMM) registers
 
-	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm6)) NE 0
 		movapd	xmm6, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm7)) NE 0
 		movapd	xmm7, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm8)) NE 0
 		movapd	xmm8, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm9)) NE 0
 		movapd	xmm9, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm10)) NE 0
 		movapd	xmm10, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm11)) NE 0
 		movapd	xmm11, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm12)) NE 0
 		movapd	xmm12, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm13)) NE 0
 		movapd	xmm13, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm14)) NE 0
 		movapd	xmm14, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm15)) NE 0
 		movapd	xmm15, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
@@ -867,37 +867,37 @@ int_prolog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
 	ENDIF
 	ENDIF
 
-	;; Compute space needed to save XMM registers
+	;; Compute space needed to save XMM and lower half of YMM registers
 	xmm_space = 0
 	IFNB <regs>
-	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm6)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm7)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm8)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm9)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm10)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm11)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm12)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm13)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm14)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm15)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
 	ENDIF
@@ -923,45 +923,45 @@ int_prolog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
 		push_amt = push_amt + stack_space
 	ENDIF
 
-	;; Save the XMM registers in the stack space we just allocated
+	;; Save the XMM and lower half of YMM registers in the stack space we just allocated
 	IFNB <regs>
-	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm6)) NE 0
 		save_xmm128 xmm6, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm7)) NE 0
 		save_xmm128 xmm7, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm8)) NE 0
 		save_xmm128 xmm8, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm9)) NE 0
 		save_xmm128 xmm9, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm10)) NE 0
 		save_xmm128 xmm10, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm11)) NE 0
 		save_xmm128 xmm11, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm12)) NE 0
 		save_xmm128 xmm12, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm13)) NE 0
 		save_xmm128 xmm13, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm14)) NE 0
 		save_xmm128 xmm14, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm15)) NE 0
 		save_xmm128 xmm15, xmm_loc
 		xmm_loc = xmm_loc + 16
 	ENDIF
@@ -1201,34 +1201,34 @@ int_epilog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
 
 	xmm_space = 0
 	IFNB <regs>
-	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm6)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm7)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm8)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm9)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm10)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm11)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm12)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm13)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm14)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm15)) NE 0
 		xmm_space = xmm_space + 16
 	ENDIF
 	ENDIF
@@ -1245,46 +1245,46 @@ int_epilog MACRO space_needed, callers_push_amt, calls_C_code, regs:vararg
 		stack_space = stack_space + (16 - ((stack_space + push_amt + 8) MOD 16))
 	ENDIF
 
-	;; Restore the saved XMM registers
+	;; Restore the saved XMM and lower half of YMM registers
 
 	IFNB <regs>
-	IF (@INSTR (,@CATSTR (regs),xmm6)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm6)) NE 0
 		movapd	xmm6, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm7)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm7)) NE 0
 		movapd	xmm7, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm8)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm8)) NE 0
 		movapd	xmm8, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm9)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm9)) NE 0
 		movapd	xmm9, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm10)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm10)) NE 0
 		movapd	xmm10, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm11)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm11)) NE 0
 		movapd	xmm11, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm12)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm12)) NE 0
 		movapd	xmm12, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm13)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm13)) NE 0
 		movapd	xmm13, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm14)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm14)) NE 0
 		movapd	xmm14, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
-	IF (@INSTR (,@CATSTR (regs),xmm15)) NE 0
+	IF (@INSTR (,@CATSTR (regs),mm15)) NE 0
 		movapd	xmm15, [rsp+xmm_loc]
 		xmm_loc = xmm_loc + 16
 	ENDIF
@@ -1560,6 +1560,7 @@ nonoexec MACRO ops:vararg
 ;IMPL_ALL_P4TP = 1
 ;IMPL_ALL_K8 = 1
 ;IMPL_ALL_K10 = 1
+;IMPL_ALL_BULL = 1
 
 ; Handy macro to only include statement if we are prefetching
 
@@ -1582,6 +1583,7 @@ Q	EQU	<QWORD PTR>
 
 bump	MACRO	reg, amt
 	IFNB <reg>
+	IFNB <amt>
 	IF amt EQ 128
 	sub	reg, -99		;; Workaround MASM bug.  It won't
 					;; generate one byte immediates
@@ -1596,6 +1598,7 @@ bump	MACRO	reg, amt
 	add	reg, amt
 	ENDIF
 	ENDIF
+	ENDIF
 	ENDM
 
 ; 
@@ -1608,18 +1611,15 @@ bump	MACRO	reg, amt
 ; test/jnz which generates a fused-op internally on Core 2 machines.
 ;
 
+;; Init the loops macros without prefetching.  Optionally mark a few of the initial loops completed.
 loops_init MACRO count, first_completed, first_iters
-	loops_init_common count, first_completed, first_iters
 	loops_pffreq = 0
+	loops_orig_pffreq = 0
+	loops_init_common count, first_completed, first_iters
 	loops_touchfreq = 0
 	ENDM
 
-loops_init_prefetch_touch MACRO count, pfamt, pffreq, pfreg, touch_amt, touch_label, first_completed, first_iters
-	loops_init_prefetch count, pfamt, pffreq, pfreg, first_completed, first_iters
-	loops_touchfreq = touch_amt / pfamt * pffreq
-	loops_touchlabel EQU touch_label
-	ENDM
-
+;; Init the loops macros with prefetching.  Optionally mark a few of the initial loops completed.
 loops_init_prefetch MACRO count, pfamt, pffreq, pfreg, first_completed, first_iters
 	IF PREFETCHING EQ 0
 	  loops_init count, first_completed, first_iters
@@ -1630,6 +1630,7 @@ loops_init_prefetch MACRO count, pfamt, pffreq, pfreg, first_completed, first_it
 	    loops_init_common count, first_completed, first_iters
 	  ELSEIF loops_pffreq NE 1 AND loops_pffreq LT first_iters
 	    loops_init_common count, first_completed, loops_pffreq
+	    loops_first_iters = first_iters
 	  ELSE
 	    loops_init_common count, first_completed, first_iters
 	  ENDIF
@@ -1637,48 +1638,52 @@ loops_init_prefetch MACRO count, pfamt, pffreq, pfreg, first_completed, first_it
 	loops_touchfreq = 0
 	ENDM
 
+;; Init the loops macros with prefetching and touching.  Optionally mark a few of the initial loops completed.
+loops_init_prefetch_touch MACRO count, pfamt, pffreq, pfreg, touch_amt, touch_label, first_completed, first_iters
+	loops_init_prefetch count, pfamt, pffreq, pfreg, first_completed, first_iters
+	loops_touchfreq = touch_amt / pfamt * pffreq
+	loops_touchlabel EQU touch_label
+	ENDM
+
+;; Internal loops init routine
 loops_init_common MACRO count, first_completed, first_iters
-	;;LOCAL	local_first_completed, local_first_iters
-	LOCAL	x
 	IFB <first_completed>
-	  local_first_completed = 0
-	  local_first_iters = 1
+	  loops_first_completed = 0
+	  loops_first_iters = 1
 	ELSE
-	  local_first_completed = first_completed
-	  local_first_iters = first_iters
+	  loops_first_completed = first_completed
+	  loops_first_iters = first_iters
 	ENDIF
 
 	loops_count = count
-	loops_completed = 1
+	loops_completed = 0
 	loops_count_is_power_of_two = 1
 	loops_np2_initial_value_adjust = 0
 	loops_np2_first_initial_value_adjust = 0
 	loops_np2_loops_completed = 0
+	loops_double_prefetching = 0
 
 	;; Compute the initial value
 
-	IF local_first_completed EQ 0
+	IF loops_first_completed EQ 0
 	  loops_initial_value = 0
-	ELSEIF (count LE 256 AND local_first_iters EQ count)
-	  loops_initial_value = local_first_completed * 256/local_first_iters
-	ELSEIF (count LE 128 AND local_first_iters * count LE 256)
-	  loops_initial_value = local_first_completed * (256/local_first_iters+1)
+	ELSEIF (count LE 256 AND loops_first_iters EQ count)
+	  loops_initial_value = loops_first_completed * 256/loops_first_iters
+	ELSEIF (count LE 128 AND loops_first_iters * count LE 256)
+	  loops_initial_value = loops_first_completed * (256/loops_first_iters+1)
 	ELSE
-	  loops_initial_value = local_first_completed * (80000000h/local_first_iters*2+1)
+	  loops_initial_value = loops_first_completed * (80000000h/loops_first_iters*2+1)
 	ENDIF
 
 	;; Always output non-power-of-2 counts as 4 bytes as the initial value
 	;; will need to be adjusted later.
 	IF (loops_count AND (loops_count-1)) NE 0
 	  loops_count_is_power_of_two = 0
-	  mov	eax, 9999
-x:	  org	x-4
-	  DD	loops_initial_value
-	  loops_initial_value_label = (OFFSET x) - 4
+	  set_initial_loop_count mov, loops_initial_value
 
 	;; Otherwise output the initial value using the shortest instruction possible
 	ELSEIF loops_initial_value EQ 0
-	  sub	eax, eax
+	  sub	rax, rax
 	ELSEIF loops_initial_value GT 0 AND loops_initial_value LT 256
 	  mov	al, loops_initial_value
 	ELSE
@@ -1693,10 +1698,14 @@ x:	  org	x-4
 	loops_original_initial_value = loops_initial_value
 	ENDM
 
+;; Override the initial loops prefetching settings
 loops_set_prefetch MACRO pfamt, pffreq, pfreg
 	IF PREFETCHING NE 0
 	  IF loops_double_prefetching EQ 1
 	    cant_set_prefetch_with_delayed_double_prefetch_pending
+	  ENDIF
+	  IF loops_double_prefetching EQ 2
+	    loops_double_prefetching = 0
 	  ENDIF
 	  IF pfamt NE 64 AND pfamt NE 128
 	    bad_pfamt_in_loops_init_prefetch
@@ -1719,154 +1728,217 @@ loops_set_prefetch MACRO pfamt, pffreq, pfreg
 	  ENDIF
 	  loops_pfreg EQU pfreg
 	  loops_orig_pffreq = pffreq
+	  loops_pfincr = PREFETCHING
 	ENDIF
 	ENDM
 
+;; Set alternate prefetch pointer increment.  The loops macros were built on the premise
+;; of bumping the prefetch pointer by one cache line (64 bytes) on every prefetch.  This
+;; macros lets us choose a smaller increment so that the caller can avoid prefetching
+;; too many cache lines.  For example, if the caller loops 100 times but only wants to
+;; prefetch 80 cache lines then we can set out prefetch increment to 64 * 80 / 100 bytes.
+;; Note this is not the preferred solution.  In the example above it would be better to
+;; back up the prefetch pointer by 20 cache lines sometime during the looping process.
+;; This is preferred because there is no guarantee (due to rounding) that we can prefetch
+;; exactly the number of cache lines requested.  Unfortunately, the looping structure
+;; or a register shortage may prevent us from using the preferred solution.
+
+loops_set_alternate_prefetch_increment MACRO cache_lines_to_prefetch, number_of_loops
+	;; Set increment so that we prefetch at least the requested number of cache lines
+	;; The formula is ceil ((cache_lines_to_prefetch * 64 - 63) / number_of_loops)
+	loops_pfincr = ((cache_lines_to_prefetch) * PREFETCHING - (PREFETCHING - 1) + ((number_of_loops) - 1)) / (number_of_loops)
+	ENDM
+
+;; Main looping macro.  Normally third argument is blank meaning increment loop counter by 1.
 loops	MACRO iters, dest, incr
-	;;LOCAL	small_count, local_incr, local_iters
-	;; Make local copies of params
+
+	;; Make local copies of params.  Validate them.
 	local_iters = iters
 	IFB <incr>
 	  local_incr = 1
 	ELSE
 	  local_incr = incr
 	ENDIF
+
+	;; Do some work required only on the first loops call
+	IF loops_completed EQ 0
+	  ;; Verify initial iters value.  If one specified in loops_init call they must match.
+	  IF loops_first_completed NE 0 AND local_iters NE loops_first_iters
+	    loops_mismatched_first_iters
+	  ENDIF
+	  ;; Verify pffreq and incr.
+	  IF loops_pffreq NE 0 AND loops_pffreq LT local_incr
+	    loops_pffreq_less_than_incr
+	  ENDIF
+	  ;; If prefetch frequency equals the incr then output prefetch instructions before testing loop counter
+	  IF (loops_pffreq NE 0) AND (loops_pffreq LE local_incr)
+	    output_prefetch_instructions
+	  ENDIF
+	  ;; Set the loop counter needs incrementing flag
+	  loops_incr_needed = 1
+	  ;; Set loops_completed which is also used to indicate first loops call
+	  loops_completed = 1
+	  ;; If local_iters is one, increment the loop counter.
+	  IF local_iters EQ 1
+	    IF loops_count LT 256
+	      add al, local_incr
+	    ELSE
+	      add eax, local_incr
+	    ENDIF
+	    loops_incr_needed = 0
+	    loops_completed = local_incr
+	    EXITM
+	  ENDIF
+	ENDIF
+
+	;; Verify the increment, only first call can be non-standard
+	IF local_incr NE 1 AND loops_incr_needed EQ 0
+	  loops_non_standard_incr_only_supported_on_first_loops_call
+	ENDIF
+
+	;; Ignore loops calls where the iteration count is one.  This avoids potentially
+	;; outputting the prefetch instructions twice
+	IF local_iters EQ 1
+	  EXITM
+	ENDIF
+
 	;; If necessary, split loop issue prefetch instruction(s)
-	IF loops_pffreq GE loops_completed AND loops_pffreq LT loops_completed * local_iters * local_incr
+	IF loops_pffreq GT loops_completed * local_incr AND loops_pffreq LT loops_completed * local_incr * local_iters
 	  small_count = loops_pffreq / loops_completed / local_incr
+	  ;; Validate small count.  User can use loops_set_prefetch to make sure this doesn't happen.
+	  IF small_count LE 1
+	    loops_pffreq_small_count_is_bad
+	  ENDIF
 	  IF (local_iters MOD small_count) NE 0
 	    error_with_non_power_of_2_and_prefetching
 	  ENDIF
-	  loops_common small_count, dest, local_incr
-	  IF loops_pfamt EQ 1
-	    prefetcht1 [loops_pfreg]
-	    bump loops_pfreg, PREFETCHING
-	  ELSE
-	    prefetcht1 [loops_pfreg]
-	    prefetcht1 [loops_pfreg+PREFETCHING]
-	    bump loops_pfreg, 2*PREFETCHING
-	  ENDIF
-	  IF loops_double_prefetching EQ 1
-	    loops_double_prefetching = 0
-	    loops_pffreq = loops_pffreq * 2
-	  ENDIF
-	  local_iters = local_iters/small_count
+	  ;; Compute large count before recursion destroys local_iters
+	  large_count = local_iters / small_count
+	  ;; Recurse to do first part of loop
+	  loops small_count, dest, local_incr
+	  ;; Fall through to do remaining part of the loop
+	  local_iters = large_count
+	  local_incr = 1
 	ENDIF
+
 	;; If necessary, split loop for jumping to touch label
-	IF loops_touchfreq GT loops_completed AND loops_touchfreq LT loops_completed * local_iters * local_incr
+	IF loops_touchfreq GT loops_completed * local_incr AND loops_touchfreq LT loops_completed * local_incr * local_iters
 	  small_count = loops_touchfreq / loops_completed / local_incr
+	  ;; Validate small count.
+	  IF small_count LE 1
+	    loops_touchfreq_small_count_is_bad
+	  ENDIF
 	  IF (local_iters MOD small_count) NE 0
 	    error_with_non_power_of_2_and_prefetch_touching
 	  ENDIF
-	  loops_common small_count, dest, local_incr
-	  local_iters = local_iters/small_count
-	ENDIF
-	;; Jump to passed in dest or to touch label
-	IF loops_touchfreq EQ 0 OR loops_completed LT loops_touchfreq
-	  loops_common local_iters, dest, local_incr
-	ELSE
-	  loops_common local_iters, loops_touchlabel, local_incr
-	ENDIF
-	ENDM
-
-loops_no_prefetch MACRO iters, dest, incr			;; Like loops macro except it won't prefetch
-	;;LOCAL	local_incr, local_iters
-	;; Make local copies of params
-	local_iters = iters
-	IFB <incr>
+	  ;; Compute large count before recursion destroys local_iters
+	  large_count = local_iters / small_count
+	  ;; Recurse to do first part of loop
+	  loops small_count, dest, local_incr
+	  ;; Fall through to do remaining part of the loop
+	  local_iters = large_count
 	  local_incr = 1
-	ELSE
-	  local_incr = incr
 	ENDIF
+
 	;; Jump to passed in dest or to touch label
 	IF loops_touchfreq EQ 0 OR loops_completed LT loops_touchfreq
 	  loops_common local_iters, dest, local_incr
 	ELSE
 	  loops_common local_iters, loops_touchlabel, local_incr
 	ENDIF
+
+	;; Output prefetch instructions after jump instruction when enough loops have been completed
+	IF loops_pffreq EQ loops_completed
+	    output_prefetch_instructions
+	ENDIF
+
 	ENDM
 
+;; Like loops macro except it won't prefetch
+loops_no_prefetch MACRO iters, dest, incr
+	save_loops_pffreq = loops_pffreq
+	loops_pffreq = 0
+	loops iters, dest, incr
+	loops_pffreq = save_loops_pffreq
+	ENDM
+
+;; Internal loops macro that manages the loops counter
 loops_common MACRO iters, dest, incr
-	;;LOCAL next_power_2, non_power_2_adjustment
-	LOCAL local_iters
-	LOCAL x
-	local_iters = iters
-	IF local_iters GT 1
+	;;LOCAL local_cmn_iters, next_power_2, non_power_2_adjustment
+	local_cmn_iters = iters
+	IF local_cmn_iters GT 1
 	  non_power_2_adjustment = 0
 	  IF loops_np2_first_initial_value_adjust NE 0 AND loops_np2_loops_completed EQ loops_completed
-		add	eax, loops_np2_first_initial_value_adjust - loops_np2_initial_value_adjust ;; restore first non-power-of-2 initial value
+	    add eax, loops_np2_first_initial_value_adjust - loops_np2_initial_value_adjust ;; restore first non-power-of-2 initial value
 	  ENDIF
 	  IF loops_completed NE 1
 	    incr = 1
 	  ENDIF
-	  IF loops_completed EQ 1 AND (local_iters AND (local_iters-1)) EQ 0 AND (incr AND (incr-1)) EQ 0
-	    IF (loops_count LE 256 AND local_iters * incr EQ loops_count)
-	      add al, 256/(local_iters)
+	  IF loops_incr_needed EQ 1 AND (local_cmn_iters AND (local_cmn_iters-1)) EQ 0 AND (incr AND (incr-1)) EQ 0
+	    IF (loops_count LE 256 AND local_cmn_iters * incr EQ loops_count)
+	      add al, 256/(local_cmn_iters)
+	    ELSEIF (loops_count LE 128 AND (local_cmn_iters) * loops_count * (incr) LE 256)
+	      add al, 80h/(local_cmn_iters)*2+(incr)
 	    ELSE
-	      IF (loops_count LE 128 AND (local_iters) * loops_count * (incr) LE 256)
-	        add al, 80h/(local_iters)*2+(incr)
-	      ELSE
-	        add eax, 80000000h/(local_iters)*2+(incr)
-	      ENDIF
+	      add eax, 80000000h/(local_cmn_iters)*2+(incr)
 	    ENDIF
-	    jnc	dest
+	    loops_incr_needed = 0
 	    loops_completed = incr
+	    jnc	dest
 	  ELSE
 	    ;; Handle non-power-of-2 iteration counts
-	    IF (local_iters AND (local_iters-1)) NE 0 OR (incr AND (incr-1)) NE 0
-	      IF loops_completed EQ 1
+	    IF (local_cmn_iters AND (local_cmn_iters-1)) NE 0 OR (incr AND (incr-1)) NE 0
+	      IF loops_incr_needed EQ 1
 	        IF loops_count LT 256
 		  add al, incr
 		ELSE
 		  add eax, incr
 		ENDIF
+		loops_incr_needed = 0
 	        loops_completed = incr
 	      ENDIF
 	      IF (loops_count AND (loops_count-1)) NE 0
-	        next_power_2 = local_iters * loops_completed
+	        next_power_2 = local_cmn_iters * loops_completed
 	        next_power_2 = next_power_2 OR (next_power_2 SHR 1)
 	        next_power_2 = next_power_2 OR (next_power_2 SHR 2)
 	        next_power_2 = next_power_2 OR (next_power_2 SHR 4)
 	        next_power_2 = next_power_2 OR (next_power_2 SHR 8)
 	        next_power_2 = (next_power_2 OR (next_power_2 SHR 16)) + 1
-		non_power_2_adjustment = next_power_2 - local_iters * loops_completed
-x:
+		non_power_2_adjustment = next_power_2 - local_cmn_iters * loops_completed
 		loops_np2_initial_value_adjust = loops_np2_initial_value_adjust + non_power_2_adjustment
-	        org loops_initial_value_label
-		DD	loops_initial_value + loops_np2_initial_value_adjust
-		org x
-		;; Adjust loops_count and local_iters so that this looks like a power-of-two
-		loops_count = loops_count / (local_iters * loops_completed) * next_power_2
-		loops_pffreq = loops_pffreq / (local_iters * loops_completed) * next_power_2
+		overwrite_initial_loop_count loops_initial_value + loops_np2_initial_value_adjust
+		;; Adjust loops_count and local_cmn_iters so that this looks like a power-of-two
+		loops_count = loops_count / (local_cmn_iters * loops_completed) * next_power_2
+		loops_pffreq = loops_pffreq / (local_cmn_iters * loops_completed) * next_power_2
 		IF (loops_completed AND (loops_completed-1)) EQ 0
-			local_iters = next_power_2 / loops_completed
+			local_cmn_iters = next_power_2 / loops_completed
 		ELSE
-			local_iters = next_power_2
+			local_cmn_iters = next_power_2
 			loops_completed = 1
 		ENDIF
 	      ELSE
 	        loops_non_power2_problem
 	      ENDIF
 	    ENDIF
-	    IF local_iters * loops_completed LE 128
-	      test al, (local_iters-1)*loops_completed
+	    IF local_cmn_iters * loops_completed LE 128
+	      test al, (local_cmn_iters-1)*loops_completed
 	      jnz dest
 	    ENDIF
-	    IF local_iters * loops_completed EQ 256
+	    IF local_cmn_iters * loops_completed EQ 256
 	      IF loops_count_is_power_of_two NE 0
 	        test al, al	;; Save one byte if loop count is a power of two
 	        jnz dest
 	      ELSE
-		test al, (local_iters-1)*loops_completed
+		test al, (local_cmn_iters-1)*loops_completed
 		jnz dest
 	      ENDIF
 	    ENDIF
-	    IF local_iters * loops_completed GT 256
-	      test eax, (local_iters-1)*loops_completed
+	    IF local_cmn_iters * loops_completed GT 256
+	      test eax, (local_cmn_iters-1)*loops_completed
 	      jnz dest
 	    ENDIF
 	  ENDIF
-	  loops_completed = local_iters * loops_completed
+	  loops_completed = local_cmn_iters * loops_completed
 	  IF loops_completed GT loops_count
 	    error_looped_more_than_loop_count
 	  ENDIF
@@ -1876,33 +1948,32 @@ x:
 	ENDIF
 	ENDM
 
+;; Undo some previous loops calls
 loops_undo MACRO iters
-	LOCAL	x
+	;; Sanity check
+	IF iters GT loops_completed
+		bad_loops_undo_amount
+	ENDIF
 
-	IF loops_pffreq EQ loops_completed
-	  IF loops_pfamt EQ 1
-	    prefetcht1 [loops_pfreg]
-	    bump loops_pfreg, PREFETCHING
-	  ELSE
-	    prefetcht1 [loops_pfreg]
-	    prefetcht1 [loops_pfreg+PREFETCHING]
-	    bump loops_pfreg, 2*PREFETCHING
-	  ENDIF
-	  IF loops_double_prefetching EQ 1
-	    loops_double_prefetching = 0
-	    loops_pffreq = loops_pffreq * 2
-	  ENDIF
-	ELSEIF loops_orig_pffreq EQ loops_completed
+	;; Handle nasty case where caller requested prefetching 64 bytes at the
+	;; loops_completed boundary on a machine that prefetches 128 bytes at a time
+	IF loops_orig_pffreq EQ loops_completed AND loops_pffreq NE loops_completed
 	  loops_double_prefetching = 1
 	  loops_pffreq = loops_pffreq / 2
 	ENDIF
+	IF loops_double_prefetching EQ 2
+	    loops_double_prefetching = 0
+	    loops_pffreq = loops_pffreq * 2
+	ENDIF
 
+	;; Change the loop counter
 	IF (iters AND (iters-1)) EQ 0
 	  loops_completed = loops_completed / (iters)
+
 	  IF loops_count LE 128
-	    sub	al, (iters) * loops_completed
+	    sub al, (iters) * loops_completed
 	  ELSE
-	    sub	eax, (iters) * loops_completed
+	    sub eax, (iters) * loops_completed
 	  ENDIF
 	ELSE
 	  next_power_2 = iters OR (iters SHR 1)
@@ -1923,10 +1994,7 @@ loops_undo MACRO iters
 	  loops_completed = loops_completed / next_power_2
 	  loops_initial_value = loops_original_initial_value - loops_np2_initial_value_adjust - next_power_2 * loops_completed
 	  loops_np2_initial_value_adjust = 0
-	  add	eax, 9999
-x:	  org	x-4
-	  DD	loops_initial_value
-	  loops_initial_value_label = (OFFSET x) - 4
+	  set_initial_loop_count add, loops_initial_value
 
 	  loops_count = loops_count / next_power_2 * iters
 	  loops_pffreq = loops_pffreq / next_power_2 * iters
@@ -1935,15 +2003,24 @@ x:	  org	x-4
 	;; Set funky xprefetch variable
 	loops_undo_called = 1
 
+	;; If we've undone everything, set loops_completed to zero so that prefetching
+	;; can be output before the next loops test.
+	IF loops_completed EQ 1
+	  loops_completed = 0
+	ENDIF
 	ENDM
 
+;; Kinda like loops_undo except that the loop counter is not adjusted
 loops_reset MACRO
-	loops_completed = 1
+	;; Reset variables
+	loops_completed = 0
 	loops_count = loops_original_count
 	loops_initial_value = loops_original_initial_value
 	loops_np2_initial_value_adjust = 0
+	ybump_flag = 0
 	ENDM
 
+;; Do two loops calls if touching cache lines, one combined loops call otherwise
 loops_touch MACRO iters1, dest1, iters2, dest2
 	IF OFFSET dest1 NE OFFSET dest2
 	loops	iters1, dest1
@@ -1953,12 +2030,37 @@ loops_touch MACRO iters1, dest1, iters2, dest2
 	ENDIF
 	ENDM
 
-; Macro to flush the P4 trace cache
-
-trace_cache_flush MACRO
-	LOCAL	rrr
-rrr:	mov	ds:BYTE PTR rrr, 0C6h
+;; Internal loops macro to output prefetch instructions
+output_prefetch_instructions MACRO
+	IF loops_pfamt EQ 1
+	    prefetcht1 [loops_pfreg]
+	    bump loops_pfreg, loops_pfincr
+	ELSE
+	    prefetcht1 [loops_pfreg]
+	    prefetcht1 [loops_pfreg+loops_pfincr]
+	    bump loops_pfreg, 2*loops_pfincr
+	ENDIF
+	IF loops_double_prefetching EQ 1
+	    loops_double_prefetching = 2
+	ENDIF
 	ENDM
+
+;; Internal macros to set and overwrite initial loop count
+set_initial_loop_count MACRO opcode, loops_initial_value
+	LOCAL	x
+	opcode	eax, 9999
+x:	org	x-4
+	DD	loops_initial_value
+	loops_initial_value_label = (OFFSET x) - 4
+	ENDM
+overwrite_initial_loop_count MACRO new_initial_value
+	LOCAL	x
+x:
+	org loops_initial_value_label
+	DD	new_initial_value
+	org x
+	ENDM
+
 
 ; Macros to create PROC statements.
 ;
@@ -2006,6 +2108,9 @@ ENDIF
 	ENDM
 
 PROCFP	MACRO x
+IFDEF yarch
+	PROCF	@CATSTR(&x,%yarch)
+ELSE
 IFDEF xarch
 	PROCF	@CATSTR(&x,%xarch)
 ELSE
@@ -2019,10 +2124,14 @@ ELSE
 ENDIF
 ENDIF
 ENDIF
+ENDIF
 	ENDM
 
 
 PROCFLP	MACRO x
+IFDEF yarch
+	PROCFL	@CATSTR(&x,%yarch)
+ELSE
 IFDEF xarch
 	PROCFL	@CATSTR(&x,%xarch)
 ELSE
@@ -2036,6 +2145,7 @@ ELSE
 ENDIF
 ENDIF
 ENDIF
+ENDIF
 	ENDM
 
 ;
@@ -2045,6 +2155,9 @@ ENDIF
 ;
 
 EXTRNP	MACRO x
+IFDEF yarch
+EXTRN	@CATSTR(&x,%yarch):PROC
+ELSE
 IFDEF xarch
 EXTRN	@CATSTR(&x,%xarch):PROC
 ELSE
@@ -2058,9 +2171,13 @@ EXTRN	&x:PROC
 ENDIF
 ENDIF
 ENDIF
+ENDIF
 	ENDM
 
 ENDPP	MACRO x
+IFDEF yarch
+@CATSTR(&x,%yarch) ENDP
+ELSE
 IFDEF xarch
 @CATSTR(&x,%xarch) ENDP
 ELSE
@@ -2071,6 +2188,7 @@ IFDEF PPRO
 &x&PPRO ENDP
 ELSE
 &x	ENDP
+ENDIF
 ENDIF
 ENDIF
 ENDIF

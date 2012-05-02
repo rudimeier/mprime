@@ -1,4 +1,4 @@
-; Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -409,8 +409,8 @@ PROCFL	gwmuls2
 	ad_prolog 16,0,rbx,rbp,rsi,rdi
 	mov	esi, DESTARG		; Address of destination
 	fld	DBLARG			; Load small value
-	fmul	XMM_NORM012_FF		; Mul by two-to-minus-phi fudge
-	fstp	XMM_TMP5		; Save multiplier
+	fmul	NORM012_FF		; Mul by two-to-minus-phi fudge
+	fstp	TMP5			; Save multiplier
 	mov	ebp, norm_grp_mults	; Address of group multipliers
 	mov	edi, norm_biglit_array	; Addr of the big/little flags array
 	fld	BIGVAL			; Start process with no carry

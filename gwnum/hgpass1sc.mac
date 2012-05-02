@@ -1,4 +1,4 @@
-; Copyright 2001-2010 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2012 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -31,21 +31,10 @@
 hg_pass1sclevels8pfa5 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1aa, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b, c6b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 39 pass2_11_levels_complex
@@ -54,11 +43,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
- 	je	xgw_finish_fft
+ 	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -252,6 +241,10 @@ c1b:	x5cl_five_reals_last_unfft rsi, 64, clmblkdst8
 
 	copy_scratch_data_to_fft 40
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -467,7 +460,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 160 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -477,21 +470,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels8pfa6 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b, c6b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 47 pass2_11_levels_complex
@@ -500,11 +482,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -698,6 +680,10 @@ c1b:	x3cl_six_reals_last_unfft rsi, 64, 2*clmblkdst8
 
 	copy_scratch_data_to_fft 48
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -912,7 +898,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 192 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -922,21 +908,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels8complex3 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2a, b2b, b3a, b3b, b5a, b5b, b7b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c5a, c5b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 48 pass2_11_levels_complex
@@ -945,11 +920,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -1098,6 +1073,10 @@ c1b:	x3cl_three_complex_last_unfft rsi, 64, 2*clmblkdst8
 
 	copy_scratch_data_to_fft 48
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -1272,7 +1251,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 192 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -1282,21 +1261,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels8pfa7 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2b, b3a, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b, c6b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 55 pass2_11_levels_complex
@@ -1305,11 +1273,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -1508,6 +1476,10 @@ c1b:	x7cl_seven_reals_last_unfft rsi, 64, clmblkdst8
 
 	copy_scratch_data_to_fft 56
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -1750,7 +1722,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 224 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -1760,21 +1732,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels8pfa8 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b, c6b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 63 pass2_11_levels_complex
@@ -1783,11 +1744,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -1980,6 +1941,10 @@ c1b:	x4cl_eight_reals_last_unfft rsi, 64, 2*clmblkdst8, 4*clmblkdst8
 
 	copy_scratch_data_to_fft 64
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -2195,7 +2160,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 256 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -2205,21 +2170,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels8complex4 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b3a, b3b, b5a, b5b, b7b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c5a, c5b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 64 pass2_11_levels_complex
@@ -2228,11 +2182,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 7,8
 ;; On input the 64-byte cache lines hold these data values:
@@ -2382,6 +2336,10 @@ c1b:	x4cl_four_complex_last_unfft rsi, 64, 2*clmblkdst8, 4*clmblkdst8, 16*128
 
 	copy_scratch_data_to_fft 64
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -2552,7 +2510,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 256 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -2562,21 +2520,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels9pfa5 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1aa, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5a, c5b, c6b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 79 pass2_11_levels_complex
@@ -2585,11 +2532,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 8,9
 ;; On input the 64-byte cache lines hold these data values:
@@ -2787,6 +2734,10 @@ c1b:	x5cl_five_reals_last_unfft rsi, 64, 2*clmblkdst8
 
 	copy_scratch_data_to_fft 80
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -3011,7 +2962,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 320 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -3021,21 +2972,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels9pfa6 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5a, c5b, c6b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 95 pass2_11_levels_complex
@@ -3044,11 +2984,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 8,9
 ;; On input the 64-byte cache lines hold these data values:
@@ -3242,6 +3182,10 @@ pfing	bump	rcx, blkdst		;; Next prefetch pointer
 
 	copy_scratch_data_to_fft 96
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -3464,7 +3408,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 384 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -3474,21 +3418,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels9complex3 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2a, b2b, b3a, b3b, b5a, b5b, b7b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c5a, c5b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 96 pass2_11_levels_complex
@@ -3497,11 +3430,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 8,9
 ;; On input the 64-byte cache lines hold these data values:
@@ -3648,6 +3581,10 @@ c1b:	x3cl_three_complex_last_unfft rsi, 64, 4*clmblkdst8
 
 	copy_scratch_data_to_fft 96
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -3826,7 +3763,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 384 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -3836,21 +3773,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels9pfa7 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2b, b3a, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5a, c5b, c6b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 111 pass2_11_levels_complex
@@ -3859,11 +3785,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 8,9
 ;; On input the 64-byte cache lines hold these data values:
@@ -4063,6 +3989,10 @@ c1b:	x7cl_seven_reals_last_unfft rsi, 64, 2*clmblkdst8
 
 	copy_scratch_data_to_fft 112
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -4309,7 +4239,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 448 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -4319,21 +4249,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels9pfa8 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2b, b3b, b4b, b5b, b6b, b7b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4a, c4b, c5a, c5b, c6b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 127 pass2_11_levels_complex
@@ -4342,11 +4261,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 8,9
 ;; On input the 64-byte cache lines hold these data values:
@@ -4536,6 +4455,10 @@ c1b:	x4cl_eight_reals_last_unfft rsi, 64, 4*clmblkdst8, 8*clmblkdst8
 
 	copy_scratch_data_to_fft 128
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -4757,7 +4680,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 512 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -4767,21 +4690,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels9complex4 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b3a, b3b, b5a, b5b, b7b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c5a, c5b, c7b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 128 pass2_11_levels_complex
@@ -4790,11 +4702,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 8,9
 ;; On input the 64-byte cache lines hold these data values:
@@ -4942,6 +4854,10 @@ c1b:	x4cl_four_complex_last_unfft rsi, 64, 4*clmblkdst8, 8*clmblkdst8, 32*128
 
 	copy_scratch_data_to_fft 128
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -5110,7 +5026,7 @@ b7b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 512 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -5121,21 +5037,10 @@ hg_pass1sclevels10pfa5 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1aa, b1b, b2b, b3b
 	LOCAL	b4b, b5b, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b, c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 159 pass2_11_levels_complex
@@ -5144,11 +5049,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 9,10
 ;; On input the 64-byte cache lines hold these data values:
@@ -5389,6 +5294,10 @@ c1b:	x5cl_five_reals_last_unfft rsi, 64, 4*clmblkdst8
 
 	copy_scratch_data_to_fft 160
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -5659,7 +5568,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 640 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -5669,21 +5578,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels10pfa6 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2b, b3b, b4b, b5b, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b, c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 191 pass2_11_levels_complex
@@ -5692,11 +5590,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 9,10
 ;; On input the 64-byte cache lines hold these data values:
@@ -5935,6 +5833,10 @@ c1b:	x3cl_six_reals_last_unfft rsi, 64, 8*clmblkdst8
 
 	copy_scratch_data_to_fft 192
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -6205,7 +6107,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 768 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -6215,21 +6117,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels10complex3 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2a, b2b, b3a, b3b, b5a, b5b, b7a, b7b, b9b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c5a, c5b, c7a, c7b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 192 pass2_11_levels_complex
@@ -6238,11 +6129,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 9,10
 ;; On input the 64-byte cache lines hold these data values:
@@ -6429,6 +6320,10 @@ c1b:	x3cl_three_complex_last_unfft rsi, 64, 8*clmblkdst8
 
 	copy_scratch_data_to_fft 192
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -6646,7 +6541,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 768 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -6658,21 +6553,10 @@ hg_pass1sclevels10pfa7 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b5b, b6a, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b
 	LOCAL	c6a, c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 223 pass2_11_levels_complex
@@ -6681,11 +6565,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 9,10
 ;; On input the 64-byte cache lines hold these data values:
@@ -6930,6 +6814,10 @@ c1b:	x7cl_seven_reals_last_unfft rsi, 64, 4*clmblkdst8
 
 	copy_scratch_data_to_fft 224
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -7223,7 +7111,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 896 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -7233,21 +7121,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels10pfa8 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2b, b3b, b4b, b5b, b6a, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c5b, c6a, c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 255 pass2_11_levels_complex
@@ -7256,11 +7133,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 9,10
 ;; On input the 64-byte cache lines hold these data values:
@@ -7495,6 +7372,10 @@ c1b:	x4cl_eight_reals_last_unfft rsi, 64, 8*clmblkdst8, 16*clmblkdst8
 
 	copy_scratch_data_to_fft 256
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -7761,7 +7642,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 1024 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -7771,21 +7652,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels10complex4 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b3a, b3b, b5a, b5b, b7a, b7b, b9b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c5a, c5b, c7a, c7b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 256 pass2_11_levels_complex
@@ -7794,11 +7664,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 9,10
 ;; On input the 64-byte cache lines hold these data values:
@@ -7984,6 +7854,10 @@ c1b:	x4cl_four_complex_last_unfft rsi, 64, 8*clmblkdst8, 16*clmblkdst8, 64*128
 
 	copy_scratch_data_to_fft 256
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -8192,7 +8066,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 1024 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -8203,21 +8077,10 @@ hg_pass1sclevels11pfa5 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1aa, b1b, b2b, b3b, b4b, b5b, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b
 	LOCAL	c5a, c5b, c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 319 pass2_11_levels_complex
@@ -8226,11 +8089,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 10,11
 ;; On input the 64-byte cache lines hold these data values:
@@ -8478,6 +8341,10 @@ c1b:	x5cl_five_reals_last_unfft rsi, 64, 8*clmblkdst8
 
 	copy_scratch_data_to_fft 320
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -8756,7 +8623,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 1280 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -8768,21 +8635,10 @@ hg_pass1sclevels11pfa6 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b5a, b5b, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b
 	LOCAL	c5a, c5b, c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 383 pass2_11_levels_complex
@@ -8791,11 +8647,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 10,11
 ;; On input the 64-byte cache lines hold these data values:
@@ -9047,6 +8903,10 @@ pfing	bump	rcx, blkdst		;; Next prefetch pointer
 
 	copy_scratch_data_to_fft 384
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -9324,7 +9184,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 1536 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -9334,21 +9194,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels11complex3 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2a, b2b, b3a, b3b, b5a, b5b, b7a, b7b, b9b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c5a, c5b, c7a, c7b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 384 pass2_11_levels_complex
@@ -9357,11 +9206,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 10,11
 ;; On input the 64-byte cache lines hold these data values:
@@ -9548,6 +9397,10 @@ c1b:	x3cl_three_complex_last_unfft rsi, 64, 16*clmblkdst8
 
 	copy_scratch_data_to_fft 384
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -9766,7 +9619,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 1536 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -9778,21 +9631,10 @@ hg_pass1sclevels11pfa7 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b5a, b5b, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4a, c4b, c5a, c5b
 	LOCAL	c6a, c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 447 pass2_11_levels_complex
@@ -9801,11 +9643,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 10,11
 ;; On input the 64-byte cache lines hold these data values:
@@ -10056,6 +9898,10 @@ c1b:	x7cl_seven_reals_last_unfft rsi, 64, 8*clmblkdst8
 
 	copy_scratch_data_to_fft 448
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -10364,7 +10210,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 1792 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -10376,21 +10222,10 @@ hg_pass1sclevels11pfa8 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b5a, b5b, b6a, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4a, c4b, c5a, c5b
 	LOCAL	c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 511 pass2_11_levels_complex
@@ -10399,11 +10234,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 10,11
 ;; On input the 64-byte cache lines hold these data values:
@@ -10651,6 +10486,10 @@ pfing	bump	rcx, blkdst		;; Next prefetch pointer
 
 	copy_scratch_data_to_fft 512
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -10923,7 +10762,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 2048 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -10933,21 +10772,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels11complex4 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b3a, b3b, b5a, b5b, b7a, b7b, b9b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c5a, c5b, c7a, c7b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 512 pass2_11_levels_complex
@@ -10956,11 +10784,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 10,11
 ;; On input the 64-byte cache lines hold these data values:
@@ -11146,6 +10974,10 @@ c1b:	x4cl_four_complex_last_unfft rsi, 64, 16*clmblkdst8, 32*clmblkdst8, 128*128
 
 	copy_scratch_data_to_fft 512
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -11354,7 +11186,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 2048 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -11366,21 +11198,10 @@ hg_pass1sclevels12pfa5 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b4b, b4c, b5b, b5c, b5d, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b
 	LOCAL	c4b, c4c, c5b, c5c, c5d, c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 159 pass2_11_levels_complex
@@ -11389,11 +11210,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 11,12
 ;; On input the 64-byte cache lines hold these data values:
@@ -11682,6 +11503,10 @@ c1b:	x5cl_five_reals_last_unfft rsi, 64, 16*clmblkdst8
 
 	copy_scratch_data_to_fft 640
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -12007,7 +11832,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 2560 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -12019,21 +11844,10 @@ hg_pass1sclevels12pfa6 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c4c, c5b, c5c, c5d
 	LOCAL	c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 191 pass2_11_levels_complex
@@ -12042,11 +11856,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 11,12
 ;; On input the 64-byte cache lines hold these data values:
@@ -12333,6 +12147,10 @@ c1b:	x3cl_six_reals_last_unfft rsi, 64, 32*clmblkdst8
 
 	copy_scratch_data_to_fft 768
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -12659,7 +12477,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 768 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -12670,21 +12488,10 @@ hg_pass1sclevels12complex3 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b2a, b2b, b3a, b3b
 	LOCAL	b4a, b4b, b5a, b5b, b7a, b7b, b9b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c4a, c4b, c5a, c5b, c7a, c7b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 192 pass2_11_levels_complex
@@ -12693,11 +12500,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 11,12
 ;; On input the 64-byte cache lines hold these data values:
@@ -12923,6 +12730,10 @@ c1b:	x3cl_three_complex_last_unfft rsi, 64, 32*clmblkdst8
 
 	copy_scratch_data_to_fft 768
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -13174,7 +12985,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 768 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -13186,21 +12997,10 @@ hg_pass1sclevels12pfa7 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b5b, b5c, b5d, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c4d, c5b, c5c, c5d
 	LOCAL	c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 223 pass2_11_levels_complex
@@ -13209,11 +13009,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 11,12
 ;; On input the 64-byte cache lines hold these data values:
@@ -13507,6 +13307,10 @@ c1b:	x7cl_seven_reals_last_unfft rsi, 64, 16*clmblkdst8
 
 	copy_scratch_data_to_fft 896
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -13861,7 +13665,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 896 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -13873,21 +13677,10 @@ hg_pass1sclevels12pfa8 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b5b, b5c, b5d, b6b, b7a, b7b, b8b, b9b
 	LOCAL	c0b, c1b, c2a, c2b, c3b, c4b, c4c
 	LOCAL	c5b, c5c, c5d, c6b, c7a, c7b, c8b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 0, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 1 pass2_11_levels_real and 255 pass2_11_levels_complex
@@ -13896,11 +13689,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 10,11
 ;; On input the 64-byte cache lines hold these data values:
@@ -14184,6 +13977,10 @@ c1b:	x4cl_eight_reals_last_unfft rsi, 64, 32*clmblkdst8, 64*clmblkdst8
 
 	copy_scratch_data_to_fft 1024
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -14511,7 +14308,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 1024 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 
@@ -14521,21 +14318,10 @@ endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
 hg_pass1sclevels12complex4 MACRO fftname, pass2_levels, clmarg
 	LOCAL	b0b, b1a, b1b, b3a, b3b, b4a, b4b, b5a, b5b, b7a, b7b, b9b
 	LOCAL	c0b, c1a, c1b, c3a, c3b, c5a, c5b, c6a, c6b, c7a, c7b, c9b
-	LOCAL	pass2, endlp, yes_fft
+	LOCAL	pass1, pass2, endlp, done, yes_fft
 
 	set_FFT_constants fftname, 0, 1, pass2_levels, clmarg
-	xfft_header
-
-;; Jump to pass 2 FFT code if the FFT has already been started
-
-	clear_timers
-	cmp	DWORD PTR [rsi-28][rbx], 0;; Test FFT-started flag
-	jne	short pass2		;; Jump if FFT already started
-
-;; Fire up auxillary threads to do pass 1 forward FFT
-
-	pass1_forward_fft_setup endlp
-	jmp	b0b			;; Jump to forward fft code
+	xfft_header pass1
 
 ;; Do the last 11 FFT levels
 ;;	do 256 pass2_11_levels_complex
@@ -14544,11 +14330,11 @@ pass2:	start_timer 0
 	call	xpass2name
 	end_timer 0
 	cmp	ffttype, 1		;; We're done if FFTing only
-	je	xgw_finish_fft
+	je	done
 
 ;; Do the inverse FFT
 
-	pass1_inverse_fft_setup endlp
+	pass1_inverse_fft_setup c0b
 
 ;; Do inverse FFT levels 11,12
 ;; On input the 64-byte cache lines hold these data values:
@@ -14771,6 +14557,10 @@ c1b:	x4cl_four_complex_last_unfft rsi, 64, 32*clmblkdst8, 64*clmblkdst8, 256*128
 
 	copy_scratch_data_to_fft 1024
 	jmp	endlp			;; Skip FFT code if flag not set
+
+;; Fire up auxiliary threads to do pass 1 forward FFT
+
+pass1:	pass1_forward_fft_setup b0b
 
 ;; Copy data from the FFT data area back to the scratch area
 
@@ -15013,7 +14803,7 @@ b9b:	g4cl_four_complex_fft rsi, 64, clmblkdst, 2*clmblkdst, rcx, 64, blkdst, 2*b
 ;; Work on next 4 sets of 1024 values
 
 endlp:	xpass1_get_next_block pass2, c0b, b0b ;; Get next block and jump
-	xfft_footer
+	done:	xfft_footer
 	ENDM
 
 ;;

@@ -2373,24 +2373,28 @@ return 0;
 if (w->n == 600) {
 gwhandle gwdata;
 void *workbuf;
-int j, min_test, max_test, test, cnt, NUM_X87_TESTS, NUM_SSE2_TESTS;
+int j, min_test, max_test, test, cnt, NUM_X87_TESTS, NUM_SSE2_TESTS, NUM_AVX_TESTS;
 #define timeit(a,n,w) (((void**)a)[0]=w,((uint32_t*)a)[2]=n,gwtimeit(a))
 
 gwinit (&gwdata);
-gwsetup (&gwdata, 1.0, 2, 10000000, -1);
+gwsetup (&gwdata, 1.0, 2, 500 /*10000000*/, -1);
 workbuf = (void *) aligned_malloc (40000000, 4096);
 memset (workbuf, 0, 40000000);
-RDTSC_TIMING = 12;
+RDTSC_TIMING = 2;
 min_test = IniGetInt (INI_FILE, "MinTest", 0);
 max_test = IniGetInt (INI_FILE, "MaxTest", min_test);
 NUM_X87_TESTS = timeit (gwdata.asm_data, -1, NULL);
 NUM_SSE2_TESTS = timeit (gwdata.asm_data, -2, NULL);
+NUM_AVX_TESTS = timeit (gwdata.asm_data, -3, NULL);
 //SetThreadPriority (CURRENT_THREAD, THREAD_PRIORITY_TIME_CRITICAL);
-for (j = 0; j < NUM_X87_TESTS + NUM_SSE2_TESTS; j++) {
+for (j = 0; j < NUM_X87_TESTS + NUM_SSE2_TESTS + NUM_AVX_TESTS; j++) {
 	cnt = 0;
-	test = (j < NUM_X87_TESTS ? j : 1000 + j - NUM_X87_TESTS);
+	test = (j < NUM_X87_TESTS ? j :
+		j < NUM_X87_TESTS + NUM_SSE2_TESTS ? 1000 + j - NUM_X87_TESTS :
+			2000 + j - NUM_X87_TESTS - NUM_SSE2_TESTS);
 	if (min_test && (test < min_test || test > max_test)) continue;
 	if (! (CPU_FLAGS & CPU_SSE2) && test >= 1000) break;
+	if (! (CPU_FLAGS & CPU_AVX) && test >= 2000) break;
 for (i = 1; i <= 50; i++) {
 	start_timer (timers, 0);
 	timeit (gwdata.asm_data, test, workbuf);
@@ -5636,8 +5640,7 @@ msg_and_exit:
 		if (pm1data.E <= 2)
 			sprintf (buf+strlen(buf), ", B2=%.0f", (double) C);
 		else
-			sprintf (buf+strlen(buf), ", B2=%.0f, E=%lu",
-				 (double) C, pm1data.E);
+			sprintf (buf+strlen(buf), ", B2=%.0f, E=%lu", (double) C, pm1data.E);
 	}
 	sprintf (buf+strlen(buf), ", We%d: %08lX\n", PORT, SEC5 (w->n, B, C));
 	OutputStr (thread_num, buf);
@@ -5715,12 +5718,11 @@ oom:	stop_reason = OutOfMemory (thread_num);
 /* Print a message if we found a factor! */
 
 bingo:	if (stage == 1)
-		sprintf (buf, "P-1 found a factor in stage #1, B1=%.0f.\n",
-			 (double) B);
+		sprintf (buf, "P-1 found a factor in stage #1, B1=%.0f.\n", (double) B);
+	else if (pm1data.E <= 2)
+		sprintf (buf, "P-1 found a factor in stage #2, B1=%.0f, B2=%.0f.\n", (double) B, (double) C);
 	else
-		sprintf (buf,
-			 "P-1 found a factor in stage #2, B1=%.0f, B2=%.0f.\n",
-			 (double) B, (double) C);
+		sprintf (buf, "P-1 found a factor in stage #2, B1=%.0f, B2=%.0f, E=%lu.\n", (double) B, (double) C, pm1data.E);
 	OutputBoth (thread_num, buf);
 
 /* Allocate memory for the string representation of the factor and for */

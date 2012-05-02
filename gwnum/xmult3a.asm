@@ -1,4 +1,4 @@
-; Copyright 2001-2010 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2012 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -26,29 +26,6 @@ _TEXT SEGMENT
 ;; Routines to do the normalization after a multiply
 ;;
 
-;; When doing zero-padded FFTs, the multiplied 7 words around the halfway point
-;; must be subtracted from the bottom of the FFT.  This must be done before
-;; normalization multiplies the FFT data by k.  This macro does that.
-
-xsub_7_words MACRO
-	LOCAL	nozpad, zlp
-	cmp	THIS_BLOCK, 8		;; Have we subtracted all 7 words?
-	jge	short nozpad		;; Yes, skip this code
-	mov	eax, cache_line_multiplier ;; Load loop counter
-	mov	edx, THIS_BLOCK
-	mov	rcx, rsi		;; Copy source ptr (we preserve rsi)
-	mov	rdi, zpad_addr		;; Addr of first zpad element
-zlp:	movsd	xmm0, Q [rcx]		;; Load FFT word
-	movsd	xmm1, Q [rdi][rdx*8]	;; Load ZPAD data
-	subsd	xmm0, xmm1
-	movsd	Q [rcx], xmm0		;; Store FFT word
-	bump	rcx, 64			;; Bump pointers
-	inc	rdx
-	dec	eax			;; Iterate 2*clm (up to 8) times
-	jnz	short zlp		;; Loop if necessary
-nozpad:
-	ENDM
-
 ; Macro to loop through all the FFT values and apply the proper normalization
 ; routine.
 
@@ -66,7 +43,6 @@ inorm	MACRO	lab, ttp, zero, echk, const, base2, sse4
 	LOCAL	noadd, setlp, ilp0, ilp1, ilp2, not8, done
 	PROCFLP	lab
 	int_prolog SZPTR+16,0,0
-zero	mov	zero_fft, 1		;; Set flag saying zero upper half
 echk	xload	xmm6, XMM_MAXERR	;; Load maximum error
 no zero	mov	edx, ADDIN_ROW		;; Is this the time to do our addin?
 no zero	cmp	edx, THIS_BLOCK
@@ -121,7 +97,6 @@ ttp	bump	rdx, 4*XMM_GMD		;; Next set of group multipliers
 	jnz	ilp0			;; Iterate
 
 echk	xstore	XMM_MAXERR, xmm6	;; Save maximum error
-ttp	mov	norm_ptr1, rdi		;; Save big/little flags array ptr
 
 	; Handle adjusting the carry out of the topmost FFT word
 
@@ -143,9 +118,7 @@ zpnorm	MACRO	lab, ttp, echk, const, base2, sse4, khi, c1, cm1
 	LOCAL	setlp, ilp0, ilp1, ilp2, not8
 	PROCFLP	lab
 	int_prolog 12,0,0
-const	mov	const_fft, 1		;; Set flag saying mul-by-const
 echk	xload	xmm6, XMM_MAXERR	;; Load maximum error
-	xsub_7_words
 
 	xnorm_wpn_zpad_preload ttp, echk, const, base2, sse4, khi, c1, cm1
 
@@ -189,7 +162,6 @@ ttp	bump	rdx, 4*XMM_GMD		;; Next set of group multipliers
 	jnz	ilp0			;; Iterate
 
 echk	xstore	XMM_MAXERR, xmm6	;; Save maximum error
-ttp	mov	norm_ptr1, rdi		;; Save big/little flags array ptr
 	int_epilog 12,0,0
 	ENDPP	lab
 	ENDM

@@ -117,11 +117,38 @@ unsigned int gen_n ()
 void compare (int thread_num, gwhandle *gwdata, gwnum x, giant g)
 {
 	giant	tmp;
+	int	i;
 
+	if (gwdata->POSTFFT) return;		// We cannot compare if we've started next forward FFT
 	tmp = popg (&gwdata->gdata, ((int) gwdata->bit_length >> 5) + 13);
 	gwtogiant (gwdata, x, tmp);
-	if (gcompg (g, tmp) != 0)
-		OutputBoth (thread_num, "Test failed.\n");
+	if (gcompg (g, tmp) != 0) {
+		gwnum	y = gwalloc (gwdata);
+		gianttogw (gwdata, g, y);
+		if (gw_get_maxerr (gwdata) >= 0.49)
+			OutputBoth (thread_num, "Test failed - probably due to roundoff error\n");
+		else
+			OutputBoth (thread_num, "Test failed.\n");
+		if(0) {			// Sometimes we must debug by finding which FFT words are different
+			for (i = 0; i < (int) gwdata->FFTLEN; i++) {
+				long val, val2;
+				get_fft_value (gwdata, x, i, &val);
+				get_fft_value (gwdata, y, i, &val2);
+				if (val != val2)
+					OutputBoth (thread_num, "mismatched words\n");
+			}
+		}
+		gwfree (gwdata, y);
+	}
+	if (0) {			// Test for doubles that aren't properly normalized
+		long val, bigval;
+		bigval = 1 << gwdata->NUM_B_PER_SMALL_WORD;
+		for (i = 0; i < (int) gwdata->FFTLEN; i++) {
+			get_fft_value (gwdata, x, i, &val);
+			if (val < -bigval || val > bigval)
+				OutputBoth (thread_num, "oflow.\n");
+		}
+	}
 	pushg (&gwdata->gdata, 1);
 }
 
@@ -149,6 +176,7 @@ void gen_data (gwhandle *gwdata, gwnum x, giant g)
 			  ((unsigned long) rand() << 10) +
 			  (unsigned long) rand();
 	}
+//	len = 1; g->n[0] = 30000;
 	g->sign = len;
 	specialmodg (gwdata, g);
 	gianttogw (gwdata, g, x);
@@ -197,16 +225,25 @@ void test_it_all (
 	num_squarings = IniSectionGetInt (INI_FILE, "QA", "NUM_SQUARINGS", 50);
 
 /* Loop over both x87 and SSE2 implementations.  Pass 1 does x87 FFTs */
-/* on SSE2 machines.  Pass 2 does the "natural" FFTs. */
+/* on SSE2 machines.  Pass 2 does the SSE2 FFTs.  Pass 3 does AVX FFTs. */
 
-	for (ii = 1; ii <= 2; ii++) {
+	for (ii = 1; ii <= 3; ii++) {
+	    int	cpu_flags;
 
-	if (ii == 1) {
+	    cpu_flags = CPU_FLAGS;
+	    if (ii == 1) {
 #ifdef X86_64
 		continue;
 #else
-		if (! (CPU_FLAGS & CPU_SSE2)) continue;
+		cpu_flags &= ~(CPU_AVX | CPU_SSE2);
 #endif
+	    }
+	    if (ii == 2) {
+		if (! (cpu_flags & CPU_SSE2)) continue;
+		cpu_flags &= ~CPU_AVX;
+	    }
+	    if (ii == 3) {
+		    if (! (cpu_flags & CPU_AVX)) continue;
 	    }
 
 /* Loop over all possible FFT implementations */
@@ -217,7 +254,7 @@ void test_it_all (
 		gwset_num_threads (&gwdata, threads);
 		gwset_thread_callback (&gwdata, SetAuxThreadPriority);
 		gwset_thread_callback_data (&gwdata, sp_info);
-		if (ii == 1) gwdata.cpu_flags &= ~CPU_SSE2;
+		gwdata.cpu_flags = cpu_flags;
 		gwdata.qa_pick_nth_fft = nth_fft;
 		res = gwsetup (&gwdata, k, b, n, c);
 		nth_fft = gwdata.qa_picked_nth_fft;
@@ -445,7 +482,7 @@ void test_it (
 	for (i = 0; i < num_squarings; i++) {
 
 		/* Test POSTFFT sometimes */
-		gwstartnextfft (gwdata, !CHECK_OFTEN && (i & 3) == 2);
+		gwstartnextfft (gwdata, (i & 3) == 2);
 
 		/* Test gwsetaddin without and with POSTFFT set */
 		if ((i == 45 || i == 46) && abs (gwdata->c) == 1)
@@ -676,7 +713,7 @@ int test_randomly (
 	unsigned int b;
 	int	c;
 	unsigned int n;
-	char	buf[140], fft_desc[100], SPECIFIC_K[20], SPECIFIC_C[20];
+	char	buf[200], fft_desc[100], SPECIFIC_K[20], SPECIFIC_C[20];
 	int	MAX_THREADS, MIN_K_BITS, MAX_K_BITS;
 	int	MAX_C_BITS_FOR_SMALL_K, MAX_C_BITS_FOR_LARGE_K;
 	int	SPECIFIC_B, SPECIFIC_N, SPECIFIC_L2_CACHE, SPECIFIC_THREADS, SPECIFIC_FFTLEN;
@@ -686,8 +723,8 @@ int test_randomly (
 
 	MAX_THREADS = IniSectionGetInt (INI_FILE, "QA", "MAX_THREADS", NUM_CPUS * CPU_HYPERTHREADS);
 	if (MAX_THREADS < 1) MAX_THREADS = 1;
-	if (MAX_THREADS > (int) (NUM_CPUS * CPU_HYPERTHREADS))
-		MAX_THREADS = NUM_CPUS * CPU_HYPERTHREADS;
+//	if (MAX_THREADS > (int) (NUM_CPUS * CPU_HYPERTHREADS))
+//		MAX_THREADS = NUM_CPUS * CPU_HYPERTHREADS;
 	MIN_K_BITS = IniSectionGetInt (INI_FILE, "QA", "MIN_K_BITS", 1);
 	MAX_K_BITS = IniSectionGetInt (INI_FILE, "QA", "MAX_K_BITS", 49);
 	MAX_C_BITS_FOR_SMALL_K = IniSectionGetInt (INI_FILE, "QA", "MAX_C_BITS_FOR_SMALL_K", 4);
@@ -818,8 +855,8 @@ int test_all_impl (
 
 	MAX_THREADS = IniSectionGetInt (INI_FILE, "QA", "MAX_THREADS", NUM_CPUS * CPU_HYPERTHREADS);
 	if (MAX_THREADS < 1) MAX_THREADS = 1;
-	if (MAX_THREADS > (int) (NUM_CPUS * CPU_HYPERTHREADS))
-		MAX_THREADS = NUM_CPUS * CPU_HYPERTHREADS;
+//	if (MAX_THREADS > (int) (NUM_CPUS * CPU_HYPERTHREADS))
+//		MAX_THREADS = NUM_CPUS * CPU_HYPERTHREADS;
 	MIN_K_BITS = IniSectionGetInt (INI_FILE, "QA", "MIN_K_BITS", 1);
 	MAX_K_BITS = IniSectionGetInt (INI_FILE, "QA", "MAX_K_BITS", 49);
 	MAX_C_BITS_FOR_SMALL_K = IniSectionGetInt (INI_FILE, "QA", "MAX_C_BITS_FOR_SMALL_K", 4);

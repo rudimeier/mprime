@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2012 Mersenne Research, Inc.  All rights reserved
 | Author:  George Woltman
 | Email: woltman@alum.mit.edu
 |
@@ -67,6 +67,26 @@ unsigned int CPU_SIGNATURE = 0;		/* Vendor-specific family number, */
 int	CPU_ARCHITECTURE = 0;		/* Our attempt to derive the CPU */
 					/* architecture. */
 
+/* Masm routines to burn up a specific number of clocks */
+
+void one_hundred_thousand_clocks_help ();
+void one_million_clocks_help ();
+
+/* Routines to burn up a specific number of clocks */
+
+void one_hundred_thousand_clocks (void)
+{
+	/* The helper function times dependent ROR instructions which have a throughput of 1 clock on Intel and AMD. */
+	/* If a future chip, needs to call a different helper routine, we'd make that choice here. */
+	one_hundred_thousand_clocks_help ();
+}
+
+void one_million_clocks (void)
+{
+	/* The helper function times dependent ROR instructions which have a throughput of 1 clock on Intel and AMD. */
+	/* If a future chip, needs to call a different helper routine, we'd make that choice here. */
+	one_million_clocks_help ();
+}
 
 /* Return the number of CPUs in the system */
 
@@ -119,7 +139,7 @@ unsigned int num_cpus (void)
 #ifdef X86_64
 
 int canExecInstruction (
-			unsigned long cpu_flag)
+	unsigned long cpu_flag)
 {
 	return (TRUE);
 }
@@ -489,7 +509,9 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			 (family == 6 && model == 47) ||		// Xeon MP (based on Sandy Bridge technology)
 			 (family == 6 && model == 44) ||		// Core i7 (based on Sandy Bridge technology)
 			 (family == 6 && model == 37) ||		// Core i3, mobile i5/i7 (based on Sandy Bridge technology)
-			 (family == 6 && model == 42))			// Core i7 (based on Sandy Bridge technology)
+			 (family == 6 && model == 42) ||		// Core i7 (based on Sandy Bridge technology)
+			 (family == 6 && model == 45) ||		// Core i7 (based on Sandy Bridge-E technology)
+			 (family == 6 && model == 58))			// Core i7 (based on Ivy Bridge technology)
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE_I7;
 		else if (family == 6 && model == 28)
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_ATOM;
@@ -1154,23 +1176,23 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 /* they do not support the full SSE instruction set.  I think testing for */
 /* the AMD MMX extensions capability will detect this case. */
 
-		if (max_extended_cpuid_value >= 0x80000001 &&
-		    ! (CPU_FLAGS & CPU_PREFETCH)) {
+		if (max_extended_cpuid_value >= 0x80000001 && ! (CPU_FLAGS & CPU_PREFETCH)) {
 			Cpuid (0x80000001, &reg);
-			if ((reg.EDX >> 22) & 0x1 &&
-			    canExecInstruction (CPU_PREFETCH))
+			if ((reg.EDX >> 22) & 0x1 && canExecInstruction (CPU_PREFETCH))
 				CPU_FLAGS |= CPU_PREFETCH;
 		}
 
 /* Check for support of 3DNow! instructions.  The prefetchw instruction */
 /* from the 3DNow! instruction set is used by the assembly code. */
+/* Starting with Bulldozer, AMD stopped supporting 3DNow! but kept */
+/* support for the 3DNow! prefetch instructions.  */
 
-		if (max_extended_cpuid_value >= 0x80000001 &&
-		    ! (CPU_FLAGS & CPU_3DNOW)) {
+		if (max_extended_cpuid_value >= 0x80000001) {
 			Cpuid (0x80000001, &reg);
-			if ((reg.EDX >> 31) & 0x1 &&
-			    canExecInstruction (CPU_3DNOW))
-				CPU_FLAGS |= CPU_3DNOW;
+			if ((reg.EDX >> 31) & 0x1 && canExecInstruction (CPU_3DNOW))
+				CPU_FLAGS |= CPU_3DNOW + CPU_3DNOW_PREFETCH;
+			else if ((reg.ECX >> 8) & 0x1 && canExecInstruction (CPU_3DNOW))
+				CPU_FLAGS |= CPU_3DNOW_PREFETCH;
 		}
 
 /* Get the L1 cache size and number of data TLBs */
@@ -1191,7 +1213,7 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			if (CPU_L2_CACHE_SIZE == 1) /* Workaround Duron bug */
 				CPU_L2_CACHE_SIZE = 64;
 			CPU_L2_CACHE_LINE_SIZE = reg.ECX & 0xFF;
-			CPU_L2_SET_ASSOCIATIVE = (reg.ECX & 0xF);
+			CPU_L2_SET_ASSOCIATIVE = (reg.ECX >> 8) & 0xF;
 			if (CPU_L2_SET_ASSOCIATIVE == 0x2)
 				CPU_L2_SET_ASSOCIATIVE = 2;
 			else if (CPU_L2_SET_ASSOCIATIVE == 0x4)
@@ -1214,7 +1236,7 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			CPU_L3_DATA_TLBS = -1;
 			CPU_L3_CACHE_SIZE = (reg.EDX >> 18) * 512;
 			CPU_L3_CACHE_LINE_SIZE = reg.EDX & 0xFF;
-			CPU_L3_SET_ASSOCIATIVE = (reg.EDX & 0xF);
+			CPU_L3_SET_ASSOCIATIVE = (reg.EDX >> 8) & 0xF;
 			if (CPU_L3_SET_ASSOCIATIVE == 0x2)
 				CPU_L3_SET_ASSOCIATIVE = 2;
 			else if (CPU_L3_SET_ASSOCIATIVE == 0x4)
@@ -1239,6 +1261,8 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 
 		if (! (CPU_FLAGS & CPU_SSE2))
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_PRE_SSE2;
+		else if (CPU_FLAGS & CPU_AVX)
+			CPU_ARCHITECTURE = CPU_ARCHITECTURE_AMD_BULLDOZER;
 		else if (max_extended_cpuid_value < 0x8000001A)
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_AMD_K8;
 		else {
@@ -1274,7 +1298,10 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 
 		if (max_extended_cpuid_value >= 0x80000006) {
 			Cpuid (0x80000006, &reg);
-			CPU_L2_CACHE_SIZE = (reg.ECX >> 24) & 0xFF;
+			if (family_code < 6 || (family_code == 6 && model_number <= 7))		// Older VIA processors
+				CPU_L2_CACHE_SIZE = (reg.ECX >> 24) & 0xFF;
+			else									// Newer VIA processors
+				CPU_L2_CACHE_SIZE = (reg.ECX >> 16) & 0xFFFF;
 			CPU_L2_CACHE_LINE_SIZE = reg.ECX & 0xFF;
 		}
 
@@ -1579,3 +1606,4 @@ double getHighResTimerFrequency (void)
 	return (1000000.0);
 #endif
 }
+

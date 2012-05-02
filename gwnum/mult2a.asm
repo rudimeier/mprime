@@ -1,4 +1,4 @@
-; Copyright 1995-2007 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2012 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -8,7 +8,6 @@
 	TITLE   setup
 
 	.686
-	.XMM
 	.MODEL	FLAT
 
 INCLUDE	unravel.mac
@@ -28,9 +27,9 @@ _TEXT SEGMENT
 ;; normalization multiplies the FFT data by k.  This macro does that.
 
 sub_7_words MACRO
-	LOCAL	nozpad, zlp
-	lea	edi, ZPAD6
-	cmp	zpad_addr, edi		;; Have we subtracted all 7 words?
+	LOCAL	nozpad, zlp, done7
+	lea	ebp, ZPAD6
+	cmp	zpad_addr, ebp		;; Have we subtracted all 7 words?
 	jg	short nozpad		;; Yes, skip this code
 	mov	edi, zpad_addr		;; Addr of next zpad element to process
 	mov	eax, cache_line_multiplier ;; Load loop counter
@@ -38,15 +37,17 @@ sub_7_words MACRO
 	mov	ecx, esi		;; Copy source ptr (we preserve esi)
 zlp:	fld	QWORD PTR [ecx]		;; Load FFT word
 	fld	QWORD PTR [edi]		;; Load ZPAD data
-	fmul	XMM_NORM012_FF		;; Scale by FFTLEN/2
+	fmul	NORM012_FF		;; Scale by FFTLEN/2
 	fsub	st(1), st
 	faddp	st(2), st		;; Adjust sumout
 	fstp	QWORD PTR [ecx]		;; Store FFT word
 	lea	ecx, [ecx+dist1]	;; Bump pointers
 	lea	edi, [edi+8]
-	dec	eax			;; Iterate 2*clm (up to 8) times
+	cmp	edi, ebp		;; Only subtract 7 zpad words
+	jg	short done7
+	dec	eax			;; Iterate 2*clm times
 	jnz	short zlp		;; Loop if necessary
-	mov	zpad_addr, edi
+done7:	mov	zpad_addr, edi
 nozpad:
 	ENDM
 
@@ -66,9 +67,10 @@ inorm	MACRO	lab, ttp, zero, echk, const
 	int_prolog 20,0,0,rcx,rbp
 	mov	saved_edx, edx		;; Save registers for top_carry_adjust
 	mov	saved_esi, esi
+no zero	mov	zero_fft, 0		;; Set flag saying not zero upper half
 zero	mov	zero_fft, 1		;; Set flag saying zero upper half
 echk	fld	MAXERR			;; Load maximum error
-	fld	XMM_SUMOUT		;; Load SUMOUT
+	fld	SUMOUT			;; Load SUMOUT
 no zero	cmp	edx, ADDIN_ROW		;; Is this the time to do our addin?
 no zero	jne	short noadd		;; Jump if addin does not occur now
 no zero	mov	edi, ADDIN_OFFSET	;; Get address to add value into
@@ -110,7 +112,7 @@ ttp	lea	edx, [edx+2*16]		;; Next set of 2 group multipliers
 	jnc	ilp0
 	add	esi, normblkdst8	;; Add 64 pad bytes every 32 clmblkdsts
 	jmp	ilp0			;; Iterate
-ilpdn:	fstp	XMM_SUMOUT		;; Save SUMOUT
+ilpdn:	fstp	SUMOUT			;; Save SUMOUT
 echk	fstp	MAXERR			;; Save maximum error
 ttp	mov	norm_ptr1, edi		;; Save big/little flags array ptr
 ttp	mov	norm_ptr2, ebx		;; Save column multipliers ptr
@@ -130,9 +132,10 @@ zpnorm	MACRO	lab, ttp, echk, const
 	LOCAL	ilp0, ilp1, ilpdn
 	PROCFLP	lab
 	int_prolog 12,0,0,rcx,rdx,rsi,rbp
+no const mov	const_fft, 0		;; Set flag saying not mul-by-const
 const	mov	const_fft, 1		;; Set flag saying mul-by-const
 echk	fld	MAXERR			;; Load maximum error
-	fld	XMM_SUMOUT		;; Load SUMOUT
+	fld	SUMOUT			;; Load SUMOUT
 	sub_7_words
 	mov	edx, norm_grp_mults	;; Addr of the group multipliers
 	mov	ebp, carries		;; Addr of the carries
@@ -166,7 +169,7 @@ ttp	lea	edx, [edx+2*16]		;; Next set of 2 group multipliers
 	jnc	ilp0
 	add	esi, normblkdst8	;; Add 64 pad bytes every 32 clmblkdsts
 	jmp	ilp0			;; Iterate
-ilpdn:	fstp	XMM_SUMOUT		;; Save SUMOUT
+ilpdn:	fstp	SUMOUT			;; Save SUMOUT
 echk	fstp	MAXERR			;; Save maximum error
 ttp	mov	norm_ptr1, edi		;; Save big/little flags array ptr
 ttp	mov	norm_ptr2, ebx		;; Save column multipliers ptr

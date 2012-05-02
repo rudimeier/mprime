@@ -7,7 +7,7 @@ CFLAGS = -I.. -O2 -march=i586 -malign-double
 CPP = g++
 CPPFLAGS = -I.. -I../qd -O2 -march=i586 -malign-double
 
-HAIKUOBJS = cpuid.o gwnum.o gwthread.o gwutil.o gwdbldbl.o giants.o ecmstag1.o
+HAIKUOBJS = cpuid.o gwnum.o gwtables.o gwthread.o gwutil.o gwdbldbl.o giants.o ecmstag1.o
 
 LIB = gwnum.a
 

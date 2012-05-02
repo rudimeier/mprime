@@ -1,8 +1,8 @@
-; Copyright 2010-2011 Mersenne Research, Inc.  All rights reserved
+; Copyright 2010-2012 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
-; These FFTs were split out of r4dwpncore.asm because of MASM limitations.
+; These FFTs were split out of r4dwpn.asm because of MASM limitations.
 ;
 
 	TITLE   setup
@@ -24,10 +24,7 @@ INCLUDE r4.mac
 INCLUDE r4dwpnpass1sc.mac
 INCLUDE r4dwpnpass2.mac
 
-EXTRN	pass1_aux_entry_point_return:PROC
-EXTRN	xgw_finish_fft:PROC
 EXTRN	xgw_carries_wpn:PROC
-EXTRN	xgw_finish_mult_wpn:PROC
 
 _TEXT SEGMENT
 

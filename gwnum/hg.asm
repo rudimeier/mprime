@@ -1,9 +1,10 @@
-; Copyright 2001-2011 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2012 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
 ; Assemble the radix-4 home-grown FFTs.  These were developed over many years
-; and used up until version 25 of the gwnum library.
+; and used up until version 25 of the gwnum library.  The one-pass FFTs and a few
+; of the smaller two-pass FFTs are still in use today.
 ;
 
 	TITLE   setup
@@ -27,16 +28,16 @@ INCLUDE hgpass1.mac
 INCLUDE hgpass1sc.mac
 INCLUDE hgpass2.mac
 
-EXTRN	pass1_aux_entry_point_return:PROC
-EXTRN	xgw_finish_fft:PROC
 EXTRN	xgw_carries:PROC
-EXTRN	xgw_finish_mult:PROC
 
 _TEXT SEGMENT
 
-;; Implement the small one pass FFTs, for now only assemble one-pass FFTs for the CORE architecture
+;; Implement the small one pass FFTs, for now only assemble one-pass FFTs for the BLEND architecture
 
 IF @INSTR(,%xarch,<BLEND>) NE 0
+
+PREFETCHING = 0
+
 	xonepass 32, 0
 	xonepass 48, 0
 	xonepass 64, 0

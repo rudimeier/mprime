@@ -1,4 +1,4 @@
-; Copyright 1995-2011 Mersenne Research, Inc., all rights reserved
+; Copyright 1995-2012 Mersenne Research, Inc., all rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -1572,7 +1572,7 @@ sievedn:mov	rbx, savefac0		; Load trial factor corresponding
 	mov	rcx, savefac1		; to first sieve bit
 	and	rbx, rbx		; Are we testing 65+ bit factors?
 	jz	short oneword		; No, go do 64 bits or less
-	test	CPU_FLAGS, 10h		; Is this an SSE2 machine?
+	test	CPU_FLAGS, 200h		; Is this an SSE2 machine?
 	jz	notsse2			; No, use non-SSE2 code
 	cmp	rbx, 400h		; Are we testing 75+ bit numbers?
 	jge	tlp86			; Yes, use 75-86 bit SSE2 code

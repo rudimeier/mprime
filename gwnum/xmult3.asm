@@ -1,4 +1,4 @@
-; Copyright 2001-2010 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2012 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -21,9 +21,13 @@ INCLUDE xmult.mac
 INCLUDE xnormal.mac
 
 PUBLIC	xgw_carries_wpn
-PUBLIC	xgw_finish_mult_wpn
 
 _TEXT SEGMENT
+
+PROCF	dummy_xgw_carries_wpn		;; Needed because objconv is trashing the first symbol converting to Mach-o format
+	int_prolog 2*SZPTR+8,0,0
+	int_epilog 2*SZPTR+8,0,0
+dummy_xgw_carries_wpn ENDP
 
 ;;*****************************************
 ;; Routine for finishing off a r4dwpn FFT
@@ -50,14 +54,11 @@ PROCF	xgw_carries_wpn
 iskip:	mov	biglit_incr, rax	; Save computed increments
 	mov	grp_incr, rdx
 	mov	rsi, carries		; Addr of the carries
-	mov	ebx, addcount1		; Load block count
-	shl	rbx, 6
-	add	rbx, rsi
 	cmp	ZERO_PADDED_FFT, 0	; Special case the zero padded FFT case
 	jne	xgw_carries_zpad
 	xnorm012_wpn_part1
-	mov	rbp, DESTARG		; Addr of the FFT data
-	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
+	mov	rbp, DATA_ADDR		; Addr of the FFT data
+	mov	rdi, norm_ptr1		; Addr of the big/little flags array
 	mov	rdx, norm_grp_mults	; Addr of the group multipliers
 	mov	eax, count3		; Load count of grp multipliers
 	mov	loopcount2, eax		; Save count
@@ -76,16 +77,12 @@ nb2:	bump	rsi, 64			; Next carries pointer
 	add	rdx, grp_incr		; Next group multiplier
 	sub	loopcount2, 1		; Test loop counter
 	jnz	ilp0			; Next carry row
-idn:	mov	zero_fft, 0		; Clear zero-high-words-fft flag
 	jmp	cdn			; Jump to common exit code
 
 xgw_carries_zpad:
-	mov	rsi, DESTARG		; Addr of the FFT data
-	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
 	xnorm012_wpn_zpad_part1
-	mov	rsi, carries		; Addr of the carries
-	mov	rbp, DESTARG		; Addr of the FFT data
-	mov	rdi, norm_biglit_array	; Addr of the big/little flags array
+	mov	rbp, DATA_ADDR		; Addr of the FFT data
+	mov	rdi, norm_ptr1		; Addr of the big/little flags array
 	mov	rdx, norm_grp_mults	; Addr of the group multipliers
 	mov	eax, count3		; Load count of grp multipliers
 	mov	loopcount2, eax		; Save count
@@ -100,50 +97,10 @@ zlp1:	xnorm012_wpn_zpad		; Split carries for one cache line
 	add	rdx, grp_incr		; Next group multiplier
 	sub	loopcount2, 1		; Test loop counter
 	jnz	zlp0			; Next carry row
-	mov	const_fft, 0		; Clear mul-by-const-fft flag
 
 cdn:	int_epilog 2*SZPTR+8,0,0
 xgw_carries_wpn ENDP
 
-
-; Common code to finish off r4dwpn FFTs.  The Windows 64-bit ABI
-; frowns on us jumping from one procedure into another.
-; However, my reading of the spec is that as long as the two procedures have
-; identical prologs then stack unwinding for exception handling will work OK.
-; Of course, this code won't be linked into a 64-bit Windows executable,
-; but we include the dummy prolog to be consistent.
-
-PROCF	__common_wpn_xfft_exit_code
-
-	;; Create a dummy prolog
-	ad_prolog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
-
-; Common code to finish up multiplies
-
-; Finish the multiply
-
-xgw_finish_mult_wpn:
-
-; Set FFT-started flag
-
-	mov	rsi, DESTARG		; Addr of FFT data
-	mov	eax, POSTFFT		; Set FFT started flag
-	mov	DWORD PTR [rsi-28], eax
-
-; Calculate SUMOUT and MAXERR values
-
-	movsd	xmm7, XMM_SUMOUT	; Add together the two partial sumouts
-	addsd	xmm7, XMM_SUMOUT+8
-	movsd	Q [rsi-24], xmm7	; Save sum of FFT outputs
-	movsd	xmm6, XMM_MAXERR	; Compute new maximum error
-	maxsd	xmm6, XMM_MAXERR+8
-	movsd	MAXERR, xmm6
-
-; Return
-
-	ad_epilog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
-
-__common_wpn_xfft_exit_code ENDP
 
 _TEXT	ENDS
 END

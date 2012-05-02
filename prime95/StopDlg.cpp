@@ -32,7 +32,7 @@ void CStopDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_THREAD_TEXT, c_thread_text);
 	DDX_Control(pDX, IDC_THREAD, c_thread);
 	DDX_Text(pDX, IDC_THREAD, m_thread);
-	DDV_MinMaxUInt(pDX, m_thread, 1, NUM_WORKER_THREADS);
+	DDV_MinMaxUInt(pDX, m_thread, 1, WORKER_THREADS_ACTIVE);
 	//}}AFX_DATA_MAP
 	c_thread_text.EnableWindow (!m_all_threads);
 	c_thread.EnableWindow (!m_all_threads);

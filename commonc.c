@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2012 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
@@ -11,7 +11,7 @@
 | Commonc contains information used during setup and execution
 +---------------------------------------------------------------------*/
 
-char JUNK[]="Copyright 1996-2011 Mersenne Research, Inc. All rights reserved";
+char JUNK[]="Copyright 1996-2012 Mersenne Research, Inc. All rights reserved";
 
 char	INI_FILE[80] = {0};
 char	LOCALINI_FILE[80] = {0};
@@ -387,8 +387,8 @@ void getCpuInfo (void)
 	if (temp == 0) CPU_FLAGS &= ~CPU_SSE41;
 	if (temp == 1) CPU_FLAGS |= CPU_SSE41;
 	temp = IniGetInt (LOCALINI_FILE, "CpuSupports3DNow", 99);
-	if (temp == 0) CPU_FLAGS &= ~CPU_3DNOW;
-	if (temp == 1) CPU_FLAGS |= CPU_3DNOW;
+	if (temp == 0) CPU_FLAGS &= ~(CPU_3DNOW + CPU_3DNOW_PREFETCH);
+	if (temp == 1) CPU_FLAGS |= (CPU_3DNOW + CPU_3DNOW_PREFETCH);
 	temp = IniGetInt (LOCALINI_FILE, "CpuSupportsAVX", 99);
 	if (temp == 0) CPU_FLAGS &= ~CPU_AVX;
 	if (temp == 1) CPU_FLAGS |= CPU_AVX;
@@ -461,9 +461,10 @@ void getCpuDescription (
 		strcat (buf, "CPU features: ");
 //		if (CPU_FLAGS & CPU_RDTSC) strcat (buf, "RDTSC, ");
 //		if (CPU_FLAGS & CPU_CMOV) strcat (buf, "CMOV, ");
-		if (CPU_FLAGS & CPU_PREFETCH) strcat (buf, "Prefetch, ");
+//		if (CPU_FLAGS & CPU_MMX) strcat (buf, "MMX, ");
 		if (CPU_FLAGS & CPU_3DNOW) strcat (buf, "3DNow!, ");
-		if (CPU_FLAGS & CPU_MMX) strcat (buf, "MMX, ");
+		else if (CPU_FLAGS & CPU_3DNOW_PREFETCH) strcat (buf, "3DNow! Prefetch, ");
+		else if (CPU_FLAGS & CPU_PREFETCH) strcat (buf, "Prefetch, ");
 		if (CPU_FLAGS & CPU_SSE) strcat (buf, "SSE, ");
 		if (CPU_FLAGS & CPU_SSE2) strcat (buf, "SSE2, ");
 		if (CPU_FLAGS & CPU_SSE41) strcat (buf, "SSE4, ");
@@ -751,6 +752,7 @@ void nameAndReadIniFiles (
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_INTEL_OTHER ? "Unknown Intel" :
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_AMD_K8 ? "AMD K8" :
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_AMD_K10 ? "AMD K10" :
+		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_AMD_BULLDOZER ? "AMD Bulldozer" :
 		 CPU_ARCHITECTURE == CPU_ARCHITECTURE_OTHER ? "Not Intel and not AMD" : "Undefined");
 	strcat (buf, "L2 cache size: ");
 	if (CPU_L2_CACHE_SIZE < 0) strcat (buf, "unknown");
@@ -858,6 +860,12 @@ int readIniFiles (void)
 	ROLLING_AVERAGE = (unsigned int) IniGetInt (LOCALINI_FILE, "RollingAverage", 1000);
 	if (ROLLING_AVERAGE < 10) ROLLING_AVERAGE = 10;
 	if (ROLLING_AVERAGE > 4000) ROLLING_AVERAGE = 4000;
+	/* Rolling average needs to be reset when AVX capable machines upgrade from v26 to v27. */
+	if (CPU_FLAGS & CPU_AVX && ! IniGetInt (LOCALINI_FILE, "RollingAverageIsFromV27", 0)) {
+		ROLLING_AVERAGE = 1000;
+		IniWriteInt (LOCALINI_FILE, "RollingAverage", 1000);
+		IniWriteInt (LOCALINI_FILE, "RollingAverageIsFromV27", 1);
+	}
 
 	PRECISION = (unsigned int) IniGetInt (INI_FILE, "PercentPrecision", 2);
 	if (PRECISION > 6) PRECISION = 6;
@@ -2974,7 +2982,8 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 	         w->work_type == WORK_DBLCHK ||
 	         w->work_type == WORK_ADVANCEDTEST) &&
 	        (w->n < MIN_PRIME ||
-	         w->n > (unsigned long) (CPU_FLAGS & CPU_SSE2 ? MAX_PRIME_SSE2 : MAX_PRIME))) {
+		 (w->forced_fftlen == 0 &&
+		  w->n > (unsigned long) (CPU_FLAGS & (CPU_AVX | CPU_SSE2) ? MAX_PRIME_SSE2 : MAX_PRIME)))) {
 		char	buf[80];
 		sprintf (buf, "Error: Worktodo.txt file contained bad LL exponent: %ld\n", w->n);
 		OutputBoth (MAIN_THREAD_NUM, buf);
