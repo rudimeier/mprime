@@ -3399,20 +3399,22 @@ int internal_gwsetup (
 		}
 	}
 
-/* If the carry must be spread over more than 2 words, then set global */
-/* so that assembly code knows this.  We check to see if three small FFT words */
+/* For x87 and SSE2 FFTs:  if the carry must be spread over more than 2 words, then set */
+/* variable so that assembly code knows this.  We check to see if three small FFT words */
 /* can absorb the expected number of bits in a result word.  We are not */
 /* aggressive in pushing this limit (we assume no big words will absorb */
-/* any of the carry) as it is not a major performance penalty to do 4 word */
-/* carries.  In fact, we might should do 4 words all the time. */
+/* any of the carry) as it is not a major performance penalty to do 4 or 6 word */
+/* carry propagations.  In fact, we might should do 4 or 6 words all the time. */
 
-	if (gwdata->ZERO_PADDED_FFT ||
-	    3.0 * gwdata->NUM_B_PER_SMALL_WORD * log2 (b) >
-			2.0 * ((gwdata->NUM_B_PER_SMALL_WORD + 1) * log2 (b) - 1) +
-			0.6 * log2 (gwdata->FFTLEN) + log2 (k) + 1.7 * log2 (abs (c)))
-		asm_data->SPREAD_CARRY_OVER_4_WORDS = FALSE;
-	else
-		asm_data->SPREAD_CARRY_OVER_4_WORDS = TRUE;
+	if (! (gwdata->cpu_flags & CPU_AVX)) {
+		if (gwdata->ZERO_PADDED_FFT ||
+		    3.0 * gwdata->NUM_B_PER_SMALL_WORD * log2 (b) >
+				2.0 * ((gwdata->NUM_B_PER_SMALL_WORD + 1) * log2 (b) - 1) +
+				0.6 * log2 (gwdata->FFTLEN) + log2 (k) + 1.7 * log2 (abs (c)))
+			asm_data->SPREAD_CARRY_OVER_EXTRA_WORDS = FALSE;
+		else
+			asm_data->SPREAD_CARRY_OVER_EXTRA_WORDS = TRUE;
+	}
 
 /* Set some global variables that make life easier in the assembly code */
 /* that wraps carry out of top FFT word into the bottom FFT word. */
@@ -4053,8 +4055,13 @@ int pass1_state1_assign_first_block (
 			unsigned int size;
 
 			if (gwdata->pass1_carry_sections[j].section_state >= 2) continue;
-			if (gwdata->pass1_carry_sections[j].last_block - gwdata->pass1_carry_sections[j].start_block <
+			/* Since each section must be at least num_postfft_blocks in size, make sure */
+			/* the section we are splitting is at least 2*num_postfft_blocks in size. */
+			/* Note: deadlocks can occur if we don't take over sections that haven't started. */
+			if (gwdata->pass1_carry_sections[j].section_state != 0 &&
+			    gwdata->pass1_carry_sections[j].last_block - gwdata->pass1_carry_sections[j].start_block <
 					gwdata->num_postfft_blocks + gwdata->num_postfft_blocks) continue;
+			/* See if this section is big enough and the largest one thusfar. */
 			size = gwdata->pass1_carry_sections[j].last_block - gwdata->pass1_carry_sections[j].next_block;
 			if (size > largest_unfinished_size && size >= min_split_size) {
 				largest_unfinished = j;
@@ -5030,13 +5037,20 @@ int multithread_init (
 		asm_data->last_pass1_block = gwdata->num_pass1_blocks - asm_data->cache_line_multiplier;
 	}
 
-/* Determine how many data blocks are affected by carries out of pass 1 section.  Eight is always safe. */
-/* For Mersenne numbers, two or three should be safe (if we aren't using a larger FFT size than necessary). */
-/* For other k,b,n,c combinations, we should do a little more research to set this to four or six when we can. */
+/* Determine how many data blocks are affected by carries out of pass 1 section.  Zero-padded FFTs require 8 words */
+/* to propagate carries into.  For AVX FFTs, ynorm012_wpn can spread the carry over a maximum of either 4 or 8 words. */
+/* For SSE2 FFTs, xnorm012_2d and xnorm012_2d_wpn spreads carries over either 2 or 6 words. */
 
-	gwdata->num_postfft_blocks = 8;
-	if (!gwdata->ZERO_PADDED_FFT && gwdata->k == 1.0 && gwdata->b == 2 && abs (gwdata->c) == 1)
-		gwdata->num_postfft_blocks = (int) floor (53.0 / gwdata->avg_num_b_per_word);
+	if (gwdata->ZERO_PADDED_FFT)
+		gwdata->num_postfft_blocks = 8;
+	else if (gwdata->cpu_flags & CPU_AVX) {
+		gwdata->num_postfft_blocks = (int) floor (53.0 / (gwdata->avg_num_b_per_word * log2 (gwdata->b)));
+		ASSERTG (gwdata->num_postfft_blocks <= 8);
+		asm_data->SPREAD_CARRY_OVER_EXTRA_WORDS = (gwdata->num_postfft_blocks > 4);
+	} else {
+		if (asm_data->SPREAD_CARRY_OVER_EXTRA_WORDS) gwdata->num_postfft_blocks = 6;
+		else gwdata->num_postfft_blocks = 2;
+	}
 	gwdata->num_postfft_blocks = round_up_to_multiple_of (gwdata->num_postfft_blocks, asm_data->cache_line_multiplier);
 
 /* Calculate the values used to compute pass 2 premultier pointers. */

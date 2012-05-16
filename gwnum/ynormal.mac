@@ -1851,6 +1851,8 @@ done:
 ; from each pass 1 block.  Three of the YMM carries are shifted and added
 ; back in to the current block, one of the YMM section carries is applied
 ; to the next block.
+; The num_postfft_blocks setting in gwdata controls how many words we can safely carry into.
+; We access this information in asm_data's SPREAD_CARRY_OVER_EXTRA_WORDS variable.
 ; rsi = pointer to carries
 ; rbp = pointer to FFT data
 ; rdi = pointer to big/little flags
@@ -1858,7 +1860,7 @@ done:
 ; rax,rbx,rcx = destroyed
 
 ynorm012_wpn MACRO ttp, base2, srcptr, carryptr, biglitptr
-	LOCAL	nz, clmloop, cloop, done
+	LOCAL	nz, cloop, last_iter, done
 
 	vmovapd	ymm2, [rsi]			;; Load low carry word
 	vmovapd	ymm3, [rsi+32]			;; Load hi carry word
@@ -1871,11 +1873,7 @@ nz:
 	mov	srcptr, rbp			;; Save pointers
 	mov	carryptr, rsi
 ttp	mov	biglitptr, rdi
-
-clmloop:
-
-ttp	mov	eax, cache_line_multiplier		;; We must increment rdi by a funky amount every 4*clm cache lines
-no ttp	sub	rax, rax				;; Init loop counter
+	mov	al, SPREAD_CARRY_OVER_EXTRA_WORDS ;; True if spreading carry over 8 words
 
 cloop:
 
@@ -1886,8 +1884,12 @@ ttp		movzx	esi, bh				;; Big/lit flags 1-2
 ttp		and	rbx, 01ch			;; Fudge flags 2
 
 		vmovapd	ymm0, [rbp]			;; Load values1
-ttp		vmulpd	ymm0, ymm0, [rdx+0*YMM_GMD][rcx] ;; Mul values1 by fudged two-to-minus-phi
 		vmovapd	ymm1, [rbp+32]			;; Load values2
+
+		cmp	al, 3*(256/4)			;; Is this the last iteration
+		je	last_iter			;; Yes, last iteration requires special handling
+
+ttp		vmulpd	ymm0, ymm0, [rdx+0*YMM_GMD][rcx] ;; Mul values1 by fudged two-to-minus-phi
 ttp		vmulpd	ymm1, ymm1, [rdx+1*YMM_GMD][rbx*8] ;; Mul values2 by fudged two-to-minus-phi
 		vaddpd	ymm0, ymm0, ymm2		;; x1 = values1 + carry
 		vaddpd	ymm1, ymm1, ymm3		;; x2 = values2 + carry
@@ -1912,11 +1914,22 @@ ttp	bump	rdi, 2				;; Advance pointers
 	jnc	cloop				;; Loop if not 4th iteration
 	sub	rbp, pass1blkdst		;; Each pass1 block consists of 4 pass 2 blocks
 	bump	rbp, 64				;; Next cache line
-ttp	sub	al, 4				;; Do we need to bump rdi yet?
-ttp	jnz	cloop				;; No, repeat carry propagation loop
+	dec	al				;; Decrement count of sets of 4 carries we've processed
+ttp	cmp	cache_line_multiplier, 4	;; We must increment rdi by a funky amount every 4*clm cache lines
+ttp	jne	cloop				;; No, repeat carry propagation loop
 ttp	add	rdi, normval2			;; Adjust ptr to little/big flags
-ttp	jmp	clmloop				;; Yes, reload 4*clm counter and propagate
-no ttp	jmp	cloop				;; No, repeat carry propagation loop
+	jmp	cloop				;; Repeat carry propagation loop
+
+		;; Do last iteration without propagating carries out
+last_iter:
+base2		vsubpd	ymm2, ymm2, YMM_BIGVAL		;; Subtract rounding constant from carries
+base2		vsubpd	ymm3, ymm3, YMM_BIGVAL
+ttp		vmulpd	ymm2, ymm2, [rdx+0*YMM_GMD+YMM_GMD/2][rcx] ;; Carry *= fudged grp two-to-phi
+ttp		vmulpd	ymm3, ymm3, [rdx+1*YMM_GMD+YMM_GMD/2][rbx*8]
+		vaddpd	ymm0, ymm0, ymm2		;; Values1 += carry
+		vaddpd	ymm1, ymm1, ymm3		;; Values2 += carry
+		vmovapd	[rbp], ymm0			;; Save new value1
+		vmovapd	[rbp+32], ymm1			;; Save new value2
 
 done:	mov	rbp, srcptr			;; Restore pointers
 	mov	rsi, carryptr
@@ -2396,7 +2409,7 @@ noncon:	ynorm012_wpn_zpad_cmn ttp, base2, noexec, srcptr, carryptr, biglitptr
 done:
 	ENDM
 ynorm012_wpn_zpad_cmn MACRO ttp, base2, const, srcptr, carryptr, biglitptr
-	LOCAL	clmloop, cloop, done
+	LOCAL	cloop, last_iter, done
 
 	vmovapd	ymm2, [rsi]			;; Load one carry word
 	vmovapd	ymm3, [rsi+32]			;; Load other carry word
@@ -2404,11 +2417,7 @@ ynorm012_wpn_zpad_cmn MACRO ttp, base2, const, srcptr, carryptr, biglitptr
 	mov	srcptr, rbp			;; Save pointers
 	mov	carryptr, rsi
 ttp	mov	biglitptr, rdi
-
-clmloop:
-
-ttp	mov	eax, cache_line_multiplier	;; We must increment rdi by a funky amount every 4*clm cache lines
-no ttp	sub	rax, rax			;; Init loop counter
+	mov	al, 1				;; Spreading carry over 8 words
 
 cloop:
 
@@ -2417,6 +2426,10 @@ ttp	movzx	esi, ch				;; Big/lit flags 1-2
 ttp	and	rcx, 0e0h			;; Fudge flags 1 & 2
 
 	vmovapd	ymm0, [rbp]			;; Load values1
+
+	cmp	al, 3*(256/4)			;; Is this the last iteration
+	je	last_iter			;; Yes, last iteration requires special handling
+
 ttp	vmulpd	ymm0, ymm0, [rdx+0*YMM_GMD][rcx] ;; mul by fudged grp two-to-minus-phi
 	vaddpd	ymm0, ymm0, ymm2		;; x1 = values1 + carry
 	split_upper_carry_zpad_word ttp, base2, ymm3, ymm1, ymm2, rsi*8
@@ -2450,11 +2463,18 @@ ttp	bump	rdi, 2				;; Advance pointers
 	jnc	cloop				;; Loop if not 4th iteration
 	sub	rbp, pass1blkdst		;; Each pass1 block consists of 4 pass 2 blocks
 	bump	rbp, 64				;; Next cache line
-ttp	sub	al, 4				;; Do we need to bump rdi yet?
-ttp	jnz	cloop				;; No, repeat carry propagation loop
+	dec	al				;; Decrement count of sets of 4 carries we've processed
+ttp	cmp	cache_line_multiplier, 4	;; We must increment rdi by a funky amount every 4*clm cache lines
+ttp	jne	cloop				;; No, repeat carry propagation loop
 ttp	add	rdi, normval2			;; Adjust ptr to little/big flags
-ttp	jmp	clmloop				;; Yes, reload 4*clm counter and propagate
-no ttp	jmp	cloop				;; No, repeat carry propagation loop
+	jmp	cloop				;; Repeat carry propagation loop
+
+		;; Do last iteration without propagating carries out
+last_iter:
+base2	vsubpd	ymm2, ymm2, YMM_BIGVAL		;; Subtract rounding constant from carry
+ttp	vmulpd	ymm2, ymm2, [rdx+0*YMM_GMD+YMM_GMD/2][rcx] ;; Carry *= fudged grp two-to-phi
+	vaddpd	ymm0, ymm0, ymm2		;; Values1 += carry
+	vmovapd	[rbp], ymm0			;; Save new values1
 
 done:	mov	rbp, srcptr			;; Restore pointers
 	mov	rsi, carryptr

@@ -1,4 +1,4 @@
-; Copyright 1995-2011 - Mersenne Research, Inc.  All rights reserved.
+; Copyright 1995-2012 - Mersenne Research, Inc.  All rights reserved.
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -1391,7 +1391,7 @@ norm012_2d MACRO
 	;; This means the carry may need to be spread over 4 words instead
 	;; of just 2.
 
-	cmp	SPREAD_CARRY_OVER_4_WORDS, 1;; Are there few bits per word?
+	cmp	SPREAD_CARRY_OVER_EXTRA_WORDS, 1;; Are there few bits per word?
 	je	hard			;; Yes, go do it the hard way
 
 					;; x2 = high carry, x1 = low carry

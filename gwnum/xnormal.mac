@@ -1,4 +1,4 @@
-; Copyright 2000-2011 - Mersenne Research, Inc.  All rights reserved.
+; Copyright 2000-2012 - Mersenne Research, Inc.  All rights reserved.
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -2615,7 +2615,7 @@ xnorm012_2d MACRO base2
 	;; This means the carry may need to be spread over 4 words instead
 	;; of just 2.
 
-	cmp	SPREAD_CARRY_OVER_4_WORDS, 1;; Are there few bits per word?
+	cmp	SPREAD_CARRY_OVER_EXTRA_WORDS, 1;; Are there few bits per word?
 	je	hard			;; Yes, go do it the hard way
 
 	movzx	rax, BYTE PTR [rdi+0]	;; Load big vs. little flag
@@ -4377,7 +4377,7 @@ xnorm012_wpn MACRO base2
 	;; This means the carry may need to be spread over 4 words instead
 	;; of just 2.
 
-	cmp	SPREAD_CARRY_OVER_4_WORDS, 1;; Are there few bits per word?
+	cmp	SPREAD_CARRY_OVER_EXTRA_WORDS, 1;; Are there few bits per word?
 	je	hard			;; Yes, go do it the hard way
 
 	movzx	rax, BYTE PTR [rdi+1]	;; Load 4 big vs. little flags

@@ -26,7 +26,8 @@ char ERRMSG5[] = "For added safety, redoing iteration using a slower, more relia
 char ERROK[] = "Disregard last error.  Result is reproducible and thus not a hardware problem.\n";
 char READFILEERR[] = "Error reading intermediate file: %s\n";
 char WRITEFILEERR[] = "Error writing intermediate file: %s\n";
-char RENAME_MSG[] = "Renaming intermediate file %s to %s.\n";
+char ALTSAVE_MSG[] = "Trying backup intermediate file: %s\n";
+char ALLSAVEBAD_MSG[] = "All intermediate files bad.  Temporarily abandoning work unit.\n";
 
 /* PauseWhileRunning globals */
 
@@ -3151,7 +3152,7 @@ int primeContinue (
 
 /* Read the line from the work file, break when out of lines */
 /* Skip comment lines from worktodo.ini */
-		
+
 		w = getNextWorkToDoLine (thread_num, w, LONG_TERM_USE);
 		if (w == NULL) break;
 		if (w->work_type == WORK_NONE) continue;
@@ -3422,55 +3423,183 @@ void uniquifySaveFile (
 	}
 }
 
-/* Prepare for reading save files.  Return TRUE if the save file or one */
-/* of its backups exists.  If using one of the backups, rename it properly. */
+/* Data structure used in reading save files and their backups as well as */
+/* renaming bad save files. */
 
-int saveFileExists (
+typedef struct save_file_state {
+	int	thread_num;
+	int	read_attempt;
+	int	a_save_file_existed;
+	int	a_non_bad_save_file_existed;
+	int	num_original_bad_files;
+	int	num_save_files_renamed;
+	char	base_filename[80];
+	char	current_filename[80];
+} saveFileState;
+
+/* Prepare for reading save files */
+
+void saveFileStateInit (
+	saveFileState *state,
 	int	thread_num,
 	char	*filename)
 {
-	char	backupname[32];
-	char	buf[120];
+	state->thread_num = thread_num;
+	state->read_attempt = 0;
+	state->a_save_file_existed = 0;
+	state->a_non_bad_save_file_existed = 0;
+	state->num_original_bad_files = -1;
+	state->num_save_files_renamed = 0;
+	strcpy (state->base_filename, filename);
+}
 
-/* If the save file exists, use it */
+/* Prepare for reading save files.  Return TRUE if the save file or one */
+/* of its backups exists. */
 
-	if (fileExists (filename)) return (TRUE);
+int saveFileExists (
+	saveFileState *state)
+{
+	int	i, maxbad;
+	char	buf[256];
+
+/* Bump the read_attempt counter so that we try the next save file */
+
+	state->read_attempt++;
+
+/* If the simple save file name exists, use it */
+
+	if (state->read_attempt <= 1) {
+		state->read_attempt = 1;
+		strcpy (state->current_filename, state->base_filename);
+		if (fileExists (state->current_filename)) goto winner;
+	}
 
 /* If the second save file exists, use it */
 
-	sprintf (backupname, "%s.bu", filename);
-	if (fileExists (backupname)) goto winner;
+	if (state->read_attempt <= 2) {
+		state->read_attempt = 2;
+		sprintf (state->current_filename, "%s.bu", state->base_filename);
+		if (fileExists (state->current_filename)) goto winner;
+	}
 
 /* If the third save file exists, use it */
 
-	sprintf (backupname, "%s.bu2", filename);
-	if (fileExists (backupname)) goto winner;
+	if (state->read_attempt <= 3) {
+		state->read_attempt = 3;
+		sprintf (state->current_filename, "%s.bu2", state->base_filename);
+		if (fileExists (state->current_filename)) goto winner;
+	}
 
 /* If the save file created during writing and before renaming exists, use it */
 
-	sprintf (backupname, "%s.write", filename);
-	if (fileExists (backupname)) goto winner;
+	if (state->read_attempt <= 4) {
+		state->read_attempt = 4;
+		sprintf (state->current_filename, "%s.write", state->base_filename);
+		if (fileExists (state->current_filename)) goto winner;
+	}
 
 /* In v24 we changed the first letter of the save file name.  We no longer do */
 /* this but we'll use them if we find them. */
 
-	if (filename[0] == 'p') {
-		sprintf (backupname, "q%s", filename+1);
-		if (fileExists (backupname)) goto winner;
-		sprintf (backupname, "r%s", filename+1);
-		if (fileExists (backupname)) goto winner;
+	if (state->base_filename[0] == 'p') {
+		if (state->read_attempt <= 5) {
+			state->read_attempt = 5;
+			sprintf (state->current_filename, "q%s", state->base_filename+1);
+			if (fileExists (state->current_filename)) goto winner;
+		}
+		if (state->read_attempt <= 6) {
+			state->read_attempt = 6;
+			sprintf (state->current_filename, "r%s", state->base_filename+1);
+			if (fileExists (state->current_filename)) goto winner;
+		}
+	}
+
+/* Now retry old bad save files in case they were good but the OS was in a funky state earlier. */
+/* Retry these files in highest to lowest order (but don't try any files we just renamed) so */
+/* that more recent bad files are tried first. */
+
+	if (state->num_original_bad_files >= 0) maxbad = state->num_original_bad_files;
+	else maxbad = IniGetInt (INI_FILE, "MaxBadSaveFiles", 10);
+	for (i = (state->read_attempt > 10) ? (state->read_attempt - 10) : 0; i < maxbad; i++) {
+		state->read_attempt = 10 + i;
+		sprintf (state->current_filename, "%s.bad%d", state->base_filename, maxbad - i);
+		if (fileExists (state->current_filename)) goto winner;
 	}
 
 /* No useable save file found */
 
 	return (FALSE);
 
-/* We found a useable backup file.  Rename it and output a message. */
+/* We found a useable backup file.  Return so caller can try it. */
 
-winner:	sprintf (buf, RENAME_MSG, backupname, filename);
-	OutputBoth (thread_num, buf);
-	rename (backupname, filename);
+winner:	if (state->read_attempt != 1) {
+		sprintf (buf, ALTSAVE_MSG, state->current_filename);
+		OutputBoth (state->thread_num, buf);
+	}
+	state->a_save_file_existed = 1;
+	if (state->read_attempt < 10) state->a_non_bad_save_file_existed = 1;
 	return (TRUE);
+}
+
+/* Handle a bad save file.  We used to simply delete it, but we found some */
+/* cases where the OS got in a funky state and could not read valid save files. */
+/* Rather than lose the work done thusfar, we now rename the bad save file for */
+/* possible later use. */
+
+void saveFileBad (
+	saveFileState *state)
+{
+	char	buf[256];
+	char	filename[256];
+	int	i, maxbad;
+
+/* Print an error message indicating failure to read the save file */
+	
+	sprintf (buf, READFILEERR, state->current_filename);
+	OutputBoth (state->thread_num, buf);
+
+/* Don't rename a bad save file */
+
+	if (state->read_attempt >= 10) return;
+
+/* If we aren't renaming save files, then just return */
+
+	maxbad = IniGetInt (INI_FILE, "MaxBadSaveFiles", 10);
+	if (maxbad == 0) return;
+
+/* If we haven't figured out how many bad save files existed originally, do so now */
+
+	if (state->num_original_bad_files < 0) {
+		state->num_original_bad_files = 0;
+		for (i = 1; i <= maxbad; i++) {
+			sprintf (buf, "%s.bad%d", state->base_filename, i);
+			if (! fileExists (buf)) break;
+			state->num_original_bad_files++;
+		}
+	}
+
+/* If we don't have room for this save file, delete the oldest save file and rename other save files */
+
+	if (state->num_original_bad_files + state->num_save_files_renamed >= maxbad) {
+		sprintf (filename, "%s.bad1", state->base_filename);
+		_unlink (filename);
+		for (i = 2; i <= maxbad; i++) {
+			char	oldname[80];
+			sprintf (filename, "%s.bad%d", state->base_filename, i-1);
+			sprintf (oldname, "%s.bad%d", state->base_filename, i);
+			rename (oldname, filename);
+		}
+		if (state->num_original_bad_files) state->num_original_bad_files--;
+		else state->num_save_files_renamed--;
+	}
+
+/* Rename the current file to a bad file */
+
+	sprintf (filename, "%s.bad%d", state->base_filename, state->num_original_bad_files + state->num_save_files_renamed + 1);
+	sprintf (buf, "Renaming %s to %s\n", state->current_filename, filename);
+	OutputBoth (state->thread_num, buf);
+	rename (state->current_filename, filename);
+	state->num_save_files_renamed++;
 }
 
 /* Open the save file for writing.  Either overwrite or generate a temporary */
@@ -3490,7 +3619,7 @@ int openWriteSaveFile (
 /* small USB stick installation where there is no room for two save files. */
 /* NOTE: This behavior is different than v24 where when the user selected one save */
 /* file, then he got the dangerous overwrite option. */
-	
+
 	if (num_backup_files == 99)
 		strcpy (output_filename, filename);
 	else
@@ -3580,8 +3709,14 @@ void deleteWriteSaveFile (
 void unlinkSaveFiles (
 	char	*filename)
 {
-	char	unlink_filename[32];
+	int	i, maxbad;
+	char	unlink_filename[80];
 
+	maxbad = IniGetInt (INI_FILE, "MaxBadSaveFiles", 10);
+	for (i = 1; i <= maxbad; i++) {
+		sprintf (unlink_filename, "%s.bad%d", filename, i);
+		_unlink (unlink_filename);
+	}
 	sprintf (unlink_filename, "%s.write", filename);
 	_unlink (unlink_filename);
 	sprintf (unlink_filename, "%s.bu2", filename);
@@ -3859,13 +3994,13 @@ int primeFactor (
 	unsigned long test_bits;	/* How far to factor to */
 	long	factor_found;		/* Returns true if factor found */
 	int	fd;			/* Continuation file handle or zero */
-	int	max_read_attempts;
 	int	first_iter_msg, continuation, stop_reason, find_smaller_factor;
 	unsigned long endpthi, endptlo;
 	double	endpt, startpt;		/* For computing percent complete */
 	unsigned long pass;		/* Factoring pass 0 through 15 */
 	unsigned long report_bits;	/* When to report results one bit */
 					/* at a time */
+	saveFileState save_file_state;	/* Manage savefile names during reading */
 	char	filename[32];
 	char	buf[200], str[80];
 	double	timers[2];
@@ -3955,32 +4090,45 @@ int primeFactor (
 /* to read in case there is an error deleting bad save files. */
 
 	filename[0] = 'f';
-	max_read_attempts = 99;
-	while (!continuation && saveFileExists (thread_num, filename) && max_read_attempts--) {
-		unsigned long version, sum, fachsw, facmsw;
+	saveFileStateInit (&save_file_state, thread_num, filename);
+	for ( ; ; ) {
 
-		fd = _open (filename, _O_BINARY | _O_RDONLY);
-		if (fd > 0 &&
-		    read_magicnum (fd, FACTOR_MAGICNUM) &&
-		    read_header (fd, &version, w, &sum) &&
-		    version == FACTOR_VERSION &&
-		    read_long (fd, (unsigned long *) &factor_found, NULL) &&
-		    read_long (fd, &bits, NULL) &&
-		    read_long (fd, &pass, NULL) &&
-		    read_long (fd, &fachsw, NULL) &&
-		    read_long (fd, &facmsw, NULL) &&
-		    read_long (fd, &endpthi, NULL) &&
-		    read_long (fd, &endptlo, NULL)) {
-			_close (fd);
-			facdata.asm_data->FACHSW = fachsw;
-			facdata.asm_data->FACMSW = facmsw;
-			continuation = TRUE;
-		} else {
-			sprintf (buf, READFILEERR, filename);
-			OutputBoth (thread_num, buf);
-			_close (fd);
-			_unlink (filename);
+		if (! saveFileExists (&save_file_state)) {
+			/* If there were save files, they are all bad.  Report a message */
+			/* and temporarily abandon the work unit.  We do this in hopes that */
+			/* we can successfully read one of the bad save files at a later time. */
+			/* This sounds crazy, but has happened when OSes get in a funky state. */
+			if (save_file_state.a_non_bad_save_file_existed) {
+				OutputBoth (thread_num, ALLSAVEBAD_MSG);
+				return (0);
+			}
+			/* No save files existed, start from scratch. */
+			break;
 		}
+
+		fd = _open (save_file_state.current_filename, _O_BINARY | _O_RDONLY);
+		if (fd > 0) {
+			unsigned long version, sum, fachsw, facmsw;
+			if (read_magicnum (fd, FACTOR_MAGICNUM) &&
+			    read_header (fd, &version, w, &sum) &&
+			    version == FACTOR_VERSION &&
+			    read_long (fd, (unsigned long *) &factor_found, NULL) &&
+			    read_long (fd, &bits, NULL) &&
+			    read_long (fd, &pass, NULL) &&
+			    read_long (fd, &fachsw, NULL) &&
+			    read_long (fd, &facmsw, NULL) &&
+			    read_long (fd, &endpthi, NULL) &&
+			    read_long (fd, &endptlo, NULL)) {
+				facdata.asm_data->FACHSW = fachsw;
+				facdata.asm_data->FACMSW = facmsw;
+				continuation = TRUE;
+			}
+			_close (fd);
+			if (continuation) break;
+		}
+
+		/* Close and rename the bad save file */
+		saveFileBad (&save_file_state);
 	}
 
 /* Init the title */
@@ -5006,13 +5154,13 @@ int prime (
 	unsigned long counter;
 	unsigned long error_count;
 	unsigned long iters;
+	saveFileState save_file_state;	/* Manage savefile names during reading */
 	char	filename[32];
 	double	timers[2];
 	double	inverse_p;
 	double	reallyminerr = 1.0;
 	double	reallymaxerr = 0.0;
 	double	*addr1;
-	int	max_read_attempts;
 	int	first_iter_msg, saving, near_fft_limit, sleep5;
 	unsigned long high32, low32;
 	int	rc, isPrime, stop_reason;
@@ -5110,12 +5258,22 @@ begin:	gwinit (&lldata.gwdata);
 /* files we try to read in case there is an error deleting bad save files. */
 
 	tempFileName (w, filename);
-	max_read_attempts = 99;
-	while (max_read_attempts--) {
+	saveFileStateInit (&save_file_state, thread_num, filename);
+	for ( ; ; ) {
 
 /* If there are no more save files, start off with the 1st Lucas number. */
 
-		if (! saveFileExists (thread_num, filename)) {
+		if (! saveFileExists (&save_file_state)) {
+			/* If there were save files, they are all bad.  Report a message */
+			/* and temporarily abandon the work unit.  We do this in hopes that */
+			/* we can successfully read one of the bad save files at a later time. */
+			/* This sounds crazy, but has happened when OSes get in a funky state. */
+			if (save_file_state.a_non_bad_save_file_existed ||
+			    (pass == 3 && save_file_state.a_save_file_existed)) {
+				OutputBoth (thread_num, ALLSAVEBAD_MSG);
+				return (0);
+			}
+			/* No save files existed, start from scratch. */
 			counter = 2;
 			error_count = 0;
 			first_iter_msg = FALSE;
@@ -5124,7 +5282,7 @@ begin:	gwinit (&lldata.gwdata);
 
 /* Read an LL save file.  If successful, break out of loop. */
 
-		if (readLLSaveFile (&lldata, filename, w, &counter, &error_count) &&
+		if (readLLSaveFile (&lldata, save_file_state.current_filename, w, &counter, &error_count) &&
 		    counter <= w->n) {
 			first_iter_msg = TRUE;
 			break;
@@ -5132,9 +5290,7 @@ begin:	gwinit (&lldata.gwdata);
 
 /* On read error, output message and loop to try the next backup save file. */
 
-		sprintf (buf, READFILEERR, filename);
-		OutputBoth (thread_num, buf);
-		_unlink (filename);
+		saveFileBad (&save_file_state);
 	}
 
 /* Hyperthreading backoff is an option to pause the program when iterations */
@@ -7608,7 +7764,7 @@ int prp (
 	gwhandle gwdata;
 	gwnum	x;
 	giant	N, tmp;
-	int	max_read_attempts, first_iter_msg, res, stop_reason;
+	int	first_iter_msg, res, stop_reason;
 	int	echk, saving, near_fft_limit, sleep5, isProbablePrime;
 	unsigned long Nlen, counter, iters, error_count;
 	int	prp_base, slow_iteration_count;
@@ -7617,6 +7773,7 @@ int prp (
 	double	reallyminerr = 1.0;
 	double	reallymaxerr = 0.0;
 	double	best_iteration_time;
+	saveFileState save_file_state;	/* Manage savefile names during reading */
 	char	filename[32];
 	char	buf[400], fft_desc[100], res64[17];
 	unsigned long last_counter = 0;		/* Iteration of last error */
@@ -7733,12 +7890,22 @@ begin:	gwinit (&gwdata);
 /* files we try to read in case there is an error deleting bad save files. */
 
 	tempFileName (w, filename);
-	max_read_attempts = 99;
-	while (max_read_attempts--) {
+	saveFileStateInit (&save_file_state, thread_num, filename);
+	for ( ; ; ) {
 
 /* If there are no more save files, start off with the 1st PRP squaring. */
 
-		if (! saveFileExists (thread_num, filename)) {
+		if (! saveFileExists (&save_file_state)) {
+			/* If there were save files, they are all bad.  Report a message */
+			/* and temporarily abandon the work unit.  We do this in hopes that */
+			/* we can successfully read one of the bad save files at a later time. */
+			/* This sounds crazy, but has happened when OSes get in a funky state. */
+			if (save_file_state.a_non_bad_save_file_existed ||
+			    (pass == 3 && save_file_state.a_save_file_existed)) {
+				OutputBoth (thread_num, ALLSAVEBAD_MSG);
+				return (0);
+			}
+			/* No save files existed, start from scratch. */
 			dbltogw (&gwdata, (double) prp_base, x);
 			counter = 0;
 			error_count = 0;
@@ -7748,16 +7915,14 @@ begin:	gwinit (&gwdata);
 
 /* Read a PRP save file.  If successful, break out of loop. */
 
-		if (readPRPSaveFile (&gwdata, x, filename, w, &counter, &error_count)) {
+		if (readPRPSaveFile (&gwdata, x, save_file_state.current_filename, w, &counter, &error_count)) {
 			first_iter_msg = TRUE;
 			break;
 		}
 
 /* On read error, output message and loop to try the next backup save file. */
 
-		sprintf (buf, READFILEERR, filename);
-		OutputBoth (thread_num, buf);
-		_unlink (filename);
+		saveFileBad (&save_file_state);
 	}
 
 /* Output a message saying we are starting/resuming the PRP test. */

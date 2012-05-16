@@ -24,11 +24,6 @@ PUBLIC	xgw_carries_wpn
 
 _TEXT SEGMENT
 
-PROCF	dummy_xgw_carries_wpn		;; Needed because objconv is trashing the first symbol converting to Mach-o format
-	int_prolog 2*SZPTR+8,0,0
-	int_epilog 2*SZPTR+8,0,0
-dummy_xgw_carries_wpn ENDP
-
 ;;*****************************************
 ;; Routine for finishing off a r4dwpn FFT
 ;;*****************************************

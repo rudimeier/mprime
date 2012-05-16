@@ -61,8 +61,8 @@ struct gwasm_data {
 	char	ffttype;		/* Type of fft (1, 2=square, 3, or 4) */
 	char	TOP_CARRY_NEEDS_ADJUSTING; /* True when carry out of top word */
 					/* needs adjusting */
-	char	SPREAD_CARRY_OVER_4_WORDS; /* True when carry out of top word */
-					/* must be spread over more than 2 words */
+	char	SPREAD_CARRY_OVER_EXTRA_WORDS; /* AVX: True when carries must be spread over more than 4 words. */
+					/* X87,SSE2: True when carries must be spread over more than 2 words. */
 	char	zero_fft;		/* TRUE if zero upper half in normalize */
 	char	const_fft;		/* TRUE if mul-by-const in normalize */
 	char	UNUSED_CHARS[6];

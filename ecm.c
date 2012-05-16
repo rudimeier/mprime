@@ -2199,13 +2199,11 @@ int ecm_restore (			/* For version 25 save files */
 	_close (fd);
 	return (TRUE);
 
-/* An error occured.  Delete the current intermediate file. */
+/* An error occured.  Cleanup and return FALSE. */
 
 readerr:
-	OutputStr (thread_num, "Error reading ECM save file.\n");
 	_close (fd);
 error:
-	_unlink (filename);
 	return (FALSE);
 }
 
@@ -2229,8 +2227,9 @@ int ecm (
 	unsigned long SQRT_B;
 	double	sigma, last_output, one_over_B, one_over_C_minus_B;
 	unsigned long i, j, curve, min_memory;
+	saveFileState save_file_state;	/* Manage savefile names during reading */
 	char	filename[32], buf[255], fft_desc[100];
-	int	res, stop_reason, stage, first_iter_msg, max_read_attempts;
+	int	res, stop_reason, stage, first_iter_msg;
 	gwnum	x, z, t1, t2, gg;
 	gwnum	Q2x, Q2z, Qiminus2x, Qiminus2z, Qdiffx, Qdiffz;
 	giant	N;		/* Number being factored */
@@ -2643,9 +2642,22 @@ OutputStr (thread_num, buf);
 /* Check for a continuation file.  Limit number of backup files we try */
 /* to read in case there is an error deleting bad save files. */
 
-	max_read_attempts = 99;
-	while (saveFileExists (thread_num, filename) && max_read_attempts--) {
+	saveFileStateInit (&save_file_state, thread_num, filename);
+	for ( ; ; ) {
 		uint64_t save_B, save_B_processed, save_C_processed;
+
+		if (! saveFileExists (&save_file_state)) {
+			/* If there were save files, they are all bad.  Report a message */
+			/* and temporarily abandon the work unit.  We do this in hopes that */
+			/* we can successfully read one of the bad save files at a later time. */
+			/* This sounds crazy, but has happened when OSes get in a funky state. */
+			if (save_file_state.a_non_bad_save_file_existed) {
+				OutputBoth (thread_num, ALLSAVEBAD_MSG);
+				return (0);
+			}
+			/* No save files existed, start from scratch. */
+			break;
+		}
 
 /* Allocate memory */
 
@@ -2658,11 +2670,13 @@ OutputStr (thread_num, buf);
 /* Read in the save file.  If the save file is no good ecm_restore will have */
 /* deleted it.  Loop trying to read a backup save file. */
 
-		if (! ecm_restore (&ecmdata, thread_num, filename, w, &stage,
+		if (! ecm_restore (&ecmdata, thread_num, save_file_state.current_filename, w, &stage,
 				   &curve, &sigma, &save_B, &save_B_processed,
 				   &save_C_processed, x, z)) {
 			gwfree (&ecmdata.gwdata, x);
 			gwfree (&ecmdata.gwdata, z);
+			/* Close and rename the bad save file */
+			saveFileBad (&save_file_state);
 			continue;
 		}
 
@@ -4057,13 +4071,11 @@ int pm1_restore (			/* For version 25 save files */
 	_close (fd);
 	return (TRUE);
 
-/* An error occured.  Delete the current intermediate file. */
+/* An error occured.  Cleanup and return. */
 
 readerr:
-	OutputStr (pm1data->thread_num, "Error reading P-1 save file.\n");
 	_close (fd);
 error:
-	_unlink (filename);
 	return (FALSE);
 }
 
@@ -4580,8 +4592,9 @@ int pminus1 (
 	unsigned long i, j, stage2incr, len, bit_number;
 	unsigned long error_recovery_mode = 0;
 	gwnum	x, gg, t3;
+	saveFileState save_file_state;	/* Manage savefile names during reading */
 	char	filename[32], buf[255], testnum[100];
-	int	have_save_file, max_read_attempts;
+	int	have_save_file;
 	int	res, stop_reason, stage, saving, near_fft_limit, echk;
 	double	one_over_len, one_over_B, one_pair_pct;
 	double	base_pct_complete, last_output, last_output_r;
@@ -4723,10 +4736,29 @@ restart:
 /* to read in case there is an error deleting bad save files. */
 
 	have_save_file = FALSE;
-	max_read_attempts = 99;
-	while (saveFileExists (thread_num, filename) && max_read_attempts--) {
-		have_save_file = pm1_restore (&pm1data, filename, w, &processed, &x, &gg);
-		if (have_save_file) break;
+	saveFileStateInit (&save_file_state, thread_num, filename);
+	for ( ; ; ) {
+		if (! saveFileExists (&save_file_state)) {
+			/* If there were save files, they are all bad.  Report a message */
+			/* and temporarily abandon the work unit.  We do this in hopes that */
+			/* we can successfully read one of the bad save files at a later time. */
+			/* This sounds crazy, but has happened when OSes get in a funky state. */
+			if (save_file_state.a_non_bad_save_file_existed) {
+				OutputBoth (thread_num, ALLSAVEBAD_MSG);
+				return (0);
+			}
+			/* No save files existed, start from scratch. */
+			break;
+		}
+
+		if (!pm1_restore (&pm1data, save_file_state.current_filename, w, &processed, &x, &gg)) {
+			/* Close and rename the bad save file */
+			saveFileBad (&save_file_state);
+			continue;
+		}
+
+		have_save_file = TRUE;
+		break;
 	}
 
 /* Record the amount of memory being used by this thread.  Until we get to */
