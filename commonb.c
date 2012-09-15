@@ -579,7 +579,7 @@ no_auto_detect:
 			else if (scramble[i] >= 'A' && scramble[i] <= 'Z')
 				AFFINITY_SCRAMBLE[i] = scramble[i] - 'A' + 10;
 			else if (scramble[i] >= 'a' && scramble[i] <= 'z')
-				AFFINITY_SCRAMBLE[i] = scramble[i] - 'A' + 36;
+				AFFINITY_SCRAMBLE[i] = scramble[i] - 'a' + 36;
 			else if (scramble[i] == '(')
 				AFFINITY_SCRAMBLE[i] = 62;
 			else if (scramble[i] == ')')

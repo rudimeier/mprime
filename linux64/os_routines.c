@@ -135,6 +135,12 @@ int OnBattery (void)
 	int	ac_state;
 
 	ac_state = -1;
+	fd = fopen ("/sys/class/power_supply/AC/online", "r");
+	if (fd != NULL) {
+		fscanf (fd, "%d", &ac_state);
+		fclose (fd);
+		return (ac_state == 0);
+	}
 	fd = fopen ("/proc/acpi/battery/BAT0/state", "r");
 	if (fd != NULL) {
 		while (fgets (buf, sizeof (buf), fd) != NULL) {

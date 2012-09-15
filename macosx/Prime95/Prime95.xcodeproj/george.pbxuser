@@ -17,7 +17,6 @@
 			5E422BF41285FB6200AFF4A8 /* PRPController.m:51 */,
 			5E7637281310E89D00F6BA19 /* *0x000000010005b123 */,
 			5E7637E2131190F400F6BA19 /* *0x000000010005b128 */,
-			5E0312191557645D00D6DA5E /* commonc.c:1102 */,
 		);
 		codeSenseManager = 5E5FDCBA105CE16100FD47A2 /* Code sense */;
 		executables = (
@@ -158,17 +157,16 @@
 			PBXWorkspaceStateSaveDate = 358811874;
 		};
 		perUserProjectItems = {
-			5E03120C155755A500D6DA5E = 5E03120C155755A500D6DA5E /* PBXTextBookmark */;
-			5E0312241557743800D6DA5E = 5E0312241557743800D6DA5E /* PBXTextBookmark */;
-			5E031263155A067200D6DA5E = 5E031263155A067200D6DA5E /* PBXTextBookmark */;
-			5E364B8D156308EA00AF4004 /* PBXTextBookmark */ = 5E364B8D156308EA00AF4004 /* PBXTextBookmark */;
-			5E5FDD16105CEC6600FD47A2 = 5E5FDD16105CEC6600FD47A2 /* PBXTextBookmark */;
-			5E69FB3F1288EA3400CA633E = 5E69FB3F1288EA3400CA633E /* PBXTextBookmark */;
-			5E6D3702124842E800352727 = 5E6D3702124842E800352727 /* PBXTextBookmark */;
-			5E7638741311A35000F6BA19 = 5E7638741311A35000F6BA19 /* PBXTextBookmark */;
-			5E9CCBF611D8F171008344A0 = 5E9CCBF611D8F171008344A0 /* PBXTextBookmark */;
-			5EDECAC4116D6E9C007B6FD8 = 5EDECAC4116D6E9C007B6FD8 /* PBXTextBookmark */;
-			5EEFFD6C126FDC6E00C4AAF4 = 5EEFFD6C126FDC6E00C4AAF4 /* PBXTextBookmark */;
+			5E03120C155755A500D6DA5E /* PBXTextBookmark */ = 5E03120C155755A500D6DA5E /* PBXTextBookmark */;
+			5E031263155A067200D6DA5E /* PBXTextBookmark */ = 5E031263155A067200D6DA5E /* PBXTextBookmark */;
+			5E364BA01563327300AF4004 /* PBXTextBookmark */ = 5E364BA01563327300AF4004 /* PBXTextBookmark */;
+			5E5FDD16105CEC6600FD47A2 /* PBXTextBookmark */ = 5E5FDD16105CEC6600FD47A2 /* PBXTextBookmark */;
+			5E69FB3F1288EA3400CA633E /* PBXTextBookmark */ = 5E69FB3F1288EA3400CA633E /* PBXTextBookmark */;
+			5E6D3702124842E800352727 /* PBXTextBookmark */ = 5E6D3702124842E800352727 /* PBXTextBookmark */;
+			5E7638741311A35000F6BA19 /* PBXTextBookmark */ = 5E7638741311A35000F6BA19 /* PBXTextBookmark */;
+			5E9CCBF611D8F171008344A0 /* PBXTextBookmark */ = 5E9CCBF611D8F171008344A0 /* PBXTextBookmark */;
+			5EDECAC4116D6E9C007B6FD8 /* PBXTextBookmark */ = 5EDECAC4116D6E9C007B6FD8 /* PBXTextBookmark */;
+			5EEFFD6C126FDC6E00C4AAF4 /* PBXTextBookmark */ = 5EEFFD6C126FDC6E00C4AAF4 /* PBXTextBookmark */;
 		};
 		sourceControlManager = 5E5FDCB9105CE16100FD47A2 /* Source Control */;
 		userBuildSettings = {
@@ -192,34 +190,6 @@
 		vrLen = 0;
 		vrLoc = 0;
 	};
-	5E0312191557645D00D6DA5E /* commonc.c:1102 */ = {
-		isa = PBXFileBreakpoint;
-		actions = (
-		);
-		breakpointStyle = 0;
-		continueAfterActions = 0;
-		countType = 0;
-		delayBeforeContinue = 0;
-		fileReference = 5E9CCBF011D8F135008344A0 /* commonc.c */;
-		functionName = "generate_application_string()";
-		hitCount = 0;
-		ignoreCount = 0;
-		lineNumber = 1102;
-		location = Prime95;
-		modificationTime = 358136228.509316;
-		originalNumberOfMultipleMatches = 1;
-		state = 1;
-	};
-	5E0312241557743800D6DA5E /* PBXTextBookmark */ = {
-		isa = PBXTextBookmark;
-		fRef = 5E9CCBF011D8F135008344A0 /* commonc.c */;
-		name = "commonc.c: 656";
-		rLen = 0;
-		rLoc = 22799;
-		rType = 0;
-		vrLen = 815;
-		vrLoc = 34663;
-	};
 	5E031263155A067200D6DA5E /* PBXTextBookmark */ = {
 		isa = PBXTextBookmark;
 		fRef = 5E031264155A067200D6DA5E /* commonc.c */;
@@ -242,15 +212,21 @@
 			sepNavVisRange = "{0, 0}";
 		};
 	};
-	5E364B8D156308EA00AF4004 /* PBXTextBookmark */ = {
+	5E364BA01563327300AF4004 /* PBXTextBookmark */ = {
 		isa = PBXTextBookmark;
-		fRef = 5E031264155A067200D6DA5E /* commonc.c */;
+		fRef = 5E364BA11563327300AF4004 /* commonc.c */;
 		name = "commonc.c: 656";
 		rLen = 0;
 		rLoc = 22799;
 		rType = 0;
 		vrLen = 0;
 		vrLoc = 0;
+	};
+	5E364BA11563327300AF4004 /* commonc.c */ = {
+		isa = PBXFileReference;
+		name = commonc.c;
+		path = /Users/george/mersenne/commonc.c;
+		sourceTree = "<absolute>";
 	};
 	5E422BF41285FB6200AFF4A8 /* PRPController.m:51 */ = {
 		isa = PBXFileBreakpoint;
@@ -266,7 +242,7 @@
 		ignoreCount = 0;
 		lineNumber = 51;
 		location = Prime95;
-		modificationTime = 358136228.4977721;
+		modificationTime = 358822004.262331;
 		originalNumberOfMultipleMatches = 1;
 		state = 1;
 	};
@@ -416,7 +392,7 @@
 		hitCount = 0;
 		ignoreCount = 0;
 		location = CoreFoundation;
-		modificationTime = 358136228.594185;
+		modificationTime = 358822004.335661;
 		originalNumberOfMultipleMatches = 1;
 		state = 1;
 		symbolName = __NSAutoreleaseNoPool;
@@ -483,7 +459,7 @@
 		hitCount = 0;
 		ignoreCount = 0;
 		location = Prime95;
-		modificationTime = 358136227.4962321;
+		modificationTime = 358822002.602273;
 		originalNumberOfMultipleMatches = 1;
 		state = 2;
 		symbolName = "*0x000000010005b123";
@@ -499,7 +475,7 @@
 		hitCount = 0;
 		ignoreCount = 0;
 		location = Prime95;
-		modificationTime = 358136227.496472;
+		modificationTime = 358822002.602521;
 		originalNumberOfMultipleMatches = 1;
 		state = 2;
 		symbolName = "*0x000000010005b128";
@@ -528,7 +504,7 @@
 		ignoreCount = 0;
 		lineNumber = 1172;
 		location = Prime95;
-		modificationTime = 358136228.429979;
+		modificationTime = 358822004.241804;
 		originalNumberOfMultipleMatches = 1;
 		state = 1;
 	};
@@ -553,7 +529,7 @@
 		ignoreCount = 0;
 		lineNumber = 1506;
 		location = Prime95;
-		modificationTime = 358136228.4504701;
+		modificationTime = 358822004.255831;
 		originalNumberOfMultipleMatches = 1;
 		state = 1;
 	};
@@ -568,17 +544,10 @@
 		hitCount = 0;
 		ignoreCount = 0;
 		location = Prime95;
-		modificationTime = 358136227.4952589;
+		modificationTime = 358822002.601511;
 		originalNumberOfMultipleMatches = 1;
 		state = 2;
 		symbolName = SetAuxThreadPriority;
-	};
-	5E9CCBF011D8F135008344A0 /* commonc.c */ = {
-		isa = PBXFileReference;
-		lastKnownFileType = sourcecode.c.c;
-		name = commonc.c;
-		path = /Users/george/mersenne/commonc.c;
-		sourceTree = "<absolute>";
 	};
 	5E9CCBF611D8F171008344A0 /* PBXTextBookmark */ = {
 		isa = PBXTextBookmark;
@@ -601,7 +570,7 @@
 		hitCount = 0;
 		ignoreCount = 0;
 		location = Prime95;
-		modificationTime = 358136227.495519;
+		modificationTime = 358822002.60175;
 		originalNumberOfMultipleMatches = 1;
 		state = 2;
 		symbolName = xfft_r4dwpn_864K_2304_4_CORE;
@@ -617,7 +586,7 @@
 		hitCount = 0;
 		ignoreCount = 0;
 		location = Prime95;
-		modificationTime = 358136227.4960021;
+		modificationTime = 358822002.602019;
 		originalNumberOfMultipleMatches = 1;
 		state = 2;
 		symbolName = xpass2_r4dwpn_2304_levels_CORE;
@@ -636,7 +605,7 @@
 		ignoreCount = 0;
 		lineNumber = 124;
 		location = Prime95;
-		modificationTime = 358136228.418005;
+		modificationTime = 358822004.207359;
 		originalNumberOfMultipleMatches = 1;
 		state = 1;
 	};
@@ -748,7 +717,7 @@
 		ignoreCount = 0;
 		lineNumber = 9176;
 		location = Prime95;
-		modificationTime = 358136227.490532;
+		modificationTime = 358822002.577457;
 		originalNumberOfMultipleMatches = 1;
 		state = 2;
 	};
@@ -807,7 +776,7 @@
 		ignoreCount = 0;
 		lineNumber = 5113;
 		location = Prime95;
-		modificationTime = 358136227.4912699;
+		modificationTime = 358822002.597433;
 		originalNumberOfMultipleMatches = 1;
 		state = 2;
 	};
