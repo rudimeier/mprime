@@ -977,7 +977,7 @@ next1:			while (zpad_jmptab->flags & 0x80000000) INC_JMPTAB_1 (zpad_jmptab);
 /* expected, if log2b is 6 you get about 2 extra bits, if log2b is 12 you can get */
 /* 3 extra bits.  This formula was found to be a bit too aggressive, at least for */
 /* large b.  Two examples:  2*22563^22563-1 and  2*22576^22576-1 fail in a 40K FFT. */
-/* Thus, we're changing the formula in v27 to a log2b of 12.5 gets 3 extra bits. */
+/* Thus, we're changing the formula in v27.9 to log2b of 12.5 gets the max of 3 extra bits. */
 /* Also, some examples such as 19464*19^31895+1 and 245*830^492-1 (worst case we */
 /* know of) still raise round off errors.  For added safety we assume an extra */
 /* 0.3 bits of output are needed when base is not 2. */
@@ -986,7 +986,7 @@ next1:			while (zpad_jmptab->flags & 0x80000000) INC_JMPTAB_1 (zpad_jmptab);
 			weighted_bits_per_output_word -=
 					((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
 					 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
-							  2.0 + (log2b - 6.0) / 6.5);
+					 (log2b <= 12.5) ? 2.0 + (log2b - 6.0) / 6.5 : 3.0);
 			if (b != 2) weighted_bits_per_output_word += 0.3;
 		}
 
@@ -4342,11 +4342,11 @@ void auxiliary_thread (void *arg)
 			}
 			// Copy maxerr and sumout
 			if (gwdata->cpu_flags & CPU_AVX) {
-				memcpy (asm_data->u.ymm.YMM_MAXERR, &main_thread_asm_data->MAXERR, 4 * sizeof (double));
+				memcpy (asm_data->u.ymm.YMM_MAXERR, &main_thread_asm_data->u.ymm.YMM_MAXERR, 4 * sizeof (double));
 			} else {
 				asm_data->u.xmm.XMM_SUMOUT[0] = 0.0;
 				asm_data->u.xmm.XMM_SUMOUT[1] = 0.0;
-				memcpy (asm_data->u.xmm.XMM_MAXERR, &main_thread_asm_data->MAXERR, 2 * sizeof (double));
+				memcpy (asm_data->u.xmm.XMM_MAXERR, &main_thread_asm_data->u.xmm.XMM_MAXERR, 2 * sizeof (double));
 			}
 		}
 
@@ -5038,6 +5038,11 @@ int multithread_init (
 		gwdata->num_pass2_blocks = (gwdata->FFTLEN / gwdata->PASS2_SIZE) >> 2;
 		asm_data->last_pass1_block = gwdata->num_pass1_blocks - asm_data->cache_line_multiplier;
 	}
+
+/* Place a limit on the number of threads */
+
+	if (gwdata->num_threads > gwdata->num_pass1_blocks / asm_data->cache_line_multiplier)
+		gwdata->num_threads = gwdata->num_pass1_blocks / asm_data->cache_line_multiplier;
 
 /* Determine how many data blocks are affected by carries out of pass 1 section.  Zero-padded FFTs require 8 words */
 /* to propagate carries into.  For AVX FFTs, ynorm012_wpn can spread the carry over a maximum of either 4 or 8 words. */
