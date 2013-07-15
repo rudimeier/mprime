@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2012 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2013 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
@@ -2606,7 +2606,7 @@ int isKnownMersennePrime (
 		p == 3021377 || p == 6972593 || p == 13466917 ||
 		p == 20996011 || p == 24036583 || p == 25964951 ||
 		p == 30402457 || p == 32582657 || p == 37156667 ||
-		p == 42643801 || p == 43112609);
+		p == 42643801 || p == 43112609 || p == 57885161);
 }
 
 /* Make a string out of a 96-bit value (a found factor) */

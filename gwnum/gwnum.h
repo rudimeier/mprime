@@ -16,7 +16,7 @@
 | threads IF AND ONLY IF each uses a different gwhandle structure
 | initialized by gwinit.
 | 
-|  Copyright 2002-2012 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2002-2013 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 #ifndef _GWNUM_H
@@ -59,9 +59,9 @@ typedef double *gwnum;
 /* gwsetup verifies that the version numbers match.  This prevents bugs */
 /* from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"27.9"
+#define GWNUM_VERSION		"27.11"
 #define GWNUM_MAJOR_VERSION	27
-#define GWNUM_MINOR_VERSION	9
+#define GWNUM_MINOR_VERSION	11
 
 /* Error codes returned by the three gwsetup routines */
 

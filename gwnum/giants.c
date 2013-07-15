@@ -7,7 +7,7 @@
  *  Massive rewrite by G. Woltman for 32-bit support
  *
  *  c. 1997,1998 Perfectly Scientific, Inc.
- *  c. 1998-2009 Mersenne Research, Inc.
+ *  c. 1998-2013 Mersenne Research, Inc.
  *  All Rights Reserved.
  *
  **************************************************************/
@@ -258,9 +258,7 @@ void gtog (			/* destgiant becomes equal to srcgiant. */
 	giant	destgiant)
 {
 	destgiant->sign = srcgiant->sign;
-	memcpy ((char *) destgiant->n,
-		(char *) srcgiant->n,
-		abs (srcgiant->sign) * sizeof (uint32_t));
+	memmove (destgiant->n, srcgiant->n, abs (srcgiant->sign) * sizeof (uint32_t));
 	ASSERTG (abs (destgiant->sign) <= destgiant->maxsize);
 }
 
@@ -880,9 +878,7 @@ void divgi (		/* n becomes n/d. n is arbitrary, but the
 			gshiftleft (dsize << 5, r);
 			n->n -= dsize;
 			n->sign += dsize;
-			memcpy ((char *) r->n,
-				(char *) n->n,
-				dsize * sizeof (uint32_t));
+			memmove (r->n, n->n, dsize * sizeof (uint32_t));
 			if (r->sign == 0) {
 				r->sign = dsize;
 				while (r->sign && r->n[r->sign-1] == 0) r->sign--;
@@ -893,11 +889,8 @@ void divgi (		/* n becomes n/d. n is arbitrary, but the
 
 			gtog (r, tmp);
 			divgi (gdata, d, tmp);
-			memset ((char *) n->n, 0,
-				dsize * sizeof (uint32_t));
-			memcpy ((char *) n->n,
-				(char *) tmp->n,
-				tmp->sign * sizeof (uint32_t));
+			memset ((char *) n->n, 0, dsize * sizeof (uint32_t));
+			memmove (n->n, tmp->n, tmp->sign * sizeof (uint32_t));
 
 /* Now compute the remainder for the next iteration */
 
@@ -1222,9 +1215,7 @@ void karatsquareg (		/* x becomes x^2. */
 	b.sign = s - w;		/* b is the upper half of the number */
 	b.n = x->n + w + w;
 	setmaxsize (&b, b.sign);
-	memmove ((char *) b.n,
-		 (char *) (a.n + w),
-		 b.sign * sizeof (uint32_t));
+	memmove (b.n, a.n + w, b.sign * sizeof (uint32_t));
 
 	c = popg (gdata, w + w + 3);	/* c is the upper and lower half added */
 	gtog (&a, c);
@@ -1293,9 +1284,7 @@ void karatmulg (		/* y becomes x*y. */
 
 	d = popg (gdata, s + t);	/* d is the upper half of y */
 	d->sign = (t > w) ? t - w : 0;
-	memcpy ((char *) d->n,
-		(char *) (c.n + w),
-		d->sign * sizeof (uint32_t));
+	memmove (d->n, c.n + w, d->sign * sizeof (uint32_t));
 
 	e = popg (gdata, s + t);	/* e is the x halves added */
 	gtog (&a, e); normal_addg (&b, e);
@@ -1320,9 +1309,7 @@ void karatmulg (		/* y becomes x*y. */
 	normal_subg (d, f);
 
 	if (d->sign) {
-		memcpy (c.n + w + w,	/* Copy muled uppers to result */
-			d->n,
-			d->sign * sizeof (uint32_t));
+		memmove (c.n + w + w, d->n, d->sign * sizeof (uint32_t)); /* Copy muled uppers to result */
 		while (c.sign < w + w)	/* zero pad mul'ed lowers */
 			c.n[c.sign++] = 0;
 		y->sign = d->sign + w;	/* Trick to add shifted f */
@@ -1413,9 +1400,7 @@ void gtogshiftright (	/* shift src right. Equivalent to dest = src/2^bits. */
 		return;
 	}
 	if (remain == 0) {
-		memcpy (dest->n,
-			src->n + words,
-			(size - words) * sizeof (uint32_t));
+		memmove (dest->n, src->n + words, (size - words) * sizeof (uint32_t));
 		dest->sign = src->sign + (src->sign < 0 ? words : -words);
 		return;
 	}
@@ -1777,16 +1762,16 @@ giant popg (
 	memsize = sizeof (gstacknode) + sizeof (giantstruct) + size * sizeof (uint32_t);
 	if (memsize > gdata->blksize) {
 		s = (gstacknode *) malloc (memsize);
-		memcpy (s, &gdata->stack, sizeof (gstacknode));
+		memmove (s, &gdata->stack, sizeof (gstacknode));
 	} else if (gdata->stack.memblk == NULL ||
 		   memsize > gdata->blksize - gdata->stack.offset) {
 		s = (gstacknode *) ((*gdata->allocate) (gdata->handle));
-		memcpy (s, &gdata->stack, sizeof (gstacknode));
+		memmove (s, &gdata->stack, sizeof (gstacknode));
 		gdata->stack.memblk = s;
 		gdata->stack.offset = memsize;
 	} else {
 		s = (gstacknode *) ((char *) gdata->stack.memblk + gdata->stack.offset);
-		memcpy (s, &gdata->stack, sizeof (gstacknode));
+		memmove (s, &gdata->stack, sizeof (gstacknode));
 		gdata->stack.offset += memsize;
 	}
 	gdata->num_popgs++;
@@ -1809,15 +1794,15 @@ void pushg (
 		s = (gstacknode *) ((char *) gdata->stack.prev - sizeof (gstacknode));
 		if (gdata->stack.memblk == s->memblk &&
 		    gdata->stack.offset == s->offset) {
-			memcpy (&gdata->stack, s, sizeof (gstacknode));
+			memmove (&gdata->stack, s, sizeof (gstacknode));
 			free (s);
 		} 
 		else if (gdata->stack.memblk != s->memblk) {
-			memcpy (&gdata->stack, s, sizeof (gstacknode));
+			memmove (&gdata->stack, s, sizeof (gstacknode));
 			(*gdata->free)(gdata->handle, s);
 		} 
 		else {
-			memcpy (&gdata->stack, s, sizeof (gstacknode));
+			memmove (&gdata->stack, s, sizeof (gstacknode));
 		}
 		gdata->num_popgs--;
 	}
@@ -1874,8 +1859,8 @@ void make_recip (	/* r becomes the steady-state reciprocal
 	b = bitlen (d);
 	normal_addg (r, d);
 	gshiftleft (b, r);
-	gtog (r, tmp2);
-	while (1) {
+	do {
+		gtog (r, tmp2);
 		gtog (r, tmp);
 		squaregi (gdata, tmp);
 		gshiftright (b, tmp);
@@ -1883,17 +1868,14 @@ void make_recip (	/* r becomes the steady-state reciprocal
 		gshiftright (b, tmp);
 		addg (r, r); 
 		subg (tmp, r);
-		if (gcompg (r, tmp2) <= 0) break;
-		gtog (r, tmp2);
-	}
+	} while (gcompg (r, tmp2) > 0);
 	setone (tmp);
 	gshiftleft (2*b, tmp);
 	gtog (r, tmp2); 
 	mulgi (gdata, d, tmp2);
 	subg (tmp2, tmp);
-	setone (tmp2);
 	while (tmp->sign < 0) {
-		subg (tmp2, r);
+		ulsubg (1, r);
 		addg (d, tmp);
 	}
 	pushg (gdata, 2);

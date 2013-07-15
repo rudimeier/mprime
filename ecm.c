@@ -2896,7 +2896,7 @@ skip_stage_2:	start_timer (timers, 0);
 
 		if (IniGetInt (INI_FILE, "GmpEcmHook", 0)) {
 			char	*msg, *buf;
-			int	msglen, i;
+			int	msglen, i, leadingzeroes;
 			giant	gx;
 			char	*hex = "0123456789ABCDEF";
 
@@ -2911,30 +2911,24 @@ skip_stage_2:	start_timer (timers, 0);
 			msglen = N->sign * 8 + 5;
 			buf = (char *) malloc (msglen + msglen + 80);
 			if (buf == NULL) goto oom;
-			strcpy (buf, "N=");
+			strcpy (buf, "N=0x");
 			msg = buf + strlen (buf);
+			leadingzeroes = 1; /* Still eat leading zeroes? */
 			for (i = 0; i < N->sign * 8; i++) {
-				msg[i+2] = hex[ ( N->n[N->sign - 1 - i/8] 
-			                    >> ((7-i%8)*4)) & 0xF ];
+				char nibble = ( N->n[N->sign - 1 - i/8] >> ((7-i%8)*4)) & 0xF;
+				if (nibble != 0) leadingzeroes = 0;
+				if (!leadingzeroes) *msg++ = hex[nibble];
 			}
-			msg[i+2] = 0;
-			for (i = 0; i < N->sign * 8 - 1; i++)
-				if (msg[i+2] != '0') break;
-			msg[i] = '0'; msg[i+1] = 'x';
-			strcpy (msg, msg+i);
-			strcat (buf, "; QX=");
-			msg = buf + strlen (buf);
+			strcpy (msg, "; QX=0x");
+			msg = msg + strlen (msg);
+			leadingzeroes = 1;
 			for (i = 0; i < gx->sign * 8; i++) {
-				msg[i+2] = hex[ ( gx->n[gx->sign - 1 - i/8] 
-				                    >> ((7-i%8)*4)) & 0xF ];
+				char nibble = ( gx->n[gx->sign - 1 - i/8] >> ((7-i%8)*4)) & 0xF;
+				if (nibble != 0) leadingzeroes = 0;
+				if (!leadingzeroes) *msg++ = hex[nibble];
 			}
-			msg[2+i] = 0;
-			for (i = 0; i < gx->sign * 8 - 1; i++)
-				if (msg[i+2] != '0') break;
-			msg[i] = '0'; msg[i+1] = 'x';
-			strcpy (msg, msg+i);
-			strcat (buf, "; SIGMA=");
-			msg = buf + strlen (buf);
+			strcpy (msg, "; SIGMA=");
+			msg = msg + strlen (msg);
 			sprintf (msg, "%.0f\n", sigma);
 			writeResults (buf);
 			free (buf);

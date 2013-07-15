@@ -1,4 +1,4 @@
-; Copyright 2011-2012 - Mersenne Research, Inc.  All rights reserved.
+; Copyright 2011-2013 - Mersenne Research, Inc.  All rights reserved.
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -975,48 +975,46 @@ done:	vmovapd	ymm2, YMM_TMP1			;; Restore carry for next section
 ; Input arguments are destroyed!
 
 ynorm_1d_cleanup MACRO ttp, base2, zero
-	LOCAL	section_begin, section_restart, section_loop, do_more, new_section, force_done, done
+		LOCAL	section_begin, section_restart, section_loop, new_section, done, force_done
 
-ttp	mov	rdi, norm_biglit_array		; Address of the big/little flags array
-ttp	mov	rbp, norm_col_mults		; Restart the column multipliers
+ttp		mov	rdi, norm_biglit_array		;; Address of the big/little flags array
+ttp		mov	rbp, norm_col_mults		;; Restart the column multipliers
 
-base2	vsubpd	ymm3, ymm3, YMM_BIGVAL
-	vmulpd	ymm3, ymm3, YMM_MINUS_C		;; Adjust wrap-around carry
-base2	vaddpd	ymm3, ymm3, YMM_BIGVAL
+base2		vsubpd	ymm3, ymm3, YMM_BIGVAL
+		vmulpd	ymm3, ymm3, YMM_MINUS_C		;; Adjust wrap-around carry
+base2		vaddpd	ymm3, ymm3, YMM_BIGVAL
 
-	mov	DWORD PTR YMM_TMP6, 12		;; Propagate carry at most 12 times (should almost never happen)
+		mov	DWORD PTR YMM_TMP6, 3		;; Propagate carry through at most 3 sections (should almost never happen)
+
 section_begin:
-	mov	rbx, 4				;; Loop through section at most 4 times
-	mov	PPTR YMM_TMP1, rsi		;; Save section pointers
-ttp	mov	PPTR YMM_TMP2, rdi
-ttp	mov	PPTR YMM_TMP3, rbp
+		mov	rbx, 4				;; Loop through section at most 4 times
+		mov	PPTR YMM_TMP1, rsi		;; Save section pointers
+ttp		mov	PPTR YMM_TMP2, rdi
+ttp		mov	PPTR YMM_TMP3, rbp
 
-base2	vmovapd	ymm5, YMM_BIGVAL		;; Clear carries for next section
-no base2 vxorpd	ymm5, ymm5, ymm5
-	vmovapd	ymm4, ymm5
+		mov	PPTR YMM_TMP7, rsi		;; Init next section pointers to this section (in case we don't complete this section)
+ttp		mov	PPTR YMM_TMP8, rbp
+
+base2		vmovapd	ymm5, YMM_BIGVAL		;; Clear carries for next section
+no base2	vxorpd	ymm5, ymm5, ymm5
+		vmovapd	ymm4, ymm5
 
 section_restart:
-	vmovapd	YMM_TMP5, ymm5			;; Save next section's initial carries
-	vmovapd	YMM_TMP4, ymm4
-	mov	edx, count1			;; Count of cache lines in section or padded group
+		vmovapd	YMM_TMP5, ymm5			;; Save next section's initial carries
+		vmovapd	YMM_TMP4, ymm4
+		mov	edx, count1			;; Count of cache lines in section or padded group
 
 section_loop:
-	sub	DWORD PTR YMM_TMP6, 1		;; There is a bizarre case where adding a zero carry causes a carry (example:
-						;; 10^114+1, a data value of 500 becomes -500 with a carry of 1 -- add zero again and
-						;; it becomes -500 with a carry of -1).  This can lead to an infinite loop because
-						;; the 4 carries never become zero.  After many attempts at getting 4 zero carries,
-						;; give up and just add in the carries without propagation.
-	jle	force_done
 
-base2		vmovapd	ymm1, YMM_BIGVAL	;; Load comparison value
-no base2	vxorpd	ymm1, ymm1, ymm1	;; Create comparison value
-		vcmppd	ymm0, ymm3, ymm1, 0Ch	;; Are any carries non-zero
-		vmovmskpd rax, ymm0		;; Extract 4 comparison bits
-no zero		vcmppd	ymm0, ymm2, ymm1, 0Ch	;; Are any carries non-zero
-no zero		vmovmskpd rcx, ymm0		;; Extract 4 comparison bits
-no zero		or	rax, rcx		;; Are any bits on?
-zero		test	rax, rax		;; Are any bits on?
-		jz	done			;; No, we're all done
+base2		vmovapd	ymm1, YMM_BIGVAL		;; Load comparison value
+no base2	vxorpd	ymm1, ymm1, ymm1		;; Create comparison value
+		vcmppd	ymm0, ymm3, ymm1, 0Ch		;; Are any carries non-zero
+		vmovmskpd rax, ymm0			;; Extract 4 comparison bits
+no zero		vcmppd	ymm0, ymm2, ymm1, 0Ch		;; Are any carries non-zero
+no zero		vmovmskpd rcx, ymm0			;; Extract 4 comparison bits
+no zero		or	rax, rcx			;; Are any bits on?
+zero		test	rax, rax			;; Are any bits on?
+		jz	done				;; No, we're all done
 
 ttp		movzx	rax, BYTE PTR [rdi]		;; Load big vs. little flags
 no zero ttp	movzx	rcx, BYTE PTR [rdi+1]
@@ -1035,37 +1033,68 @@ no zero ttp	vmulpd	ymm1, ymm1, [rbp+96]		;; new value2 = val * two-to-phi
 		vmovapd	[rsi], ymm0			;; Save new value1
 no zero		vmovapd	[rsi+32], ymm1			;; Save new value2
 
-do_more:
-ttp	bump	rdi, 2				;; Advance pointers
-	bump	rsi, 64
-ttp	bump	rbp, 128
-	sub	rdx, 1				;; Test cache line counter
-	jnz	section_loop			;; More cache lines in section, go add carry in
+ttp		bump	rdi, 2				;; Advance pointers
+		bump	rsi, 64
+ttp		bump	rbp, 128
+		sub	rdx, 1				;; Test cache line counter
+		jnz	section_loop			;; More cache lines in section, go add carry in
 
 	;; Section ended.  Rotate carries and stay in the current section or
 	;; move to the next section.  I think only a length 32 FFT will ever
 	;; move onto the next section.
 
-	rotate_carries_interleaved base2, ymm3, ymm5, ymm2, ymm4, ymm0, ymm1
+		rotate_carries_interleaved base2, ymm3, ymm5, ymm2, ymm4, ymm0, ymm1
 
-base2	vsubpd	ymm5, ymm5, YMM_BIGVAL		;; Add carry for next section
-base2	vsubpd	ymm4, ymm4, YMM_BIGVAL
-	vaddpd	ymm5, ymm5, YMM_TMP5
-	vaddpd	ymm4, ymm4, YMM_TMP4
+		mov	PPTR YMM_TMP7, rsi		;; Save next section's pointers
+ttp		mov	PPTR YMM_TMP8, rbp
 
-	sub	rbx, 1				;; See if we should move to the next section
-	jz	short new_section		;; Yes, go start next section
+base2		vsubpd	ymm5, ymm5, YMM_BIGVAL		;; Add carry for next section
+base2		vsubpd	ymm4, ymm4, YMM_BIGVAL
+		vaddpd	ymm5, ymm5, YMM_TMP5
+		vaddpd	ymm4, ymm4, YMM_TMP4
 
-	mov	rsi, PPTR YMM_TMP1		;; Restore section pointers
-ttp	mov	rdi, PPTR YMM_TMP2
-ttp	mov	rbp, PPTR YMM_TMP3
-	jmp	section_restart			;; Do the section again
+		sub	rbx, 1				;; See if we should move to the next section
+		jz	short new_section		;; Yes, go start next section
+
+		mov	rsi, PPTR YMM_TMP1		;; Restore section pointers
+ttp		mov	rdi, PPTR YMM_TMP2
+ttp		mov	rbp, PPTR YMM_TMP3
+		jmp	section_restart			;; Do the section again
 
 new_section:
-	vmovapd	ymm3, ymm5			;; Copy next section carry words
-	vmovapd	ymm2, ymm4
-	jmp	section_begin			;; Do next section
 
+	;; There is a bizarre case where adding a zero carry causes a carry (example: 10^114+1, a data
+	;; value of 500 becomes -500 with a carry of 1 -- add zero again and it becomes -500 with a carry
+	;; of -1).  This means that even though we have shifted the carries 4 times, the carries may not
+	;; be zero.  Add the carries back to the section start.
+
+		mov	rsi, PPTR YMM_TMP1		;; Restore section start pointers
+ttp		mov	rbp, PPTR YMM_TMP3
+base2		vsubpd	ymm3, ymm3, YMM_BIGVAL		;; Subtract rounding constant from carry
+base2		vsubpd	ymm2, ymm2, YMM_BIGVAL
+ttp		vmulpd	ymm3, ymm3, [rbp+32]		;; carry1 *= two-to-phi
+ttp no zero	vmulpd	ymm2, ymm2, [rbp+96]		;; carry2 *= two-to-phi
+		vaddpd	ymm3, ymm3, [rsi]		;; Add in values1
+no zero		vaddpd	ymm2, ymm2, [rsi+32]		;; Add in values2
+		vmovapd	[rsi], ymm3			;; Save new value1
+no zero		vmovapd	[rsi+32], ymm2			;; Save new value2
+
+		mov	rsi, PPTR YMM_TMP7		;; Load next section pointers
+ttp		mov	rbp, PPTR YMM_TMP8
+		vmovapd	ymm3, ymm5			;; Copy next section carry words
+		vmovapd	ymm2, ymm4
+
+		sub	DWORD PTR YMM_TMP6, 1		;; Text maximum number of sections to process
+		jnz	section_begin			;; Do next section
+		jmp	short force_done		;; Forced end.  Add already loaded carries into next section.
+
+		;; Ugh, the next section's carries may not be zero (because adding a zero carry
+		;; can cause a carry into the next section).  Add any carries into next section.
+
+done:		vmovapd	ymm3, YMM_TMP5			;; Reload any rotated carries
+		vmovapd	ymm2, YMM_TMP4
+		mov	rsi, PPTR YMM_TMP7		;; Restore next section pointers
+ttp		mov	rbp, PPTR YMM_TMP8
 force_done:
 base2		vsubpd	ymm3, ymm3, YMM_BIGVAL		;; Subtract rounding constant from carry
 base2		vsubpd	ymm2, ymm2, YMM_BIGVAL
@@ -1075,19 +1104,7 @@ ttp no zero	vmulpd	ymm2, ymm2, [rbp+96]		;; carry2 *= two-to-phi
 no zero		vaddpd	ymm2, ymm2, [rsi+32]		;; Add in values2
 		vmovapd	[rsi], ymm3			;; Save new value1
 no zero		vmovapd	[rsi+32], ymm2			;; Save new value2
-base2		vmovapd	ymm3, YMM_BIGVAL		;; Clear carry1
-no base2	vxorpd	ymm3, ymm3, ymm3
-		vmovapd	ymm2, ymm3			;; Clear carry2
 
-		;; Ugh, the next section's carries may not be zero (because adding a zero carry
-		;; can cause a carry into the next section).  Keep going until they are zero.
-done:		vcmppd	ymm0, ymm3, YMM_TMP5, 0Ch ;; Are any carries non-zero
-		vmovmskpd rax, ymm0		;; Extract 4 comparison bits
-no zero		vcmppd	ymm0, ymm2, YMM_TMP4, 0Ch ;; Are any carries non-zero
-no zero		vmovmskpd rcx, ymm0		;; Extract 4 comparison bits
-no zero		or	rax, rcx		;; Are any bits on?
-zero		test	rax, rax		;; Are any bits on?
-		jnz	do_more			;; Yes, do more carrying
 	ENDM
 
 ; This macro is similar to the above, but is for the zero padding case.
