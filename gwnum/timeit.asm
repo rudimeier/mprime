@@ -1,4 +1,4 @@
-; Copyright 1995-2012 Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -30,7 +30,7 @@ ELSE
 X87_CASES	EQU	13
 ENDIF
 SSE2_CASES	EQU	216
-AVX_CASES	EQU	224
+AVX_CASES	EQU	300
 
 loopent	MACRO	y,z		; Create a entry in the loop entry table
 	DP	&y&z
@@ -492,6 +492,133 @@ av0b:	&ops
 	jmp	exit
 	ENDM
 
+ynormmac MACRO	memused, memarea, ops:vararg
+	LOCAL	avxlabel
+	avxlabel CATSTR <avcase>,%avx_case_num
+	avx_case_num = avx_case_num + 1
+	ynormmac1 avxlabel, memused, memarea, ops
+	ENDM
+ynormmac1 MACRO	lab, memused, memarea, ops:vararg
+	LOCAL	av00, av0a, av0b
+	inner_iters = memarea / (memused)
+	outer_iters = 10000 / inner_iters
+	odd_iters = 10000 - inner_iters * outer_iters
+	IF odd_iters EQ 0
+	odd_iters = inner_iters
+	ELSE
+	outer_iters = outer_iters + 1
+	ENDIF
+lab:	mov	edx, outer_iters
+	mov	ebx, odd_iters
+	mov	SRCARG, rdi		;; Save work buf addr
+av0a:	mov	rsi, SRCARG		;; Reload work buf addr (FFT data)
+	lea	rbp, [rsi+524288+256]	;; Addr of the multipliers
+;	mov	rdi, norm_biglit_array	;; Addr of the big/little flags array
+	lea	rdi, [rsi+5000000]
+av0b:	&ops
+	bump	rsi, 64			;; Next cache line
+	bump	rbp, 128		;; Next set of 8 multipliers
+	bump	rdi, 2			;; Next big/little flags
+	dec	ebx
+	jnz	av0b
+	mov	ebx, inner_iters
+	dec	edx
+	jnz	av0a
+	jmp	exit
+	ENDM
+
+ynormwpnmac MACRO memused, memarea, ops:vararg
+	LOCAL	avxlabel
+	avxlabel CATSTR <avcase>,%avx_case_num
+	avx_case_num = avx_case_num + 1
+	ynormwpnmac1 avxlabel, memused, memarea, ops
+	ENDM
+ynormwpnmac1 MACRO lab, memused, memarea, ops:vararg
+	LOCAL	av00, av0a, av0b
+	inner_iters = memarea / (memused)
+	outer_iters = 10000 / inner_iters
+	odd_iters = 10000 - inner_iters * outer_iters
+	IF odd_iters EQ 0
+	odd_iters = inner_iters
+	ELSE
+	outer_iters = outer_iters + 1
+	ENDIF
+lab:
+	mov	COPYZERO, outer_iters
+	mov	ebp, odd_iters
+	mov	SRCARG, rdi		;; Save work buf addr
+av0a:	mov	rsi, SRCARG		;; Reload work buf addr (FFT data)
+	mov	rdx, norm_grp_mults	;; Addr of the group multipliers
+	mov	rdi, norm_biglit_array	;; Addr of the big/little flags array
+IFDEF X86_64
+	lea	r9, [rdx+2*YMM_GMD]	;; Prefetch pointer for group multipliers
+ENDIF
+	movzx	rbx, WORD PTR [rdi]	;; Preload 4 big vs. little & fudge flags
+av0b:	&ops
+	bump	rsi, 64			;; Next cache line
+	bump	rdi, 2			;; Next big/little flags
+;	bump	rdx, 2*YMM_GMD		;; Next set of group multipliers
+	bump	rdx, 64
+	dec	rbp
+	jnz	av0b
+	mov	ebp, inner_iters
+	dec	COPYZERO
+	jnz	av0a
+	jmp	exit
+	ENDM
+
+
+IFNDEF X86_64
+ynormwpn4mac MACRO memused, memarea, ops:vararg
+	ynormwpnmac memused, memarea, ops
+	ENDM
+ELSE
+ynormwpn4mac MACRO memused, memarea, ops:vararg
+	LOCAL	avxlabel
+	avxlabel CATSTR <avcase>,%avx_case_num
+	avx_case_num = avx_case_num + 1
+	ynormwpn4mac1 avxlabel, memused, memarea, ops
+	ENDM
+ynormwpn4mac1 MACRO lab, memused, memarea, ops:vararg
+	LOCAL	av00, av0a, av0b
+	inner_iters = memarea / (memused)
+	outer_iters = 10000 / inner_iters
+	odd_iters = 10000 - inner_iters * outer_iters
+	IF odd_iters EQ 0
+	odd_iters = inner_iters
+	ELSE
+	outer_iters = outer_iters + 1
+	ENDIF
+lab:
+	mov	COPYZERO, outer_iters
+	mov	ebp, odd_iters
+	mov	SRCARG, rdi		;; Save work buf addr
+av0a:	mov	rsi, SRCARG		;; Reload work buf addr (FFT data)
+	lea	r13, [rsi+8192+256]	;; Source ptr #2
+	mov	r12, norm_grp_mults	;; Addr of the group multipliers
+	lea	r15, [r12+2*YMM_GMD]	;; Addr of the group multipliers #2
+	lea	r9, [r15+2*YMM_GMD]	;; Prefetch pointer for group multipliers
+	mov	rdi, norm_biglit_array	;; Addr of the big/little flags array
+	lea	r14, [rdi+4096+128]	;; Addr of the big/little flags array #2
+	movzx	rbx, WORD PTR [rdi]	;; Preload 4 big vs. little & fudge flags
+	movzx	rcx, WORD PTR [r14]	;; Preload 4 big vs. little & fudge flags
+av0b:	&ops
+	bump	rsi, 64			;; Next cache line
+	bump	rdi, 2			;; Next big/little flags
+	bump	r13, 64			;; Next cache line
+	bump	r14, 2			;; Next big/little flags
+;	bump	r12, 4*YMM_GMD		;; Next set of group multipliers
+	bump	r12, 64
+	bump	r15, 64
+	dec	rbp
+	jnz	av0b
+	mov	ebp, inner_iters
+	dec	COPYZERO
+	jnz	av0a
+	jmp	exit
+	ENDM
+ENDIF
+
 _TEXT	SEGMENT
 
 x87table: looptab case, X87_CASES
@@ -509,7 +636,7 @@ avxtable: looptab avcase, AVX_CASES
 ;	Parameter asm_data = rdi
 
 PROCFL	gwtimeit
-	ad_prolog 0,0,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	ad_prolog 0,0,rbx,rbp,rsi,rdi,r8,r9,r10,r11,r12,r13,r14,r15,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
 
 	mov	rdi, PPTR [AD_BASE]	; Load work buf address
 	mov	rsi, rdi
@@ -935,6 +1062,7 @@ INCLUDE yarch.mac
 INCLUDE ybasics.mac
 INCLUDE ymult.mac
 INCLUDE yr4.mac
+INCLUDE ynormal.mac
 
 ; This code reads/writes 64MB (1M cache lines) in contiguous blocks.  Timings are done
 ; on 4 memory sizes.  4KB will operate on the L1 cache only, 128KB will operate on the
@@ -968,7 +1096,7 @@ avcase11:	readwrite4 32768*1024, 2 ; Read/write 32MB
 		jmp	exit
 
 	yloop_init 32			;; Dummy call to yloop_init
-MAXRPT	EQU	2
+
 	avx_case_num = 12
 
 ;;12
@@ -998,11 +1126,11 @@ MAXRPT	EQU	2
 	avxmac 256, 100000, 0, yr4_sg4cl_2sc_eight_reals_unfft4 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64, rdi, YMM_SCD4, rdi, YMM_SCD2, 1
 
 ;;34
-	avxmac 256*1, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 1
-	avxmac 256*2, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 2
-	avxmac 256*3, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 3
-	avxmac 256*4, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 4
-	avxmac 256*5, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 5
+	avxmac 256*1, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 1	;;, L1PREFETCH_ALL, 2*256*1
+	avxmac 256*2, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 2	;;, L1PREFETCH_ALL, 2*256*2
+	avxmac 256*3, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 3	;;, L1PREFETCH_ALL, 2*256*3
+	avxmac 256*4, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 4	;;, L1PREFETCH_ALL, 2*256*4
+	avxmac 256*5, 8192, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 5	;;, L1PREFETCH_ALL, 2*256*5
 	avxmac 256*1, 100000, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 1
 	avxmac 256*2, 100000, 0, yr4_4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2, 2
 	avxmac 256*1, 8192, 0, yr4_b4cl_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, YMM_SCD2/4, 1
@@ -1222,20 +1350,114 @@ MAXRPT	EQU	2
 	avxmac 512*1, 100000, 0, yr8_sg8cl_2sc_sixteen_reals_unfft8 rsi, 8*64, 64, 2*64, 4*64, rdx, 8*64, 64, 2*64, 4*64, rdi, 0, rdi, YMM_SCD8, 1
 
 ;;216
+	avxmac 512*1, 8192, 0, yr8_8cl_16_reals_fft rsi, 8*64, 64, 128, 256, rdi, YMM_SCD7, 1
+	avxmac 512*1, 100000, 0, yr8_8cl_16_reals_fft rsi, 8*64, 64, 128, 256, rdi, YMM_SCD7, 1
+	avxmac 512*1, 8192, 0, yr8_8cl_16_reals_unfft rsi, 8*64, 64, 128, 256, rdi, YMM_SCD7, 1
+	avxmac 512*1, 100000, 0, yr8_8cl_16_reals_unfft rsi, 8*64, 64, 128, 256, rdi, YMM_SCD7, 1
+
+;;220
 	avxmac 640*1, 8192, 0, yr5_10cl_20_reals_fft rsi, 10*64, 64, 128, rdi, YMM_SCD9, 1
 	avxmac 640*1, 100000, 0, yr5_10cl_20_reals_fft rsi, 10*64, 64, 128, rdi, YMM_SCD9, 1
 	avxmac 640*1, 8192, 0, yr5_10cl_20_reals_unfft rsi, 10*64, 64, 128, rdi, YMM_SCD9, 1
 	avxmac 640*1, 100000, 0, yr5_10cl_20_reals_unfft rsi, 10*64, 64, 128, rdi, YMM_SCD9, 1
 
-;;220
+;;224
+	avxmac 768*1, 8192, 0, yr6_12cl_24_reals_fft rsi, 12*64, 64, 128, rdi, YMM_SCD11, 1
+	avxmac 768*1, 100000, 0, yr6_12cl_24_reals_fft rsi, 12*64, 64, 128, rdi, YMM_SCD11, 1
+	avxmac 768*1, 8192, 0, yr6_12cl_24_reals_unfft rsi, 12*64, 64, 128, rdi, YMM_SCD11, 1
+	avxmac 768*1, 100000, 0, yr6_12cl_24_reals_unfft rsi, 12*64, 64, 128, rdi, YMM_SCD11, 1
+
+;;228
 	avxmac 896*1, 8192, 0, yr7_14cl_28_reals_fft rsi, 14*64, 64, 128, rdi, YMM_SCD13, 1
 	avxmac 896*1, 100000, 0, yr7_14cl_28_reals_fft rsi, 14*64, 64, 128, rdi, YMM_SCD13, 1
 	avxmac 896*1, 8192, 0, yr7_14cl_28_reals_unfft rsi, 14*64, 64, 128, rdi, YMM_SCD13, 1
 	avxmac 896*1, 100000, 0, yr7_14cl_28_reals_unfft rsi, 14*64, 64, 128, rdi, YMM_SCD13, 1
 
+;;232
+	ynormmac 64, 8192, ynorm_1d exec, exec, noexec, noexec, noexec		;; base2 ttp (the most common case)
+	ynormmac 64, 8192, ynorm_1d exec, exec, noexec, exec, noexec		;; base2 ttp echk
+	ynormmac 64, 8192, ynorm_1d exec, exec, noexec, noexec, exec		;; base2 ttp const
+	ynormmac 64, 8192, ynorm_1d exec, exec, noexec, exec, exec		;; base2 ttp const echk
+	ynormmac 64, 8192, ynorm_1d noexec, exec, noexec, noexec, noexec	;; base2 nottp
+	ynormmac 64, 8192, ynorm_1d exec, noexec, noexec, noexec, noexec	;; nobase2 ttp
+	ynormmac 64, 8192, ynorm_1d exec, noexec, noexec, exec, noexec		;; nobase2 ttp echk
+	ynormmac 64, 8192, ynorm_1d exec, noexec, noexec, noexec, exec		;; nobase2 ttp const
+	ynormmac 64, 8192, ynorm_1d exec, noexec, noexec, exec, exec		;; nobase2 ttp const echk
+	ynormmac 64, 8192, ynorm_1d noexec, noexec, noexec, noexec, noexec	;; nobase2 nottp
+
+;;242
+	ynormmac 64, 8192, ynorm_1d_zpad exec, exec, noexec, noexec, noexec, exec, noexec	;; base2 ttp c1 (the most common case)
+	ynormmac 64, 8192, ynorm_1d_zpad exec, exec, exec, noexec, noexec, exec, noexec		;; base2 ttp c1 echk
+	ynormmac 64, 8192, ynorm_1d_zpad exec, exec, noexec, exec, noexec, noexec, noexec	;; base2 ttp const
+	ynormmac 64, 8192, ynorm_1d_zpad exec, exec, exec, exec, noexec, noexec, noexec		;; base2 ttp const echk
+	ynormmac 64, 8192, ynorm_1d_zpad exec, exec, noexec, noexec, noexec, exec, noexec	;; base2 ttp c1 khi
+	ynormmac 64, 8192, ynorm_1d_zpad exec, noexec, noexec, noexec, noexec, exec, noexec	;; nobase2 ttp c1 (the most common case)
+	ynormmac 64, 8192, ynorm_1d_zpad exec, noexec, exec, noexec, noexec, exec, noexec	;; nobase2 ttp c1 echk
+	ynormmac 64, 8192, ynorm_1d_zpad exec, noexec, noexec, exec, noexec, noexec, noexec	;; nobase2 ttp const
+	ynormmac 64, 8192, ynorm_1d_zpad exec, noexec, exec, exec, noexec, noexec, noexec	;; nobase2 ttp const echk
+	ynormmac 64, 8192, ynorm_1d_zpad exec, noexec, noexec, noexec, noexec, exec, noexec	;; nobase2 ttp c1 khi
+
+;;252
+	ynormwpn4mac 64, 8192, ynorm_wpn exec, exec, noexec, noexec, noexec		;; base2 ttp (the most common case)
+	ynormwpn4mac 64, 8192, ynorm_wpn exec, exec, noexec, exec, noexec		;; base2 ttp echk
+	ynormwpn4mac 64, 8192, ynorm_wpn exec, exec, noexec, noexec, exec		;; base2 ttp const
+	ynormwpn4mac 64, 8192, ynorm_wpn exec, exec, noexec, exec, exec			;; base2 ttp const echk
+	ynormwpn4mac 64, 8192, ynorm_wpn noexec, exec, noexec, noexec, noexec		;; base2 nottp
+	ynormwpn4mac 64, 8192, ynorm_wpn exec, noexec, noexec, noexec, noexec		;; nobase2 ttp
+	ynormwpn4mac 64, 8192, ynorm_wpn exec, noexec, noexec, exec, noexec		;; nobase2 ttp echk
+	ynormwpn4mac 64, 8192, ynorm_wpn exec, noexec, noexec, noexec, exec		;; nobase2 ttp const
+	ynormwpn4mac 64, 8192, ynorm_wpn exec, noexec, noexec, exec, exec		;; nobase2 ttp const echk
+	ynormwpn4mac 64, 8192, ynorm_wpn noexec, noexec, noexec, noexec, noexec		;; nobase2 nottp
+
+;;262
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, exec, noexec, noexec, noexec, exec, noexec	;; base2 ttp c1 (the most common case)
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, exec, exec, noexec, noexec, exec, noexec	;; base2 ttp c1 echk
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, exec, noexec, exec, noexec, noexec, noexec	;; base2 ttp const
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, exec, exec, exec, noexec, noexec, noexec	;; base2 ttp const echk
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, exec, noexec, noexec, noexec, exec, noexec	;; base2 ttp c1 khi
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, noexec, noexec, noexec, noexec, exec, noexec ;; nobase2 ttp c1 (the most common case)
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, noexec, exec, noexec, noexec, exec, noexec	;; nobase2 ttp c1 echk
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, noexec, noexec, exec, noexec, noexec, noexec ;; nobase2 ttp const
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, noexec, exec, exec, noexec, noexec, noexec	;; nobase2 ttp const echk
+	ynormwpn4mac 64, 8192, ynorm_wpn_zpad exec, noexec, noexec, noexec, noexec, exec, noexec ;; nobase2 ttp c1 khi
+
+;;272
+	avxmac 256, 8192, 0, yr4_b4cl_csc_wpn4_eight_reals_fft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND4, 1
+	avxmac 256, 100000, 0, yr4_b4cl_csc_wpn4_eight_reals_fft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND4, 1
+	avxmac 256, 8192, 0, yr4_b4cl_csc_wpn4_eight_reals_unfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND4, 1
+	avxmac 256, 100000, 0, yr4_b4cl_csc_wpn4_eight_reals_unfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND4, 1
+	avxmac 256*1, 8192, 0, yr4_b4cl_wpn4_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND2, 1
+	avxmac 256*2, 8192, 0, yr4_b4cl_wpn4_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND2, 2
+	avxmac 256*1, 100000, 0, yr4_b4cl_wpn4_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND2, 1
+	avxmac 256*2, 100000, 0, yr4_b4cl_wpn4_four_complex_djbfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND2, 2
+	avxmac 256*1, 8192, 0, yr4_b4cl_wpn4_four_complex_djbunfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND2, 1
+	avxmac 256*2, 8192, 0, yr4_b4cl_wpn4_four_complex_djbunfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND2, 2
+	avxmac 256*1, 100000, 0, yr4_b4cl_wpn4_four_complex_djbunfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND2, 1
+	avxmac 256*2, 100000, 0, yr4_b4cl_wpn4_four_complex_djbunfft rsi, 4*64, 64, 2*64, rdi, 0, rdi, YMM_SCND2, 2
+
+;;284
+	avxmac 256*1, 8192, 0, yr4_rsc_sg4cl_four_complex_fft4 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64, rdi, YMM_SCD4, 1
+	avxmac 256*1, 100000, 0, yr4_rsc_sg4cl_four_complex_fft4 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64, rdi, YMM_SCD4, 1
+	avxmac 256*1, 8192, 0, yr4_rsc_sg4cl_four_complex_unfft4 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64, rdi, YMM_SCD4, 1
+	avxmac 256*1, 100000, 0, yr4_rsc_sg4cl_four_complex_unfft4 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64, rdi, YMM_SCD4, 1
+	avxmac 256*1, 8192, 0, yr4_rsc_sg4cl_2sc_eight_reals_fft4 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64, rdi, YMM_SCD4, rdi, YMM_SCD2, 1
+	avxmac 256*1, 100000, 0, yr4_rsc_sg4cl_2sc_eight_reals_fft4 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64, rdi, YMM_SCD4, rdi, YMM_SCD2, 1
+	avxmac 256*1, 8192, 0, yr4_rsc_sg4cl_2sc_eight_reals_unfft4 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64, rdi, YMM_SCD4, rdi, YMM_SCD2, 1
+	avxmac 256*1, 100000, 0, yr4_rsc_sg4cl_2sc_eight_reals_unfft4 rsi, 4*64, 64, 2*64, rdx, 4*64, 64, 2*64, rdi, YMM_SCD4, rdi, YMM_SCD2, 1
+
+;;292
+	avxmac 512*1, 8192, 0, yr8_rsc_sg8cl_eight_complex_fft8 rsi, 8*64, 64, 2*64, 4*64, rdx, 8*64, 64, 2*64, 4*64, rdi, YMM_SCD8, 1
+	avxmac 512*1, 100000, 0, yr8_rsc_sg8cl_eight_complex_fft8 rsi, 8*64, 64, 2*64, 4*64, rdx, 8*64, 64, 2*64, 4*64, rdi, YMM_SCD8, 1
+	avxmac 512*1, 8192, 0, yr8_rsc_sg8cl_eight_complex_unfft8 rsi, 8*64, 64, 2*64, 4*64, rdx, 8*64, 64, 2*64, 4*64, rdi, YMM_SCD8, 1
+	avxmac 512*1, 100000, 0, yr8_rsc_sg8cl_eight_complex_unfft8 rsi, 8*64, 64, 2*64, 4*64, rdx, 8*64, 64, 2*64, 4*64, rdi, YMM_SCD8, 1
+	avxmac 512*1, 8192, 0, yr8_rsc_sg8cl_2sc_sixteen_reals_fft8 rsi, 8*64, 64, 2*64, 4*64, rdx, 8*64, 64, 2*64, 4*64, rdi, 0, rdi, YMM_SCD8, 1
+	avxmac 512*1, 100000, 0, yr8_rsc_sg8cl_2sc_sixteen_reals_fft8 rsi, 8*64, 64, 2*64, 4*64, rdx, 8*64, 64, 2*64, 4*64, rdi, 0, rdi, YMM_SCD8, 1
+	avxmac 512*1, 8192, 0, yr8_rsc_sg8cl_2sc_sixteen_reals_unfft8 rsi, 8*64, 64, 2*64, 4*64, rdx, 8*64, 64, 2*64, 4*64, rdi, 0, rdi, YMM_SCD8, 1
+	avxmac 512*1, 100000, 0, yr8_rsc_sg8cl_2sc_sixteen_reals_unfft8 rsi, 8*64, 64, 2*64, 4*64, rdx, 8*64, 64, 2*64, 4*64, rdi, 0, rdi, YMM_SCD8, 1
+
 ; Exit the timing code
 
-exit:	ad_epilog 0,0,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+exit:	ad_epilog 0,0,rbx,rbp,rsi,rdi,r8,r9,r10,r11,r12,r13,r14,r15,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
 
 gwtimeit ENDP
 

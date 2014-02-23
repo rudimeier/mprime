@@ -1,4 +1,4 @@
-; Copyright 2001-2012 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2014 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -235,7 +235,7 @@ set_FFT_constants MACRO fftname, in_place, all_complex, p2_levels, clmarg
 
 xfft_header MACRO pass1
 	PROCF	xprocname
-	ad_prolog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	ad_prolog 0,1,rbx,rbp,rsi,rdi,r12,r13,r14,r15,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
 	mov	rsi, DESTARG
 	mov	rbx, DIST_TO_FFTSRCARG
 	clear_timers
@@ -250,7 +250,7 @@ xfft_header MACRO pass1
 	ENDM
 
 xfft_footer MACRO
-	ad_epilog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	ad_epilog 0,1,rbx,rbp,rsi,rdi,r12,r13,r14,r15,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
 	xprocname ENDP	
 	ENDM
 

@@ -8,8 +8,8 @@
  *
  *  This is the only C++ routine in the gwnum library.  Since gwnum is
  *  a C based library, we declare all routines here as extern "C".
- * 
- *  Copyright 2005-2012 Mersenne Research, Inc.  All rights reserved.
+ *
+ *  Copyright 2005-2014 Mersenne Research, Inc.  All rights reserved.
  *
  **************************************************************/
 
@@ -117,6 +117,13 @@ void gwasm_constants (
 #define P383			asm_values[21]
 #define P782			asm_values[22]
 #define P434			asm_values[23]
+#define P975_P434		asm_values[24]
+#define P782_P434		asm_values[25]
+#define P259			asm_values[26]
+#define P966			asm_values[27]
+#define P259_P707		asm_values[28]
+#define P966_P707		asm_values[29]
+#define P924_P383		asm_values[30]
 
 /* Do some initial setup */
 
@@ -179,6 +186,20 @@ void gwasm_constants (
 	P782 = double (sine1);
 	P434 = double (sine3);
 
+	P975_P434 = double (sine2 / P434);
+	P782_P434 = double (sine1 / P434);
+
+/* Initialize the 24-reals sine-cosine data. */
+
+	arg = dd_real::_2pi / 24.0;		// 2*PI * 1 / 24
+	sincos (arg, sine1, cosine1);		// cosine (0.966), sine (0.259)
+
+	P259 = double (sine1);
+	P966 = double (cosine1);
+
+	P259_P707 = double (sine1 / sqrt (0.5));
+	P966_P707 = double (cosine1 / sqrt (0.5));
+
 /* Initialize the roots of -1 used by r4_four_complex_first_fft. */
 
 	arg = dd_real::_2pi / 16.0;		// 2*PI / 16
@@ -186,6 +207,9 @@ void gwasm_constants (
 	P924 = double (cosine1);
 	P383 = double (sine1);
 
+/* Initialize the roots of -1 used by FMA 16-reals */
+
+	P924_P383 = double (cosine1 / double (sine1));
 	END_x86_FIX
 }
 
@@ -273,6 +297,24 @@ void gwsincos5 (
 }
 
 extern "C"
+void gwsincos1by_raw (
+	unsigned long x,
+	unsigned long N,
+	double	*results,
+	int	incr)
+{
+	dd_real twopi_over_N, sine, cosine;
+
+	x86_FIX
+	twopi_over_N = dd_real::_2pi / (double) N;
+	sincos (twopi_over_N * (double) x, sine, cosine);
+
+	results[0] = sine;
+	results[incr] = cosine;
+	END_x86_FIX
+}
+
+extern "C"
 void gwsincos1by (
 	unsigned long x,
 	unsigned long N,
@@ -286,6 +328,29 @@ void gwsincos1by (
 	results[0] = sine;
 	results[0] += epsilon;		/* Protect against divide by zero */
 	results[incr] = cosine / results[0];
+	END_x86_FIX
+}
+
+extern "C"
+void gwsincos12by_raw (
+	unsigned long x,
+	unsigned long N,
+	double	*results,
+	int	incr)
+{
+	dd_real arg1, sine, cosine, sine2, cosine2;
+
+	x86_FIX
+	arg1 = dd_real::_2pi * (double) x / (double) N;
+	sincos (arg1, sine, cosine);
+	results[0] = sine;
+	results[incr] = cosine;
+	results += incr + incr;
+
+	sine2 = sine * cosine * 2.0;
+	cosine2 = sqr (cosine) - sqr (sine);
+	results[0] = sine2;
+	results[incr] = cosine2;
 	END_x86_FIX
 }
 
@@ -458,6 +523,42 @@ void gwsincos125by (
 	results[incr] = cosine5 / results[0];
 	END_x86_FIX
 }
+
+extern "C"
+void gwsincos1234by_raw (
+	unsigned long x,
+	unsigned long N,
+	double	*results,
+	int	incr)
+{
+	dd_real arg1, sine, cosine, sine2, cosine2, sine3, cosine3, sine4, cosine4;
+
+	x86_FIX
+	arg1 = dd_real::_2pi * (double) x / (double) N;
+	sincos (arg1, sine, cosine);
+	results[0] = sine;
+	results[incr] = cosine;
+	results += incr + incr;
+
+	sine2 = sine * cosine * 2.0;
+	cosine2 = sqr (cosine) - sqr (sine);
+	results[0] = sine2;
+	results[incr] = cosine2;
+	results += incr + incr;
+
+	sine3 = sine * cosine2 + sine2 * cosine;
+	cosine3 = cosine * cosine2 - sine * sine2;
+	results[0] = sine3;
+	results[incr] = cosine3;
+	results += incr + incr;
+
+	sine4 = sine2 * cosine2 * 2.0;
+	cosine4 = sqr (cosine2) - sqr (sine2);
+	results[0] = sine4;
+	results[incr] = cosine4;
+	END_x86_FIX
+}
+
 
 extern "C"
 void gwsincos1234by (

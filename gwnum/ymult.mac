@@ -1,4 +1,4 @@
-; Copyright 2011-2012 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2011-2013 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -30,8 +30,10 @@ YMM_SCD2 = 128			;; Sizeof a DJB sin/cos table entry
 YMM_SCD3 = 192			;; Sizeof an eight_reals sin/cos table entry
 YMM_SCD4 = 256			;; Sizeof an entry in premultiplier table
 YMM_SCD6 = 384			;; Sizeof a combined first_djbfft / last_djbunfft table entry
+YMM_SCD7 = 448			;; Sizeof a real radix-16 with premultipliers table entry
 YMM_SCD8 = 512			;; Sizeof a radix-8 with premultipliers table entry
 YMM_SCD9 = 576			;; Sizeof a real radix-20 with premultipliers table entry
+YMM_SCD11 = 704			;; Sizeof a real radix-24 with premultipliers table entry
 YMM_SCD13 = 832			;; Sizeof a real radix-28 with premultipliers table entry
 
 ;; Used in r4dwpn (radix-4 delay with partial normalization) FFTs
@@ -64,6 +66,7 @@ YMM_GMD = 320			;; Sizeof a grp two-to-phi/two-to-minus-phi multiplier block in 
 ;
 ; yarch indicates FFT is optimized for one of these architectures:
 ;	CORE		Sandy Bridge and later Intel Core CPUs
+;	FMA3		Haswell and later Intel Core CPUs
 ;	BULL		third generation AMD64 chips (Bulldozer)
 ;
 ; Examples:
@@ -147,6 +150,7 @@ yonepass MACRO fftname, all_complex
 ;
 ; yarch indicates FFT is optimized for one of these architectures:
 ;	CORE		Sandy Bridge Core i7, default for unrecognized Intel CPUs
+;	FMA3		Intel chips supporting the FMA3 instruction (Haswell chips)
 ;	BULL		AMD's Bulldozer chips
 ;
 ; Examples:
@@ -220,7 +224,7 @@ set_FFT_constants MACRO fftname, in_place, all_complex, p1_size, p2_levels, clma
 ;;	next 4cl:	64, 2KB+64, 4KB+128, 6KB+128
 ;; A padding of 192 will solve the problem.
 
-	IF p1_size EQ 384 OR p1_size EQ 640 OR p1_size EQ 1536
+	IF (p1_size EQ 384 AND all_complex) OR (p1_size EQ 640 AND all_complex) OR (p1_size EQ 1536 AND all_complex)
 		clmblkdst = (4*clm*64+64)
 		clmblkdst8 = (clmblkdst*8)
 	ELSEIF clm EQ 1
@@ -273,7 +277,7 @@ set_FFT_constants MACRO fftname, in_place, all_complex, p1_size, p2_levels, clma
 
 yfft_header MACRO pass1
 	PROCF	yprocname
-	ad_prolog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	ad_prolog 0,1,rbx,rbp,rsi,rdi,r12,r13,r14,r15,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
 	mov	rsi, DESTARG
 	mov	rbx, DIST_TO_FFTSRCARG
 	clear_timers
@@ -288,7 +292,7 @@ yfft_header MACRO pass1
 	ENDM
 
 yfft_footer MACRO
-	ad_epilog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	ad_epilog 0,1,rbx,rbp,rsi,rdi,r12,r13,r14,r15,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
 	yprocname ENDP	
 	ENDM
 
@@ -431,6 +435,7 @@ yloop_init MACRO count, first_completed, first_iters
 	yloop_prefetch_type = 0
 	yloop_prefetch_iter = 0
 	yloop_bump_iter = 0
+	yloop_prefetched_early = 0
 	yloop_unrolled_count = 0
 	yloop_adjustment = 0
 	ENDM
@@ -548,6 +553,7 @@ yloop MACRO iters, label1, incr_rsi, pm_incr_reg, pm_incr_amt, sc_incr_reg, sc_i
 	ENDIF
 
 	;; Clear count of unrolled building blocks (in case loops_undo or loops_reset is called)
+	yloop_prefetched_early = 0
 	yloop_unrolled_count = 0
 	yloop_adjustment = 0
 
@@ -555,6 +561,28 @@ yloop MACRO iters, label1, incr_rsi, pm_incr_reg, pm_incr_amt, sc_incr_reg, sc_i
 	bump	rsi, incr_rsi			;; Next source pointer
 	bump	pm_incr_reg, pm_incr_amt	;; Next premultiplier pointer
 	bump	sc_incr_reg, sc_incr_amt	;; Next sin/cos pointer
+	ENDM
+
+;; This macro is called by the building block macros to try and distribute YDOUBLE and YQUAD prefetching a bit more uniformly.
+;; It may also help the YSINGLE case by moving the prefetch away from the ystores that are bunched at the end of building block macros.
+
+yloop_optional_early_prefetch MACRO
+
+	;; If we prefetch every iteration and we haven't already prefetched the required amount, then prefetch one now.
+	IF yloop_prefetch_iter EQ 1
+	IF yloop_prefetched_early LT yloop_prefetch_count
+		;; Handle standard prefetching
+		IF yloop_prefetch_type EQ 1
+			prefetcht1 [yloop_pfreg + yloop_prefetched_early * PREFETCHING]
+			yloop_prefetched_early = yloop_prefetched_early + 1
+		;; Handle "clm prefetching" where we bump the prefetch pointer every 64*clm bytes
+		ELSEIF yloop_prefetch_type EQ 2
+			prefetcht1 [rcx + (yloop_prefetched_early * PREFETCHING)/(clm*64)*blkdst + (yloop_prefetched_early * PREFETCHING mod (clm*64))]
+			yloop_prefetched_early = yloop_prefetched_early + 1
+		ENDIF
+	ENDIF
+	ENDIF
+
 	ENDM
 
 ;; This macro is called by the building block macros when they are unrolling a building block.   We must
@@ -573,9 +601,12 @@ yloop_unrolled_one MACRO
 	ENDIF
 
 	;; Handle "clm prefetching" where we bump the prefetch pointer every 64*clm bytes
+	;; Note that yloop_prefetch handled this in some cases (where prefetch count fetched a multiple of 64*clm bytes)
 	IF yloop_bump_iter GT 1
+	IF (yloop_prefetch_count * PREFETCHING) MOD (clm*64) NE 0
 	IF (yloop_unrolled_count + yloop_adjustment) MOD yloop_bump_iter EQ 0
 		bump	rcx, -clm*64+blkdst		;; Next prefetch pointer
+	ENDIF
 	ENDIF
 	ENDIF
 	ENDM
@@ -673,17 +704,19 @@ yloop_prefetch MACRO
 	;; Handle standard prefetching
 	IF yloop_prefetch_type EQ 1
 
-		prefetcht1 [yloop_pfreg]
-		IF yloop_prefetch_count GE 2
+		IF yloop_prefetched_early LT 1
+			prefetcht1 [yloop_pfreg]
+		ENDIF
+		IF yloop_prefetch_count GE 2 AND yloop_prefetched_early LT 2
 			prefetcht1 [yloop_pfreg + PREFETCHING]
 		ENDIF
-		IF yloop_prefetch_count GE 3
+		IF yloop_prefetch_count GE 3 AND yloop_prefetched_early LT 3
 			prefetcht1 [yloop_pfreg + 2 * PREFETCHING]
 		ENDIF
-		IF yloop_prefetch_count GE 4
+		IF yloop_prefetch_count GE 4 AND yloop_prefetched_early LT 4
 			prefetcht1 [yloop_pfreg + 3 * PREFETCHING]
 		ENDIF
-		IF yloop_prefetch_count GE 5
+		IF yloop_prefetch_count GE 5 AND yloop_prefetched_early LT 5
 			prefetch_count_too_large
 		ENDIF
 
@@ -692,17 +725,19 @@ yloop_prefetch MACRO
 	;; Handle "clm prefetching" where we bump the prefetch pointer every 64*clm bytes
 	ELSEIF yloop_prefetch_type EQ 2
 
-		prefetcht1 [rcx]
-		IF yloop_prefetch_count GE 2
+		IF yloop_prefetched_early LT 1
+			prefetcht1 [rcx]
+		ENDIF
+		IF yloop_prefetch_count GE 2 AND yloop_prefetched_early LT 2
 			prefetcht1 [rcx + (PREFETCHING)/(clm*64)*blkdst + (PREFETCHING mod (clm*64))]
 		ENDIF
-		IF yloop_prefetch_count GE 3
+		IF yloop_prefetch_count GE 3 AND yloop_prefetched_early LT 3
 			prefetcht1 [rcx + (2*PREFETCHING)/(clm*64)*blkdst + ((2*PREFETCHING) mod (clm*64))]
 		ENDIF
-		IF yloop_prefetch_count GE 4
+		IF yloop_prefetch_count GE 4 AND yloop_prefetched_early LT 4
 			prefetcht1 [rcx + (3*PREFETCHING)/(clm*64)*blkdst + ((3*PREFETCHING) mod (clm*64))]
 		ENDIF
-		IF yloop_prefetch_count GE 5
+		IF yloop_prefetch_count GE 5 AND yloop_prefetched_early LT 5
 			yloop_prefetch_count_too_large
 		ENDIF
 
@@ -739,6 +774,7 @@ yloop_prefetch MACRO
 ;
 ; yarch indicates FFT is optimized for one of these architectures:
 ;	CORE		Sandy Bridge Core i7, default for unrecognized Intel CPUs
+;	FMA3		Intel chips supporting the FMA3 instruction (Haswell chips)
 ;	BULL		AMD's Bulldozer chips
 ;
 ; Examples:

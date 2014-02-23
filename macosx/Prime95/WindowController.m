@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/18/09.
-//  Copyright 2009-2012 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2014 Mersenne Research, Inc. All rights reserved.
 //
 
 #import "WindowController.h"
@@ -11,7 +11,8 @@
 
 gwmutex	VIEW_MUTEX;		/* Lock for accessing Views Array */
 int	VIEW_MUTEX_INITIALIZED = 0;
-#define MAX_VIEWS	(MAX_NUM_WORKER_THREADS+2)	/* Main_thread, comm_thread and worker threads. */
+#define MAX_VIEWS	34	/* 34 windows: Main_thread, comm_thread */
+				/* and 32 worker threads. */
 WindowController *Views[MAX_VIEWS] = {0};
 char	ThreadTitles[MAX_VIEWS][80] = {0};
 double	currentFontSize = 0.0;
@@ -322,6 +323,20 @@ static	int	partial_line_output[MAX_VIEWS] = {FALSE};
 	NSAutoreleasePool *pool;
 	WindowController *view;
 	NSString *textToAdd;
+
+/* My latest MacBook Pro running OS X Mavericks changes Prime95's priority to near zero. */
+/* This wouldn't be a problem except that the scheduler feels free to invoke SpeedStep */
+/* when low priority processes are using 100% of the CPU time.  This hack changes the */
+/* priority frequently to "trick" the scheduler into keeping the CPU running full speed. */
+/* Alas, this trick does not seem to work.  ode left here in case it might be useful one day. */
+
+	if (thread_num != MAIN_THREAD_NUM &&
+	    thread_num != COMM_THREAD_NUM &&
+	    IniGetInt (INI_FILE, "FrequentSetPriority", 0)) {
+		int	mask[MAX_NUM_WORKER_THREADS/32];
+		memset (mask, 0xFF, sizeof (mask));
+		setThreadPriorityAndAffinity (PRIORITY, mask);
+	}
 
 // Create an autorelease pool.  This routine is probably called from
 // a worker thread where an autorelease pool is not in place.

@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2013 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
@@ -15,7 +15,7 @@
 char ERRMSG0[] = "Iteration: %ld/%ld, %s";
 char ERRMSG1A[] = "ERROR: ILLEGAL SUMOUT\n";
 char ERRMSG1B[] = "ERROR: SUM(INPUTS) != SUM(OUTPUTS), %.16g != %.16g\n";
-char ERRMSG1C[] = "ERROR: ROUND OFF (%.10g) > 0.40\n";
+char ERRMSG1C[] = "possible error: round off (%.10g) > 0.40\n";
 char ERRMSG1D[] = "ERROR: Shift counter corrupt.\n";
 char ERRMSG1E[] = "ERROR: Illegal double encountered.\n";
 char ERRMSG1F[] = "ERROR: FFT data has been zeroed!\n";
@@ -598,7 +598,7 @@ no_auto_detect:
 /* All our internal code uses this scheme: if there are N cpus with hyperthreading, */
 /* then physical cpu 0 is logical cpu 0 and 1, physical cpu 1 is logical cpu 2 and 3, etc. */
 /* When launching threads, we apply the dynamically generated affinity scramble computed */
-/*  here to map our internal scheme to the numbering scheme that the OS is using. */
+/* here to map our internal scheme to the numbering scheme that the OS is using. */
 
 void generate_affinity_scramble (void)
 {
@@ -608,6 +608,12 @@ void generate_affinity_scramble (void)
 /* If there is only one physical CPU, then affinity scrambling isn't needed */
 
 	if (CPU_HYPERTHREADS == 1 || NUM_CPUS == 1) return;
+
+/* There is no need to scare Apple users with error-like messages since we can't set affinity on Apple products */
+
+#ifdef __APPLE__
+	return;
+#endif
 
 /* Do the scramble computations in a separate thread to avoid changing the main thread's priority */
 
@@ -730,6 +736,13 @@ void SetPriority (
 				maskset (AFFINITY_SCRAMBLE[i]);
 		}
 	}
+
+/* Apple does not support setting affinities.  Set the mask */
+/* so that we print out the proper informative message. */
+
+#ifdef __APPLE__
+	memset (mask, 0xFF, sizeof (mask));
+#endif
 
 /* Output an informative message */
 
@@ -4366,7 +4379,7 @@ int primeFactor (
 		makestr (facdata.asm_data->FACHSW,
 			 facdata.asm_data->FACMSW,
 			 facdata.asm_data->FACLSW, str);
-		sprintf (buf, "M%ld has a factor: %s\n", p, str);
+		sprintf (buf, "M%ld has a factor: %s (TF:%d-%d)\n", p, str, (int) w->sieve_depth, (int) test_bits);
 		OutputStr (thread_num, buf);
 		formatMsgForResultsFile (buf, w);
 		writeResults (buf);
@@ -5316,23 +5329,26 @@ begin:	gwinit (&lldata.gwdata);
 	inverse_p = 1.0 / (double) p;
 	w->pct_complete = (double) counter * inverse_p;
 
-/* Start off with the 1st Lucas number - four */
-/* Note we do something a little strange here.  We actually set the */
-/* first number to 4 but shifted by a random amount.  This lets two */
-/* different machines check the same Mersenne number and operate */
-/* on different FFT data - thus greatly reducing the chance that */
-/* a CPU or program error corrupts the results. */
+/* Start off with the 1st Lucas number - four (ATH requested making the starting value overriddable). */
+/* Note we do something a little strange here.  We actually set the first number to 4 but shifted by */
+/* a random amount.  This lets two different machines check the same Mersenne number and operate on */
+/* different FFT data - thus greatly reducing the chance that a CPU or program error corrupts the results. */
 
 	if (counter == 2) {
-		unsigned long i, word, bit_in_word;
-		uint32_t hi, lo;
-		srand ((unsigned) time (NULL));
-		lldata.units_bit = (rand () << 16) + rand ();
-		if (CPU_FLAGS & CPU_RDTSC) { rdtsc(&hi,&lo); lldata.units_bit += lo; }
-		lldata.units_bit = lldata.units_bit % p;
-		bitaddr (&lldata.gwdata, (lldata.units_bit + 2) % p, &word, &bit_in_word);
-		for (i = 0; i < gwfftlen (&lldata.gwdata); i++) {
-			set_fft_value (&lldata.gwdata, lldata.lldata, i, (i == word) ? (1L << bit_in_word) : 0);
+		if (IniGetInt (INI_FILE, "InitialLLValue", 4) != 4) {
+			dbltogw (&lldata.gwdata, (double) IniGetInt (INI_FILE, "InitialLLValue", 4), lldata.lldata);
+			lldata.units_bit = 0;
+		} else {
+			unsigned long i, word, bit_in_word;
+			uint32_t hi, lo;
+			srand ((unsigned) time (NULL));
+			lldata.units_bit = (rand () << 16) + rand ();
+			if (CPU_FLAGS & CPU_RDTSC) { rdtsc(&hi,&lo); lldata.units_bit += lo; }
+			lldata.units_bit = lldata.units_bit % p;
+			bitaddr (&lldata.gwdata, (lldata.units_bit + 2) % p, &word, &bit_in_word);
+			for (i = 0; i < gwfftlen (&lldata.gwdata); i++) {
+				set_fft_value (&lldata.gwdata, lldata.lldata, i, (i == word) ? (1L << bit_in_word) : 0);
+			}
 		}
 	}
 
@@ -5464,7 +5480,7 @@ begin:	gwinit (&lldata.gwdata);
 /* then repeat the iteration using a safer, slower method.  This can */
 /* happen when operating near the limit of an FFT. */
 
-		if (echk && gw_get_maxerr (&lldata.gwdata) >= 0.40625) {
+		if (echk && gw_get_maxerr (&lldata.gwdata) > 0.40625) {
 			if (counter == last_counter &&
 			    gw_get_maxerr (&lldata.gwdata) == last_maxerr) {
 				OutputBoth (thread_num, ERROK);
@@ -5771,7 +5787,7 @@ char SELFFAIL4[] = "Possible hardware failure, consult readme.txt file, restarti
 char SELFFAIL5[] = "Hardware failure detected, consult stress.txt file.\n";
 char SELFFAIL6[] = "Maximum number of warnings exceeded.\n";
 
-#define SELFPASS "Self-test %iK passed!\n"
+#define SELFPASS "Self-test %i%s passed!\n"
 //char SelfTestIniMask[] = "SelfTest%iPassed";
 
 struct self_test_info {
@@ -6179,191 +6195,251 @@ struct self_test_info SELF_TEST_DATA2[MAX_SELF_TEST_ITERS2] = {
 {141311, 800000, 0x9BB8A6A3}, {135169, 800000, 0xECA55A45}
 };
 
-#ifdef ONE_HOUR_SELF_TEST
-int selfTest (
-	int	thread_num,
-	struct PriorityInfo *sp_info,
-	struct work_unit *w)
-{
-	unsigned long fftlen;
-	char	iniName[32];
-	int	tests_completed, self_test_errors, self_test_warnings;
-
-/* What fft length are we running? */
-
-	if (w->forced_fftlen)
-		fftlen = w->forced_fftlen;
-	else
-		fftlen = gwmap_to_fftlen (1.0, 2, w->n, -1);
-
-/* If fftlength is less than 64K return (we don't have any small exponents */
-/* in our self test data) */
-
-	if (fftlen < 65536) return (0);
-
-/* Make sure we haven't run this self-test already. */
-
-	sprintf (iniName, SelfTestIniMask, (int) (fftlen/1024));
-	if (IniGetInt (LOCALINI_FILE, iniName, 0)) return (0);
-#ifdef SERVER_TESTING
-	return (0);
-#endif
-
-/* Make sure the user really wants to spend an hour doing this now */
-
-	OutputStr (thread_num, SELFMSG1A);
-	OutputStr (thread_num, SELFMSG1B);
-	OutputStr (thread_num, SELFMSG1C);
-
-/* Do the self test */
-
-	tests_completed = 0;
-	self_test_errors = 0;
-	self_test_warnings = 0;
-	return (selfTestInternal (thread_num, sp_info, fftlen, 60, NULL, 0, NULL,
-				  &tests_completed, &self_test_errors, &self_test_warnings));
-}
-#endif
-
-int tortureTest (
-	int	thread_num,
-	int	num_threads)
-{
-	struct PriorityInfo sp_info;
-	int	num_lengths;		/* Number of FFT lengths we will torture test */
-	int	lengths[500];		/* The FFT lengths we will torture test */
-	int	data_index[500];	/* Last exponent tested for each FFT length */
-	int	min_fft, max_fft, test_time;
-	int	tests_completed, self_test_errors, self_test_warnings;
-	int	i, run_indefinitely, stop_reason;
-	unsigned long fftlen;
-	time_t	start_time, current_time;
-	unsigned int memory;	/* Memory to use during torture test */
-	void	*bigbuf = NULL;
-
-/* Set the process/thread priority */
-
-	sp_info.type = SET_PRIORITY_TORTURE;
-	sp_info.thread_num = thread_num;
-	sp_info.aux_thread_num = 0;
-	sp_info.num_threads = num_threads;
-	SetPriority (&sp_info);
-
-/* Init counters */
-
-	tests_completed = 0;
-	self_test_errors = 0;
-	self_test_warnings = 0;
-
-/* We used to support a menu option to run the self-test for an hour on */
-/* each FFT length.  If we ever decide to resupport this option, change */
-/* the run_indefiitely variable to an argument and change the output */
-/* message below. */
-
-loop:	run_indefinitely = TRUE;
-
-/* Make sure the user really wants to spend many hours doing this now */
-
-	if (run_indefinitely) {
-		OutputStr (thread_num, TORTURE1);
-		OutputStr (thread_num, TORTURE2);
-		test_time = IniGetInt (INI_FILE, "TortureTime", 15);
-	}
-
-/* Determine fft lengths we should run and allocate a big block */
-/* of memory to test. */
-
-	min_fft = IniGetInt (INI_FILE, "MinTortureFFT", 8);
-	max_fft = IniGetInt (INI_FILE, "MaxTortureFFT", 4096);
-	memory = IniGetInt (INI_FILE, "TortureMem", 8);
-	while (memory > 8 && bigbuf == NULL) {
-		bigbuf = aligned_malloc ((size_t) memory * (size_t) 1048576, 128);
-		if (bigbuf == NULL) memory--;
-	}
-
-/* Enumerate the FFT lengths we will torture test. */
-
-	num_lengths = 0;
-	fftlen = gwmap_to_fftlen (1.0, 2, 15 * min_fft * 1024, -1);
-	for ( ; ; ) {
-		if (fftlen > (unsigned long) (max_fft * 1024)) break;
-		if (fftlen % 1024 == 0 && fftlen >= (unsigned long) (min_fft * 1024)) {
-			lengths[num_lengths] = fftlen / 1024;
-			data_index[num_lengths++] = 0;
-		}
-		fftlen = gwmap_to_fftlen (1.0, 2, gwmap_fftlen_to_max_exponent (fftlen) + 100, -1);
-		if (fftlen == 0) break;
-	}
-
-/* Raise error if no FFT lengths to test */
-
-	if (num_lengths == 0) {
-		OutputStr (thread_num, "No FFT lengths available in the range specified.\n");
-		return (0);
-	}
-
-/* For historical reasons, we alternate testing big and small FFT lengths */
-/* (the theory being we'll find bad memory or an overheat problem more quickly). */
-
-	for (i = 0; i <= num_lengths / 2 - 2; i += 2) {
-		int	temp;
-		temp = lengths[i];
-		lengths[i] = lengths[i + num_lengths / 2];
-		lengths[i + num_lengths / 2] = lengths[i + num_lengths / 2 + 1];
-		lengths[i + num_lengths / 2 + 1] = lengths[i + 1];
-		lengths[i + 1] = temp;
-	}
-
-/* Now self-test each fft length */
-
-	stop_reason = 0;
-	time (&start_time);
-	for ( ; ; ) {
-	    for (i = 0; i < num_lengths; i++) {
-		if (lengths[i] < min_fft || lengths[i] > max_fft)
-			continue;
-		stop_reason =
-			selfTestInternal (thread_num, &sp_info, lengths[i]*1024,
-					  test_time, &data_index[i],
-					  memory, bigbuf, &tests_completed,
-					  &self_test_errors, &self_test_warnings);
-		if (stop_reason) {
-			char	buf[120];
-			int	hours, minutes;
-			time (&current_time);
-			minutes = (int) (current_time - start_time) / 60;
-			hours = minutes / 60;
-			minutes = minutes % 60;
-			sprintf (buf, "Torture Test completed %d tests in ", tests_completed);
-			if (hours > 1) sprintf (buf+strlen(buf), "%d hours, ", hours);
-			else if (hours == 1) sprintf (buf+strlen(buf), "1 hour, ");
-			sprintf (buf+strlen(buf),
-				 "%d minutes - %d errors, %d warnings.\n",
-				 minutes, self_test_errors, self_test_warnings);
-			OutputStr (thread_num, buf);
-			run_indefinitely = FALSE;
-			break;
-		}
-	    }
-	    if (! run_indefinitely) break;
-	}
-
-/* Self test completed!  Free memory. */
-
-	aligned_free (bigbuf);
-
-/* If this was a user requested stop, then wait for a restart */
-	
-	while (stop_reason == STOP_WORKER) {
-		implement_stop_one_worker (thread_num);
-		stop_reason = stopCheck (thread_num);
-		if (stop_reason == 0) goto loop;
-	}
-
-/* All done */
-
-	return (stop_reason);
-}
+#define MAX_SELF_TEST_ITERS3	484
+struct self_test_info SELF_TEST_DATA3[MAX_SELF_TEST_ITERS3] = {
+{560000001, 400, 0x5D2075F2}, {420000001, 600, 0x76973D8D},
+{280000001, 800, 0xA4B0C213}, {210000001, 1200, 0x9B0FEEA5},
+{140000001, 1600, 0xEC8F25E6}, {110000001, 2000, 0xD7EE8401},
+{77497473, 3600, 0xEE1F9603}, {76497471, 3600, 0xABE435B0},
+{75497473, 3600, 0x36285106}, {75497471, 3600, 0xE8CC66CA},
+{74497473, 3600, 0x24B8A2BF}, {73497471, 3600, 0xC12E28E9},
+{72303169, 3600, 0x51A924BC}, {71303169, 3600, 0x8FB537CB},
+{71303167, 3600, 0xB71873A1}, {70303167, 3600, 0x92EFC50B},
+{68060289, 4000, 0xA2629086}, {67060287, 4000, 0x23347B16},
+{66060289, 4000, 0xDA787057}, {66060287, 4000, 0x0810958A},
+{65390273, 4000, 0xAD06FF26}, {64390271, 4000, 0xE3A7F5DB},
+{63390273, 4000, 0x874392AC}, {62390273, 4000, 0xB4718A58},
+{62390271, 4000, 0x80C10B5F}, {61390271, 4000, 0xCAD8F47A},
+{57623105, 4800, 0x1C2BA27E}, {56623105, 4800, 0xBA735E8B},
+{56623103, 4800, 0x13519FDB}, {55623103, 4800, 0xE787C20E},
+{53477377, 4800, 0xB35788F2}, {53477375, 4800, 0x03E36F38},
+{52331647, 4800, 0xDC9F1FA1}, {51331649, 4800, 0x82533823},
+{50331649, 4800, 0x97F22401}, {50331647, 4800, 0x5A2FDCC0},
+{48185921, 6000, 0x966A35F6}, {47185921, 6000, 0xD8378EF6},
+{47185919, 6000, 0xD04DD7C3}, {46185919, 6000, 0x3BA8288B},
+{45943041, 6000, 0xFF87BC35}, {44943039, 6000, 0x726253F8},
+{43943041, 6000, 0x8E343AC4}, {42943039, 6000, 0xADF105FF},
+{41943041, 6000, 0xE0C8040C}, {41943039, 6000, 0x5EF2E3E9},
+{39151585, 7600, 0x294D16AC}, {38748737, 7600, 0xBA261FA4},
+{38251583, 7600, 0xA64744BA}, {37748737, 7600, 0xCEA0A996},
+{37748735, 7600, 0x71246EC6}, {36748735, 7600, 0xDF0D4C96},
+{36251585, 7600, 0x6941330C}, {35651585, 7600, 0x9454919C},
+{35651583, 7600, 0xE953A8B3}, {35251583, 7600, 0x95E45098},
+{34230145, 8400, 0x0FF2D27E}, {33730143, 8400, 0xA815C3CD},
+{33030145, 8400, 0x2968002F}, {33030143, 8400, 0x4AFDF43B},
+{32595137, 8400, 0x979CF919}, {32095135, 8400, 0x7C0E8693},
+{31595137, 8400, 0x6FD95140}, {31195137, 8400, 0xAA6AD58C},
+{31195135, 8400, 0x65EE1BF7}, {30695135, 8400, 0x9D10BC3A},
+{29311553, 10000, 0xB8C54183}, {28811551, 10000, 0xC70F9D7E},
+{28311553, 10000, 0xEA018EED}, {28311551, 10000, 0x43E2096F},
+{27738689, 10000, 0x0EA59538}, {27238687, 10000, 0xC53169EE},
+{26738689, 10000, 0x9F98CF04}, {26738687, 10000, 0x733122D3},
+{26138689, 10000, 0xD88162ED}, {25638687, 10000, 0x6ADB6B49},
+{24903681, 12400, 0xEF9EC005}, {24903679, 12400, 0xAB56E004},
+{24092961, 12400, 0x3518F8DD}, {23892959, 12400, 0xE0AEFA13},
+{23592961, 12400, 0xD1EC53D7}, {23592959, 12400, 0xB006AE40},
+{22971521, 12400, 0xA8964CC4}, {21871519, 12400, 0x4DDF7551},
+{20971521, 12400, 0x8927FFB4}, {20971519, 12400, 0x7B3217C2},
+{19922945, 16000, 0x069C3DCD}, {19922943, 16000, 0xBED8A46E},
+{19374367, 16000, 0x11A21885}, {19174369, 16000, 0x2BB5AEAD},
+{18874369, 16000, 0xF47D9EC1}, {18874367, 16000, 0xC342E089},
+{18474367, 16000, 0x8AC5B7C8}, {18274367, 16000, 0x4DB0F691},
+{18274369, 16000, 0x9886B1C9}, {18074369, 16000, 0x241D5A65},
+{17432577, 18000, 0xE7FEF929}, {17432575, 18000, 0xE0673389},
+{17115073, 18000, 0xCA8909F8}, {16815071, 18000, 0x4C1D976F},
+{16515073, 18000, 0xE86FAE0C}, {16515071, 18000, 0x37F5DF1E},
+{16297569, 18000, 0x82A0AF96}, {15997567, 18000, 0x321905E4},
+{15597569, 18000, 0x2790951D}, {15597567, 18000, 0xFD88F93B},
+{14942209, 21000, 0xE9467E64}, {14942207, 21000, 0x781D4424},
+{14155777, 21000, 0xBA64B1E8}, {14155775, 21000, 0xF88B7AAE},
+{13969343, 21000, 0xD091E8C3}, {13669345, 21000, 0xE57FED05},
+{13369345, 21000, 0xCEEEA179}, {13369343, 21000, 0xBB87F46F},
+{13069345, 21000, 0x47222D3F}, {12969343, 21000, 0x477EEFE4},
+{12451841, 26000, 0x9A1DC942}, {12451839, 26000, 0x8FEFE60F},
+{12196481, 26000, 0x1AD3B450}, {11796481, 26000, 0x6A42C88D},
+{11796479, 26000, 0x1A3C83A4}, {11596479, 26000, 0x69D18B9B},
+{11285761, 26000, 0x6980EFB6}, {10885759, 26000, 0x223C49A6},
+{10485761, 26000, 0xBD0AFF34}, {10485759, 26000, 0xD4216A83},
+{9961473, 31000, 0x25DE6210}, {9961471, 31000, 0x2FE72634},
+{9837183, 31000, 0x44128AF8}, {9737185, 31000, 0x84C70161},
+{9537183, 31000, 0x017BE747}, {9437185, 31000, 0x3D38D6E4},
+{9437183, 31000, 0xCF2C58C4}, {9337185, 31000, 0x13BFB2D4},
+{9237183, 31000, 0xBBC6391C}, {9137185, 31000, 0x23AF0A31},
+{8716289, 36000, 0x10FB9FB7}, {8716287, 36000, 0xDF905C4F},
+{8516289, 36000, 0xCB8D21BD}, {8316287, 36000, 0xC61BC2BA},
+{8257537, 36000, 0x2F93BEA5}, {8257535, 36000, 0xA9B6681A},
+{8098785, 36000, 0x7CEFE90D}, {7998783, 36000, 0x32CA4DC8},
+{7798785, 36000, 0xB2669EFF}, {7798783, 36000, 0xF2D393AC},
+{7471105, 44000, 0x3D4F6CBB}, {7471103, 44000, 0x51F68987},
+{7377889, 44000, 0xD3F710E4}, {7277887, 44000, 0xAF76194F},
+{7077889, 44000, 0x815E3804}, {7077887, 44000, 0x2C55F47D},
+{6984673, 44000, 0xE530552B}, {6884671, 44000, 0x96085903},
+{6684673, 44000, 0x5143D5DB}, {6684671, 44000, 0xD153D55E},
+{6225921, 52000, 0xF11B3E86}, {6225919, 52000, 0x26AEF35D},
+{6198241, 52000, 0x55A1AD52}, {6098239, 52000, 0xEE20AC08},
+{5898241, 52000, 0x024AA620}, {5898239, 52000, 0x36EC9FDB},
+{5705025, 52000, 0x87610A79}, {5605023, 52000, 0xBA409794},
+{5505025, 52000, 0x0D4AD8BF}, {5505023, 52000, 0xAA82E4D6},
+{5120737, 68000, 0xF6376191}, {5030735, 68000, 0x6608D7A5},
+{4980737, 68000, 0xE0F7D92F}, {4980735, 68000, 0x8EFD0C10},
+{4888593, 68000, 0xF25A28E9}, {4818591, 68000, 0x5EF8173F},
+{4718593, 68000, 0x8A2349A7}, {4718591, 68000, 0xD6782279},
+{4698593, 68000, 0xE695F8C3}, {4648591, 68000, 0xEEAC3CB7},
+{4501145, 76000, 0x9EA735B3}, {4458143, 76000, 0x5D196BB0},
+{4358145, 76000, 0x69BA2CCC}, {4358143, 76000, 0x9C4DD97B},
+{4298769, 76000, 0xAA0A48AD}, {4228767, 76000, 0xD3AF13A3},
+{4128769, 76000, 0xCC2E5548}, {4128767, 76000, 0xB2F51617},
+{4028769, 76000, 0x6186CC09}, {3978767, 76000, 0x40CC887E},
+{3835553, 88000, 0xE3CA2ED9}, {3785551, 88000, 0x1BD285F6},
+{3735553, 88000, 0xAF0621FF}, {3735551, 88000, 0xBC97EF83},
+{3688945, 88000, 0xBE99894A}, {3618943, 88000, 0x9D3E55C1},
+{3538945, 88000, 0x9757CD7F}, {3538943, 88000, 0xB3AA0A96},
+{3342337, 88000, 0xE78AC3D0}, {3342335, 88000, 0x6127F902},
+{3242961, 110000, 0x0722ADC3}, {3172959, 110000, 0xA4F278FB},
+{3112961, 110000, 0x98E79B6B}, {3112959, 110000, 0x3EC57BE5},
+{2949121, 110000, 0x7E5BA333}, {2949119, 110000, 0xE6D8CF29},
+{2885281, 110000, 0x4F575F34}, {2785281, 110000, 0x73483675},
+{2785279, 110000, 0x95FDDD37}, {2685279, 110000, 0x018291EF},
+{2605473, 140000, 0xB0C85136}, {2584313, 140000, 0x90790AD6},
+{2573917, 140000, 0x303B334A}, {2540831, 140000, 0x031C1AA0},
+{2539613, 140000, 0x79A266C8}, {2495213, 140000, 0x18EE9970},
+{2408447, 140000, 0x7B7030D4}, {2388831, 140000, 0x3339B0E9},
+{2359297, 140000, 0x4B5D9EF4}, {2359295, 140000, 0xA8FD205D},
+{2244765, 160000, 0xE719BC36}, {2236671, 160000, 0x642AE29B},
+{2222517, 160000, 0x1E20BD07}, {2193011, 160000, 0x3C64988F},
+{2130357, 160000, 0xAA1D86BC}, {2122923, 160000, 0x42499686},
+{2100559, 160000, 0x31F3C1EB}, {2088461, 160000, 0xE48241A0},
+{2066543, 160000, 0x3BBBFBD6}, {2004817, 160000, 0x5F9B943D},
+{1933071, 180000, 0x09344960}, {1911957, 180000, 0x66F5EC79},
+{1899247, 180000, 0x6D8B1D9B}, {1877431, 180000, 0x325EB183},
+{1855067, 180000, 0xCB9EED7F}, {1833457, 180000, 0x0663527F},
+{1777773, 180000, 0xB78DA358}, {1755321, 180000, 0xDE573EE9},
+{1699779, 180000, 0x8745CD26}, {1677323, 180000, 0xE138A3E2},
+{1633941, 220000, 0x8D116786}, {1611557, 220000, 0x8CD83629},
+{1599549, 220000, 0xD950AEE1}, {1577771, 220000, 0xB592C606},
+{1555947, 220000, 0xD7C183D6}, {1533349, 220000, 0xBAE10734},
+{1477941, 220000, 0x903394EC}, {1455931, 220000, 0x22203D42},
+{1433069, 220000, 0x1CB8E61C}, {1411747, 220000, 0x6104BE9F},
+{1322851, 300000, 0x20B81597}, {1310721, 300000, 0xE89D646E},
+{1310719, 300000, 0x41AE4CA1}, {1300993, 300000, 0xD34E4497},
+{1288771, 300000, 0x128E16D1}, {1266711, 300000, 0x840497CE},
+{1244881, 300000, 0x8AFB3D24}, {1222991, 300000, 0xDAFAE5FB},
+{1200881, 300000, 0x5190783B}, {1188441, 300000, 0xF5FD938D},
+{1150221, 330000, 0x7311E3A0}, {1144221, 330000, 0x6A2EB001},
+{1122001, 330000, 0x25448CBB}, {1108511, 330000, 0x36C4124A},
+{1100881, 330000, 0x957930CB}, {1096837, 330000, 0x39C43852},
+{1088511, 330000, 0x79B0E4DB}, {1066837, 330000, 0x4FDDE395},
+{1044811, 330000, 0x70108FEE}, {1022991, 330000, 0xACCCA430},
+{983041, 400000, 0x205E1EF2}, {974849, 400000, 0x2E8CEF15},
+{942079, 400000, 0xCDF36D31}, {933889, 400000, 0x1A75EF3C},
+{917503, 400000, 0x91D50B39}, {901121, 400000, 0x5E87DF64},
+{884735, 400000, 0xE12C485D}, {860161, 400000, 0x524E6891},
+{854735, 400000, 0x8B9BF82E}, {851967, 400000, 0xAF790945},
+{827279, 480000, 0xE880E7E1}, {819199, 480000, 0x6A230C26},
+{802817, 480000, 0x62EA07D7}, {795473, 480000, 0x0FE31D56},
+{786431, 480000, 0xCF4CE6EF}, {778241, 480000, 0x8E467FCA},
+{753663, 480000, 0x85D18DAE}, {745473, 480000, 0x06C55332},
+{737279, 480000, 0xE19FE986}, {720897, 480000, 0xC83C96AA},
+{662593, 640000, 0x42DD71CD}, {659457, 640000, 0x1B973A76},
+{655359, 640000, 0x4B3D2077}, {644399, 640000, 0x0C222CE6},
+{638977, 640000, 0x3CB3F547}, {630783, 640000, 0x926291B7},
+{622593, 640000, 0x4BE31D76}, {614399, 640000, 0x87AD01DB},
+{612113, 640000, 0xE29B49BB}, {602113, 640000, 0xE61272B7},
+{580673, 720000, 0xC5E9DE8B}, {573441, 720000, 0xDC079BC0},
+{565247, 720000, 0xCF1CA37C}, {557057, 720000, 0x9EEF945E},
+{544767, 720000, 0xCC75A226}, {540673, 720000, 0x223549D1},
+{532479, 720000, 0x40759687}, {524289, 720000, 0xA30037F1},
+{522479, 720000, 0xAE25C4CA}, {516095, 720000, 0x2968525A},
+{501041, 840000, 0x5D010F00}, {496943, 840000, 0x264D9BA7},
+{487423, 840000, 0xE5FE5968}, {471041, 840000, 0x2A4CFB08},
+{466943, 840000, 0x7CD3183C}, {458753, 840000, 0x84645EE0},
+{450559, 840000, 0xE84CD133}, {442369, 840000, 0x930A5D84},
+{441041, 840000, 0x7F778EED}, {436943, 840000, 0x31400F2C},
+{420217, 1100000, 0x4D58EEF3}, {409601, 1100000, 0x4938363A},
+{401407, 1100000, 0x92B347B5}, {393217, 1100000, 0xF6D354E3},
+{392119, 1100000, 0x1D1D9D2E}, {389119, 1100000, 0x4DF62116},
+{376833, 1100000, 0x4F526504}, {372735, 1100000, 0x3A3B365A},
+{368641, 1100000, 0xBF818C14}, {360447, 1100000, 0xFAEF41BB},
+{339487, 1400000, 0x62266123}, {335393, 1400000, 0x9198809B},
+{331681, 1400000, 0x093642F5}, {329727, 1400000, 0xE092ED88},
+{327681, 1400000, 0xD127F6AF}, {319487, 1400000, 0x7EDD49B9},
+{315393, 1400000, 0x2AD1CBBB}, {311295, 1400000, 0xB501E32F},
+{308295, 1400000, 0x58F6B52C}, {307201, 1400000, 0x382936EE},
+{291913, 1500000, 0x34AC1486}, {286719, 1500000, 0x32151B08},
+{282625, 1500000, 0x98F655CC}, {280335, 1500000, 0x47FF5C70},
+{278527, 1500000, 0xF74DF4BE}, {274335, 1500000, 0x2322F4FA},
+{270335, 1500000, 0xC065C6F4}, {266241, 1500000, 0x120A64F0},
+{262143, 1500000, 0x7A473DE6}, {260335, 1500000, 0xB69E9EB9},
+{250519, 1800000, 0x763B1556}, {245759, 1800000, 0xFBB67721},
+{245281, 1800000, 0xF640633D}, {243713, 1800000, 0xCDC2C7AA},
+{235519, 1800000, 0xC4A7AD0F}, {233473, 1800000, 0x39EF35D2},
+{231183, 1800000, 0xB8792E3B}, {229375, 1800000, 0xE028677D},
+{225281, 1800000, 0xFC11CE76}, {221183, 1800000, 0xACCF7139},
+{212991, 2200000, 0x161FB56E}, {210415, 2200000, 0x7B60E81C},
+{208897, 2200000, 0x63514A8F}, {204799, 2200000, 0xB1925D4B},
+{200705, 2200000, 0x91E5EF6D}, {196607, 2200000, 0x0B2FA06D},
+{194561, 2200000, 0x004E1A6D}, {188415, 2200000, 0x7C10EA53},
+{186369, 2200000, 0xE723EC59}, {184319, 2200000, 0x1EC9F330},
+{172031, 3200000, 0xA8289A03}, {163839, 3200000, 0x9BCEAD72},
+{159745, 3200000, 0x4D30796D}, {157695, 3200000, 0x2719836B},
+{155649, 3200000, 0x7C4B1002}, {153599, 3200000, 0x10F2B05E},
+{147455, 3200000, 0x3BD06944}, {143361, 3200000, 0xA5C7C148},
+{141311, 3200000, 0x71A19953}, {138527, 4000000, 0xD2E65D57},
+{136241, 4000000, 0x99EE467C}, {135169, 4000000, 0x1115D06F},
+{134335, 4000000, 0x32AA5A36}, {132143, 4000000, 0x392D9060},
+{130335, 4000000, 0x689E07C6}, {130331, 4000000, 0xA791824A},
+{125759, 5000000, 0x68E60664}, {125281, 5000000, 0x99421692},
+{123713, 5000000, 0x883AC578}, {120519, 5000000, 0x6915D35E},
+{119375, 5000000, 0x5930769A}, {115519, 5000000, 0x4092717B},
+{115281, 5000000, 0x9C03F336}, {113473, 5000000, 0x15571C02},
+{111183, 5000000, 0xAE6E91FF}, {111181, 5000000, 0x0E250D4F},
+{108897, 6000000, 0xBEE96B52}, {104799, 6000000, 0xFF4FDA4D},
+{102991, 6000000, 0x272CB267}, {100705, 6000000, 0xC0D285CF},
+{100415, 6000000, 0x8FC75796}, {98415, 6000000, 0x55F0423B},
+{96607, 6000000, 0xF60BA9EB}, {96369, 6000000, 0x5015EFE2},
+{94561, 6000000, 0x27F5F9D8}, {94319, 6000000, 0x22FEEB22},
+{83839, 7000000, 0xF3816D12}, {82031, 7000000, 0xD102B9B5},
+{79745, 7000000, 0xDA483FC0}, {77695, 7000000, 0x62E51145},
+{77455, 7000000, 0x9AEBD3EA}, {75649, 7000000, 0x64961C9D},
+{73599, 7000000, 0x16415370}, {73361, 7000000, 0x87ED3BB9},
+{71311, 7000000, 0x8F9E1C81}, {68527, 7000000, 0x44F5B375},
+{66241, 8000000, 0x58E92942}, {65759, 8000000, 0x45F7CAD9},
+{65281, 8000000, 0x71D13735}, {65169, 8000000, 0x9291C45D},
+{64335, 8000000, 0x179EEB42}, {63713, 8000000, 0xC4D70CD3},
+{62143, 8000000, 0x4EADFEDC}, {60519, 9000000, 0x59187C4E},
+{60337, 8000000, 0x06B2F274}, {60335, 8000000, 0xF4A5C109},
+{59375, 9000000, 0xECACBD29}, {58897, 9000000, 0x2D49F445},
+{55519, 9000000, 0xCC57A689}, {55281, 9000000, 0x370811FF},
+{54799, 11000000, 0xDF09CED1}, {53473, 11000000, 0x7527A443},
+{52991, 11000000, 0x3F3E6D08}, {51183, 11000000, 0x63B7BC14},
+{51181, 11000000, 0xCF23C3FE}, {50705, 11000000, 0xD7755CCA},
+{50415, 11000000, 0xF13B5703}, {48415, 11000000, 0x18720A74},
+{46607, 11000000, 0xEFAD69EB}, {46369, 11000000, 0x36576FF2},
+{44561, 11000000, 0xBBFF519A}, {44319, 11000000, 0x67D8C7C8},
+{43839, 14000000, 0xAB4287EC}, {42031, 14000000, 0x07E5F336},
+{39745, 14000000, 0xB1F4CDA4}, {37695, 14000000, 0x5E68A976},
+{37455, 14000000, 0x160940DF}, {35649, 14000000, 0x82C7BF50},
+{35169, 14000000, 0xA9AA21D4}, {34527, 14000000, 0x746D4F98},
+{33599, 14000000, 0xEEC3F4A4}, {33361, 14000000, 0x8060C92F},
+{33241, 16000000, 0x6B01C7DF}, {32759, 16000000, 0x114A953B},
+{32335, 16000000, 0x3E6C186B}, {32281, 16000000, 0x19CCFAF9},
+{31713, 16000000, 0x8AFEC931}, {31311, 16000000, 0x7BF36CD8},
+{31143, 16000000, 0x311C5B29}, {30519, 16000000, 0xD6403088},
+{30335, 16000000, 0xCC66B636}, {30331, 16000000, 0x06615CC4},
+{29897, 18000000, 0x376F4617}, {29375, 18000000, 0x2F7EEC43},
+{27799, 18000000, 0xB887EB2B}, {27519, 18000000, 0x3E2FC829},
+{27281, 18000000, 0x61D01456}, {26991, 18000000, 0x5500B456},
+{26473, 22000000, 0x18B413C8}, {25705, 22000000, 0xE3A124A8},
+{25415, 22000000, 0x5BAB711C}, {25183, 22000000, 0x4D02C76D},
+{25181, 22000000, 0x54240561}, {24415, 22000000, 0x76E207FC},
+{23607, 22000000, 0xE0ED69CD}, {23369, 22000000, 0x7B6B1955},
+{22561, 22000000, 0xF68FF31A}, {22319, 22000000, 0x65736E87},
+{21839, 28000000, 0x04ECD2F5}, {21031, 28000000, 0xBD7BB022},
+{19745, 28000000, 0xC0E93F7C}, {18695, 28000000, 0x0E424A5F},
+{18455, 28000000, 0xC0C87A73}, {17649, 28000000, 0xECB5F4E2},
+{16599, 28000000, 0x2614F881}, {16361, 28000000, 0x9575CC6F},
+{15311, 28000000, 0xDB715E07}, {15169, 28000000, 0xB7945996}
+};
 
 int selfTestInternal (
 	int	thread_num,
@@ -6373,6 +6449,8 @@ int selfTestInternal (
 	int	*torture_index,	/* Index into self test data array */
 	unsigned int memory,	/* MB of memory the torture test can use */
 	void	*bigbuf,	/* Memory block for the torture test */
+	struct self_test_info *test_data, /* Self test data */
+	unsigned int test_data_count,
 	int	*completed,	/* Returned count of tests completed */
 	int	*errors,	/* Returned count of self test errors */
 	int	*warnings)	/* Returned count of self test warnings */
@@ -6383,26 +6461,11 @@ int selfTestInternal (
 	char	buf[120];
 //	char	iniName[32];
 	time_t	start_time, current_time;
-	struct self_test_info *test_data;
-	unsigned int test_data_count;
 	int	stop_reason;
 
 /* Set the title */
 
 	title (thread_num, "Self-Test");
-
-/* Pick which self test data array to use.  Machines are much faster now */
-/* compared to when the torture test was introduced.  This new self test */
-/* data will run more iterations and thus stress the cpu more by spending */
-/* less time in the initialization code. */
-
-	if (CPU_SPEED < 1000.0) {
-		test_data = SELF_TEST_DATA;
-		test_data_count = MAX_SELF_TEST_ITERS;
-	} else {
-		test_data = SELF_TEST_DATA2;
-		test_data_count = MAX_SELF_TEST_ITERS2;
-	}
 
 /* Decide how many threads the torture test can use.  This should only */
 /* really be needed for QA purposes as the user can probably create more */
@@ -6627,11 +6690,216 @@ restart_test:	dbltogw (&lldata.gwdata, 4.0, lldata.lldata);
 /* We've passed the self-test.  Remember this in the .INI file */
 /* so that we do not need to do this again. */
 
-	sprintf (buf, SELFPASS, (int) (fftlen/1024));
+	if (fftlen % 1024 == 0)
+		sprintf (buf, SELFPASS, (int) (fftlen/1024), "K");
+	else
+		sprintf (buf, SELFPASS, (int) fftlen, "");
 	OutputBoth (thread_num, buf);
 //	sprintf (iniName, SelfTestIniMask, (int) (fftlen/1024));
 //	IniWriteInt (LOCALINI_FILE, iniName, 1);
 	return (0);
+}
+
+#ifdef ONE_HOUR_SELF_TEST
+int selfTest (
+	int	thread_num,
+	struct PriorityInfo *sp_info,
+	struct work_unit *w)
+{
+	unsigned long fftlen;
+	char	iniName[32];
+	int	tests_completed, self_test_errors, self_test_warnings;
+
+/* What fft length are we running? */
+
+	if (w->forced_fftlen)
+		fftlen = w->forced_fftlen;
+	else
+		fftlen = gwmap_to_fftlen (1.0, 2, w->n, -1);
+
+/* If fftlength is less than 64K return (we don't have any small exponents */
+/* in our self test data) */
+
+	if (fftlen < 65536) return (0);
+
+/* Make sure we haven't run this self-test already. */
+
+	sprintf (iniName, SelfTestIniMask, (int) (fftlen/1024));
+	if (IniGetInt (LOCALINI_FILE, iniName, 0)) return (0);
+#ifdef SERVER_TESTING
+	return (0);
+#endif
+
+/* Make sure the user really wants to spend an hour doing this now */
+
+	OutputStr (thread_num, SELFMSG1A);
+	OutputStr (thread_num, SELFMSG1B);
+	OutputStr (thread_num, SELFMSG1C);
+
+/* Do the self test */
+
+	tests_completed = 0;
+	self_test_errors = 0;
+	self_test_warnings = 0;
+	return (selfTestInternal (thread_num, sp_info, fftlen, 60, NULL, 0, NULL,
+				  &tests_completed, &self_test_errors, &self_test_warnings));
+}
+#endif
+
+int tortureTest (
+	int	thread_num,
+	int	num_threads)
+{
+	struct PriorityInfo sp_info;
+	struct self_test_info *test_data; /* Self test data */
+	unsigned int test_data_count;
+	int	num_lengths;		/* Number of FFT lengths we will torture test */
+	unsigned long lengths[500];	/* The FFT lengths we will torture test */
+	int	data_index[500];	/* Last exponent tested for each FFT length */
+	int	test_time;
+	int	tests_completed, self_test_errors, self_test_warnings;
+	int	i, run_indefinitely, stop_reason;
+	unsigned long fftlen, min_fft, max_fft;
+	time_t	start_time, current_time;
+	unsigned int memory;	/* Memory to use during torture test */
+	void	*bigbuf = NULL;
+
+/* Set the process/thread priority */
+
+	sp_info.type = SET_PRIORITY_TORTURE;
+	sp_info.thread_num = thread_num;
+	sp_info.aux_thread_num = 0;
+	sp_info.num_threads = num_threads;
+	SetPriority (&sp_info);
+
+/* Init counters */
+
+	tests_completed = 0;
+	self_test_errors = 0;
+	self_test_warnings = 0;
+
+/* Pick which self test data array to use.  Machines are much faster now */
+/* compared to when the torture test was introduced.  This new self test */
+/* data will run more iterations and thus stress the cpu more by spending */
+/* less time in the initialization code. */
+
+	if (CPU_FLAGS & CPU_AVX) {
+		test_data = SELF_TEST_DATA3;
+		test_data_count = MAX_SELF_TEST_ITERS3;
+	} else if (CPU_SPEED >= 1000.0) {
+		test_data = SELF_TEST_DATA2;
+		test_data_count = MAX_SELF_TEST_ITERS2;
+	} else {
+		test_data = SELF_TEST_DATA;
+		test_data_count = MAX_SELF_TEST_ITERS;
+	}
+
+/* We used to support a menu option to run the self-test for an hour on */
+/* each FFT length.  If we ever decide to resupport this option, change */
+/* the run_indefiitely variable to an argument and change the output */
+/* message below. */
+
+loop:	run_indefinitely = TRUE;
+
+/* Make sure the user really wants to spend many hours doing this now */
+
+	if (run_indefinitely) {
+		OutputStr (thread_num, TORTURE1);
+		OutputStr (thread_num, TORTURE2);
+		test_time = IniGetInt (INI_FILE, "TortureTime", 15);
+	}
+
+/* Determine fft lengths we should run and allocate a big block */
+/* of memory to test. */
+
+	min_fft = IniGetInt (INI_FILE, "MinTortureFFT", 8) * 1024;
+	if (min_fft < 32) min_fft = 32;
+	max_fft = IniGetInt (INI_FILE, "MaxTortureFFT", 4096) * 1024;
+	memory = IniGetInt (INI_FILE, "TortureMem", 8);
+	while (memory > 8 && bigbuf == NULL) {
+		bigbuf = aligned_malloc ((size_t) memory * (size_t) 1048576, 128);
+		if (bigbuf == NULL) memory--;
+	}
+
+/* Enumerate the FFT lengths we will torture test. */
+
+	num_lengths = 0;
+	fftlen = gwmap_to_fftlen (1.0, 2, 15 * min_fft, -1);
+	while (fftlen <= max_fft) {
+		unsigned long max_exponent = gwmap_fftlen_to_max_exponent (fftlen);
+		if (fftlen >= min_fft && max_exponent > test_data[test_data_count-1].p) {
+			lengths[num_lengths] = fftlen;
+			data_index[num_lengths++] = 0;
+		}
+		fftlen = gwmap_to_fftlen (1.0, 2, max_exponent + 100, -1);
+		if (fftlen == 0) break;
+	}
+
+/* Raise error if no FFT lengths to test */
+
+	if (num_lengths == 0) {
+		OutputStr (thread_num, "No FFT lengths available in the range specified.\n");
+		return (0);
+	}
+
+/* For historical reasons, we alternate testing big and small FFT lengths */
+/* (the theory being we'll find bad memory or an overheat problem more quickly). */
+
+	for (i = 0; i <= num_lengths / 2 - 2; i += 2) {
+		int	temp;
+		temp = lengths[i];
+		lengths[i] = lengths[i + num_lengths / 2];
+		lengths[i + num_lengths / 2] = lengths[i + num_lengths / 2 + 1];
+		lengths[i + num_lengths / 2 + 1] = lengths[i + 1];
+		lengths[i + 1] = temp;
+	}
+
+/* Now self-test each fft length */
+
+	stop_reason = 0;
+	time (&start_time);
+	for ( ; ; ) {
+	    for (i = 0; i < num_lengths; i++) {
+		stop_reason =
+			selfTestInternal (thread_num, &sp_info, lengths[i], test_time, &data_index[i],
+					  memory, bigbuf, test_data, test_data_count, &tests_completed,
+					  &self_test_errors, &self_test_warnings);
+		if (stop_reason) {
+			char	buf[120];
+			int	hours, minutes;
+			time (&current_time);
+			minutes = (int) (current_time - start_time) / 60;
+			hours = minutes / 60;
+			minutes = minutes % 60;
+			sprintf (buf, "Torture Test completed %d tests in ", tests_completed);
+			if (hours > 1) sprintf (buf+strlen(buf), "%d hours, ", hours);
+			else if (hours == 1) sprintf (buf+strlen(buf), "1 hour, ");
+			sprintf (buf+strlen(buf),
+				 "%d minutes - %d errors, %d warnings.\n",
+				 minutes, self_test_errors, self_test_warnings);
+			OutputStr (thread_num, buf);
+			run_indefinitely = FALSE;
+			break;
+		}
+	    }
+	    if (! run_indefinitely) break;
+	}
+
+/* Self test completed!  Free memory. */
+
+	aligned_free (bigbuf);
+
+/* If this was a user requested stop, then wait for a restart */
+	
+	while (stop_reason == STOP_WORKER) {
+		implement_stop_one_worker (thread_num);
+		stop_reason = stopCheck (thread_num);
+		if (stop_reason == 0) goto loop;
+	}
+
+/* All done */
+
+	return (stop_reason);
 }
 
 /*******************************************/
@@ -7169,7 +7437,7 @@ int primeTime (
 	gwsquare (&lldata.gwdata, lldata.lldata);
 
 /* Compute numbers in the lucas series */
-/* Note that for reasons unknown, we've seen cases where printing out
+/* Note that for reasons unknown, we've seen cases where printing out */
 /* the times on each iteration greatly impacts P4 timings. */
 
 	save_limit = (p <= 4000000) ? SAVED_LIMIT : 1;
@@ -7542,9 +7810,11 @@ int primeBench (
 
 /* Compute the number of iterations to time.  This is based on the fact that it doesn't */
 /* take too long for my 1400 MHz P4 to run 10 iterations of a 1792K FFT. */
+/* Updated: minimum number of set to 25 for AVX machines */
 
 		iterations = (unsigned long) (10 * 1792 * CPU_SPEED / 1400 / (fftlen / 1024));
 		if (iterations < 10) iterations = 10;
+		if (iterations < 25 && (CPU_FLAGS & CPU_AVX)) iterations = 25;
 		if (iterations > 100) iterations = 100;
 
 /* Output start message for this FFT length */
@@ -7567,7 +7837,7 @@ int primeBench (
 		gwsquare (&lldata.gwdata, lldata.lldata);
 
 /* Compute numbers in the lucas series */
-/* Note that for reasons unknown, we've seen cases where printing out
+/* Note that for reasons unknown, we've seen cases where printing out */
 /* the times on each iteration greatly impacts P4 timings. */
 
 		total_time = 0.0;
@@ -7844,11 +8114,14 @@ begin:	gwinit (&gwdata);
 /* and return an error code. */
 
 	if (res) {
-		sprintf (buf, "PRP cannot initialize FFT code, errcode=%d\n", res);
+		char	string_rep[80];
+		gw_as_string (string_rep, w->k, w->b, w->n, w->c);
+		sprintf (buf, "PRP cannot initialize FFT code for %s, errcode=%d\n", string_rep, res);
 		OutputBoth (thread_num, buf);
 		gwerror_text (&gwdata, res, buf, sizeof (buf) - 1);
 		strcat (buf, "\n");
 		OutputBoth (thread_num, buf);
+		if (res == GWERROR_TOO_SMALL) return (STOP_WORK_UNIT_COMPLETE);
 		return (STOP_FATAL_ERROR);
 	}
 
@@ -7938,6 +8211,15 @@ begin:	gwinit (&gwdata);
 
 	stop_reason = setN (&gwdata, thread_num, w, &N);
 	if (stop_reason) goto exit;
+
+/* If N is one, the number is already fully factored.  Print an error message. */
+
+	if (isone (N)) {
+		sprintf (buf, "PRP test of one is not allowed.  Input string was: %s\n", string_rep);
+		OutputBoth (thread_num, buf);
+		stop_reason = STOP_WORK_UNIT_COMPLETE;
+		goto exit;
+	}
 
 /* Subtract 1 from N to compute a^(N-1) mod N.  Get the exact bit length */
 /* of the number.  We will perform bitlen(N)-1 squarings for the PRP test. */
@@ -8100,7 +8382,7 @@ OutputStr (thread_num, "Iteration failed.\n");
 /* then repeat the iteration using a safer, slower method.  This can */
 /* happen when operating near the limit of an FFT. */
 
-		if (echk && gw_get_maxerr (&gwdata) >= 0.40625) {
+		if (echk && gw_get_maxerr (&gwdata) > 0.40625) {
 			if (counter == last_counter &&
 			    gw_get_maxerr (&gwdata) == last_maxerr) {
 				OutputBoth (thread_num, ERROK);

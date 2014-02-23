@@ -1,8 +1,8 @@
 /*----------------------------------------------------------------------
 | This file contains various utility routines that may be used by gwnum
 | setup.
-| 
-|  Copyright 2011-2012 Mersenne Research, Inc.  All rights reserved.
+|
+|  Copyright 2011-2014 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 #ifndef _GWTABLES_H
@@ -223,30 +223,45 @@ struct gwasm_data {
 		char	YMM_FIRST_BIGLIT_VALUES[8];  /* Big/lit flags for first 8 values */
 		double	UNUSED_YMM_DOUBLES[3];
 
-		double	YMM_P924[4];	/* Used in one-pass all-complex premultipliers */
-		double	YMM_P383[4];	/* and in the sixteen reals macros. */
+		double	UNUSED_YMM_DOUBLES2[4];
+		double	YMM_P924_P383[4]; /* Used in FMA versions of 16-reals macros */
+
+		double	YMM_P383[4];	/* Used in one-pass all-complex premultipliers */
+		double	YMM_P924[4];	/* and in the sixteen reals macros. */
 
 		double	YMM_P866[4];	/* Used in three-complex building blocks */
-		double	YMM_TWO[4];	/* 2.0 */
+		double	YMM_P588[4];	/* Used in five-complex and 20-reals macros */
 
-		double	YMM_P309[4];	/* Used in five-complex and 20-reals macros */
+		double	YMM_P309[4];
 		double	YMM_P809[4];
 
 		double	YMM_P951[4];
-		double	YMM_P588[4];
+		double	YMM_P618[4];	/* only used in FMA version of five-complex and 20-reals (.588/.951) */
+
+		double	YMM_ONE[4];	/* 1.0 - used in FMA3 code */
+		double	YMM_TWO[4];	/* 2.0 */
 
 		double	YMM_P975[4];	/* Used in radix-28 macros */
-		double	YMM_P623[4];
-
-		double	YMM_P901[4];
 		double	YMM_P782[4];
+
+		double	YMM_P623[4];
+		double	YMM_P901[4];
 
 		double	YMM_P434[4];
 		double	YMM_P223[4];
 
-		double	YMM_TMPS[26*4];		/* 26 YMM temporaries */
+		double	YMM_P975_P434[4];	/* only used in FMA version of radix-28 macros */
+		double	YMM_P782_P434[4];
+
+		double	YMM_P259[4];		/* Used in radix-24 macros */
+		double	YMM_P966[4];
+
+		double	YMM_P259_P707[4];	/* Used in FMA versions of radix-24 macros */
+		double	YMM_P966_P707[4];
+
 		double	YMM_LIMIT_BIGMAX[192];	/* Normalization constants */
 		double	YMM_LIMIT_INVERSE[192];
+		double	YMM_TMPS[256];		/* 26 YMM temporaries or space for clm*YMM_SCD8 using sg8cl */
 	    } ymm;
 
 	    struct xmm_data {

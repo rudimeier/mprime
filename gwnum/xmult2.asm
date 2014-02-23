@@ -1,4 +1,4 @@
-; Copyright 2001-2012 Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2014 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -48,7 +48,7 @@ _TEXT SEGMENT
 ;	Parameter asm_data = rdi
 
 PROCFL pass1_aux_entry_point
-	ad_prolog 0,1,rbx,rbp,rsi,rdi,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
+	ad_prolog 0,1,rbx,rbp,rsi,rdi,r12,r13,r14,r15,xmm6,xmm7,xmm8,xmm9,xmm10,xmm11,xmm12,xmm13,xmm14,xmm15
 
 ;; Jump to common pass 1 code.  We must jump rather than call because the
 ;; pass 1 code operates with a push_amt of zero.

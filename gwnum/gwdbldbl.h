@@ -4,7 +4,7 @@
 | This file contains the headers for the gwnum helper routines that use
 | extended-precision floats.
 | 
-|  Copyright 2005-2011 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2005-2014 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 #ifndef _GWDBLDBL_H
@@ -28,10 +28,20 @@ void gwsincos (unsigned long, unsigned long, double *);
 void gwsincos3 (unsigned long, unsigned long, double *);
 void gwsincos5 (unsigned long, unsigned long, double *);
 
+#define gwsincos1by1_raw(a,b,c)	gwsincos1by_raw(a,b,c,1)
+#define gwsincos1by2_raw(a,b,c)	gwsincos1by_raw(a,b,c,2)
+#define gwsincos1by4_raw(a,b,c)	gwsincos1by_raw(a,b,c,4)
+void gwsincos1by_raw (unsigned long, unsigned long, double *, int);
+
 #define gwsincos1by1(a,b,c)	gwsincos1by(a,b,c,1)
 #define gwsincos1by2(a,b,c)	gwsincos1by(a,b,c,2)
 #define gwsincos1by4(a,b,c)	gwsincos1by(a,b,c,4)
 void gwsincos1by (unsigned long, unsigned long, double *, int);
+
+#define gwsincos12by1_raw(a,b,c) gwsincos12by_raw(a,b,c,1)
+#define gwsincos12by2_raw(a,b,c) gwsincos12by_raw(a,b,c,2)
+#define gwsincos12by4_raw(a,b,c) gwsincos12by_raw(a,b,c,4)
+void gwsincos12by_raw (unsigned long, unsigned long, double *, int);
 
 #define gwsincos12by1(a,b,c)	gwsincos12by(a,b,c,1)
 #define gwsincos12by2(a,b,c)	gwsincos12by(a,b,c,2)
@@ -53,6 +63,10 @@ void gwsincos15913by (unsigned long, unsigned long, double *, int);
 #define gwsincos125by2(a,b,c)	gwsincos125by(a,b,c,2)
 #define gwsincos125by4(a,b,c)	gwsincos125by(a,b,c,4)
 void gwsincos125by (unsigned long, unsigned long, double *, int);
+
+#define gwsincos1234by2_raw(a,b,c)	gwsincos1234by_raw(a,b,c,2)
+#define gwsincos1234by4_raw(a,b,c)	gwsincos1234by_raw(a,b,c,4)
+void gwsincos1234by_raw (unsigned long, unsigned long, double *, int);
 
 #define gwsincos1234by2(a,b,c)	gwsincos1234by(a,b,c,2)
 #define gwsincos1234by4(a,b,c)	gwsincos1234by(a,b,c,4)

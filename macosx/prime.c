@@ -1,4 +1,4 @@
-/* Copyright 1995-2012 Mersenne Research, Inc. */
+/* Copyright 1995-2013 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -427,6 +427,7 @@ void linuxContinue (
 	char	filename[30];
 	int	fd;
 	struct stat filedata;
+	dev_t	dev1, dev2;
 	ino_t	inode1, inode2;
 
 /* Compare this process' ID and the pid from the INI file */
@@ -462,15 +463,17 @@ void linuxContinue (
 	fd = _open (filename, _O_RDONLY);
 	if (fd < 0) goto ok;
 	fstat (fd, &filedata);
+	dev1 = filedata.st_dev;
 	inode1 = filedata.st_ino;
 	_close (fd);
 	sprintf (filename, PROCNAME, running_pid);
 	fd = _open (filename, _O_RDONLY);
 	if (fd < 0) goto ok;
 	fstat (fd, &filedata);
+	dev2 = filedata.st_dev;
 	inode2 = filedata.st_ino;
 	_close (fd);
-	if (inode1 != inode2) goto ok;
+	if (dev1 != dev2 || inode1 != inode2) goto ok;
 #endif
 
 /* The two pids are running the same executable, raise an error and return */

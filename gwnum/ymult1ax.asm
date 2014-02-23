@@ -1,4 +1,4 @@
-; Copyright 2011-2012 Mersenne Research, Inc.  All rights reserved
+; Copyright 2011-2013 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -19,6 +19,11 @@ INCLUDE memory.mac
 INCLUDE ynormal.mac
 
 _TEXT SEGMENT
+
+;; Only assemble the add/sub/etc routines when compiled with the CORE architecture
+;; Maybe someday we can look into whether or not FMA versions would be faster
+
+IF (@INSTR(,%yarch,<CORE>) NE 0)
 
 ;;
 ;; Add two numbers without carry propagation.  Caller can use this for
@@ -41,10 +46,10 @@ uaddlp:	vmovapd	ymm0, [rdx]		; Load second number
 	vaddpd	ymm2, ymm2, [rcx+64]	; Add in first number
 	vmovapd	ymm3, [rdx+96]		; Load second number
 	vaddpd	ymm3, ymm3, [rcx+96]	; Add in first number
-	vmovapd	[rsi], ymm0		; Save result
-	vmovapd	[rsi+32], ymm1		; Save result
-	vmovapd	[rsi+64], ymm2		; Save result
-	vmovapd	[rsi+96], ymm3		; Save result
+	ystore	[rsi], ymm0		; Save result
+	ystore	[rsi+32], ymm1		; Save result
+	ystore	[rsi+64], ymm2		; Save result
+	ystore	[rsi+96], ymm3		; Save result
 	bump	rcx, 128		; Next source
 	bump	rdx, 128		; Next source
 	bump	rsi, 128		; Next dest
@@ -417,10 +422,10 @@ usublp:	vmovapd	ymm0, [rdx]		; Load second number
 	vsubpd	ymm2, ymm2, [rcx+64]	; Subtract first number
 	vmovapd	ymm3, [rdx+96]		; Load second number
 	vsubpd	ymm3, ymm3, [rcx+96]	; Subtract first number
-	vmovapd	[rsi], ymm0		; Save result
-	vmovapd	[rsi+32], ymm1		; Save result
-	vmovapd	[rsi+64], ymm2		; Save result
-	vmovapd	[rsi+96], ymm3		; Save result
+	ystore	[rsi], ymm0		; Save result
+	ystore	[rsi+32], ymm1		; Save result
+	ystore	[rsi+64], ymm2		; Save result
+	ystore	[rsi+96], ymm3		; Save result
 	bump	rcx, 128		; Next source
 	bump	rdx, 128		; Next source
 	bump	rsi, 128		; Next dest
@@ -798,14 +803,14 @@ uaddsublp:
 	vmovapd	ymm7, [rcx+96]		; Load first number
 	vaddpd	ymm6, ymm7, [rdx+96]	; Add in second number
 	vsubpd	ymm7, ymm7, [rdx+96]	; Subtract out second number
-	vmovapd	[rsi], ymm0		; Save result
-	vmovapd	[rbp], ymm1		; Save result
-	vmovapd	[rsi+32], ymm2		; Save result
-	vmovapd	[rbp+32], ymm3		; Save result
-	vmovapd	[rsi+64], ymm4		; Save result
-	vmovapd	[rbp+64], ymm5		; Save result
-	vmovapd	[rsi+96], ymm6		; Save result
-	vmovapd	[rbp+96], ymm7		; Save result
+	ystore	[rsi], ymm0		; Save result
+	ystore	[rbp], ymm1		; Save result
+	ystore	[rsi+32], ymm2		; Save result
+	ystore	[rbp+32], ymm3		; Save result
+	ystore	[rsi+64], ymm4		; Save result
+	ystore	[rbp+64], ymm5		; Save result
+	ystore	[rsi+96], ymm6		; Save result
+	ystore	[rbp+96], ymm7		; Save result
 	bump	rcx, 128		; Next source
 	bump	rdx, 128		; Next source
 	bump	rsi, 128		; Next dest
@@ -1633,6 +1638,8 @@ nb2rzpmulsecdn:
 	ad_epilog 6*SZPTR+8,0,rbx,rbp,rsi,rdi,xmm6,xmm7
 gwymulsnrzp1 ENDP
 
+ENDIF
+
 ;;
 ;; Routines to do the normalization after a multiply
 ;;
@@ -1694,7 +1701,7 @@ ttp	mov	rdi, saved_reg2		;; Restore big/lit pointer
 ttp	mov	rbp, saved_reg3		;; Restore ttp pointer
 	sub	loopcount1, 1		;; Test section counter
 	jnz	ilp0
-echk	vmovapd	YMM_MAXERR, ymm6	;; Save maximum error
+echk	ystore	YMM_MAXERR, ymm6	;; Save maximum error
 zero ttp		jmp	zdn	;; Go to zero upper half irrational end code
 zero no ttp		jmp	zrdn	;; Go to zero upper half rational end code
 no base2 ttp		jmp	nb2dn	;; Go to non-base2 irrational end code
@@ -1744,7 +1751,7 @@ ttp	mov	rdi, saved_reg2		;; Restore big/lit pointer
 ttp	mov	rbp, saved_reg3		;; Restore ttp pointer
 	sub	loopcount1, 1		;; Test section counter
 	jnz	ilp0
-echk	vmovapd	YMM_MAXERR, ymm6	;; Save maximum error
+echk	ystore	YMM_MAXERR, ymm6	;; Save maximum error
 no base2 const jmp nb2zpcdn		;; Go to zero padded FFT end code
 no base2 no const jmp nb2zpdn		;; Go to non-base2 end code
 base2 const jmp	zpcdn			;; Go to zero padded FFT end code
@@ -1847,7 +1854,7 @@ base2 no const jmp zpdn			;; Go to zero padded FFT end code
 ; However, my reading of the spec is that as long as the two procedures have
 ; identical prologs then stack unwinding for exception handling will work OK.
 
-PROCF	__common_ynorm1_end_code
+PROCFP	__common_ynorm1_end_code
 
 	;; Dummy prolog to match normalization code
 	int_prolog 6*SZPTR+8,0,0
@@ -1897,7 +1904,7 @@ b2rdn:	mov	rsi, DESTARG		; Address of squared number
 ; Normalize SUMOUT value by multiplying by 1 / (fftlen/2).
 
 cmnend:	mov	rsi, DESTARG		; Address of squared number
-	vmovapd	YMM_TMP1, ymm7		; Add together the four partial sumouts
+	ystore	YMM_TMP1, ymm7		; Add together the four partial sumouts
 	vaddsd	xmm7, xmm7, YMM_TMP1+8
 	vaddsd	xmm7, xmm7, YMM_TMP1+16
 	vaddsd	xmm7, xmm7, YMM_TMP1+24
@@ -1913,7 +1920,7 @@ cmnend:	mov	rsi, DESTARG		; Address of squared number
 ; Return
 
 	int_epilog 6*SZPTR+8,0,0
-__common_ynorm1_end_code ENDP
+	ENDPP __common_ynorm1_end_code 
 
 _TEXT	ENDS
 END

@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2013 Mersenne Research, Inc.  All rights reserved
 +---------------------------------------------------------------------*/
 
 //#define SERVER_TESTING
@@ -60,8 +60,6 @@ void LauncherDispatch (void *arg);
 int primeContinue (int);
 int tortureTest (int, int);
 int selfTest (int, struct PriorityInfo *, struct work_unit *);
-int selfTestInternal (int, struct PriorityInfo *, unsigned long, unsigned int,
-		      int *, unsigned int, void *, int *, int *, int *);
 int primeTime (int, unsigned long, unsigned long);
 int primeBench (int);
 int primeFactor (int, struct PriorityInfo *, struct work_unit *, unsigned int);

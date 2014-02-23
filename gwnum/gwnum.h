@@ -16,7 +16,7 @@
 | threads IF AND ONLY IF each uses a different gwhandle structure
 | initialized by gwinit.
 | 
-|  Copyright 2002-2013 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2002-2014 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 #ifndef _GWNUM_H
@@ -59,9 +59,9 @@ typedef double *gwnum;
 /* gwsetup verifies that the version numbers match.  This prevents bugs */
 /* from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"27.11"
-#define GWNUM_MAJOR_VERSION	27
-#define GWNUM_MINOR_VERSION	11
+#define GWNUM_VERSION		"28.4"
+#define GWNUM_MAJOR_VERSION	28
+#define GWNUM_MINOR_VERSION	4
 
 /* Error codes returned by the three gwsetup routines */
 
@@ -78,6 +78,7 @@ typedef double *gwnum;
 					/* gwinit call doesn't match size */
 					/* when gwnum.c was compiled.  Check */
 					/* compiler alignment switches. */
+#define GWERROR_TOO_SMALL	1008	/* Gwsetup called on a number <= 1 */
 #define GWERROR_INTERNAL	2000	/* 2000 and up are "impossible" internal errors. */
 
 /* Error codes returned by gwtobinary, gwtogiant, gwiszero, gwequal, and get_fft_value */
@@ -392,7 +393,7 @@ void gwsetmulbyconst (gwhandle *gwdata, long s);
 /* multiplication code whether or not it should multiply the result by */
 /* a small constant. */
 
-#define gwsetnormroutine(h,z,e,c) {(h)->NORMNUM=2*(c)+(e);}
+#define gwsetnormroutine(h,z,e,c) {(h)->NORMNUM=((c)?2:0)+((e)?1:0);}
 
 /* If you know the result of a multiplication will be the input to another */
 /* multiplication (but not gwsquare_carefully), then a small performance */

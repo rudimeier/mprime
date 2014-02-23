@@ -1,10 +1,359 @@
-; Copyright 2011-2012 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2011-2013 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
 ; These macros implement basic AVX building blocks that will be used by
 ; all FFT types.
 ;
+
+;; Macros that try to make it easier to right code that works best on both Bulldozer 
+;; which supports the superior FMA4 instruction and Intel which only supports the
+;; more clumsy FMA3 instructions.
+
+yfmaddpd MACRO dest, mulval1, mulval2, addval, which_arg_to_copy
+	IFIDNI <&dest>, <&addval>
+		IF (OPATTR (mulval1)) AND 10000b
+			vfmadd231pd addval, mulval1, mulval2
+		ELSE
+			vfmadd231pd addval, mulval2, mulval1
+		ENDIF
+	ELSE
+	IFIDNI <&dest>, <&mulval1>
+		IF (OPATTR (mulval2)) AND 10000b
+			vfmadd213pd mulval1, mulval2, addval
+		ELSE
+			vfmadd132pd mulval1, addval, mulval2
+		ENDIF
+	ELSE
+	IFIDNI <&dest>, <&mulval2>
+		IF (OPATTR (mulval1)) AND 10000b
+			vfmadd213pd mulval2, mulval1, addval
+		ELSE
+			vfmadd132pd mulval2, addval, mulval1
+		ENDIF
+	ELSE
+	IFNB <which_arg_to_copy>
+		IF which_arg_to_copy EQ 1
+			vmovapd dest, mulval1
+			IF (OPATTR (mulval2)) AND 10000b
+				vfmadd213pd dest, mulval2, addval
+			ELSE
+				vfmadd132pd dest, addval, mulval2
+			ENDIF
+		ELSE
+		IF which_arg_to_copy EQ 2
+			vmovapd dest, mulval2
+			IF (OPATTR (mulval1)) AND 10000b
+				vfmadd213pd dest, mulval1, addval
+			ELSE
+				vfmadd132pd dest, addval, mulval1
+			ENDIF
+		ELSE
+			vmovapd dest, addval
+			IF (OPATTR (mulval1)) AND 10000b
+				vfmadd231pd dest, mulval1, mulval2
+			ELSE
+				vfmadd231pd dest, mulval2, mulval1
+			ENDIF
+		ENDIF
+		ENDIF
+	ELSE
+		IF (OPATTR (mulval2)) AND 10000b
+			vmovapd dest, mulval2
+			IF (OPATTR (mulval1)) AND 10000b
+				vfmadd213pd dest, mulval1, addval
+			ELSE
+				vfmadd132pd dest, addval, mulval1
+			ENDIF
+		ELSE
+			vmovapd dest, mulval1
+			vfmadd132pd dest, addval, mulval2
+		ENDIF
+	ENDIF
+	ENDIF
+	ENDIF
+	ENDIF
+	ENDM
+
+yfmsubpd MACRO dest, mulval1, mulval2, addval, which_arg_to_copy
+	IFIDNI <&dest>, <&addval>
+		IF (OPATTR (mulval1)) AND 10000b
+			vfmsub231pd addval, mulval1, mulval2
+		ELSE
+			vfmsub231pd addval, mulval2, mulval1
+		ENDIF
+	ELSE
+	IFIDNI <&dest>, <&mulval1>
+		IF (OPATTR (mulval2)) AND 10000b
+			vfmsub213pd mulval1, mulval2, addval
+		ELSE
+			vfmsub132pd mulval1, addval, mulval2
+		ENDIF
+	ELSE
+	IFIDNI <&dest>, <&mulval2>
+		IF (OPATTR (mulval1)) AND 10000b
+			vfmsub213pd mulval2, mulval1, addval
+		ELSE
+			vfmsub132pd mulval2, addval, mulval1
+		ENDIF
+	ELSE
+	IFNB <which_arg_to_copy>
+		IF which_arg_to_copy EQ 1
+			vmovapd dest, mulval1
+			IF (OPATTR (mulval2)) AND 10000b
+				vfmsub213pd dest, mulval2, addval
+			ELSE
+				vfmsub132pd dest, addval, mulval2
+			ENDIF
+		ELSE
+		IF which_arg_to_copy EQ 2
+			vmovapd dest, mulval2
+			IF (OPATTR (mulval1)) AND 10000b
+				vfmsub213pd dest, mulval1, addval
+			ELSE
+				vfmsub132pd dest, addval, mulval1
+			ENDIF
+		ELSE
+			vmovapd dest, addval
+			IF (OPATTR (mulval1)) AND 10000b
+				vfmsub231pd dest, mulval1, mulval2
+			ELSE
+				vfmsub231pd dest, mulval2, mulval1
+			ENDIF
+		ENDIF
+		ENDIF
+	ELSE
+		IF (OPATTR (mulval2)) AND 10000b
+			vmovapd dest, mulval2
+			IF (OPATTR (mulval1)) AND 10000b
+				vfmsub213pd dest, mulval1, addval
+			ELSE
+				vfmsub132pd dest, addval, mulval1
+			ENDIF
+		ELSE
+			vmovapd dest, mulval1
+			vfmsub132pd dest, addval, mulval2
+		ENDIF
+	ENDIF
+	ENDIF
+	ENDIF
+	ENDIF
+	ENDM
+
+yfnmaddpd MACRO dest, mulval1, mulval2, addval, which_arg_to_copy
+	IFIDNI <&dest>, <&addval>
+		IF (OPATTR (mulval1)) AND 10000b
+			vfnmadd231pd addval, mulval1, mulval2
+		ELSE
+			vfnmadd231pd addval, mulval2, mulval1
+		ENDIF
+	ELSE
+	IFIDNI <&dest>, <&mulval1>
+		IF (OPATTR (mulval2)) AND 10000b
+			vfnmadd213pd mulval1, mulval2, addval
+		ELSE
+			vfnmadd132pd mulval1, addval, mulval2
+		ENDIF
+	ELSE
+	IFIDNI <&dest>, <&mulval2>
+		IF (OPATTR (mulval1)) AND 10000b
+			vfnmadd213pd mulval2, mulval1, addval
+		ELSE
+			vfnmadd132pd mulval2, addval, mulval1
+		ENDIF
+	ELSE
+	IFNB <which_arg_to_copy>
+		IF which_arg_to_copy EQ 1
+			vmovapd dest, mulval1
+			IF (OPATTR (mulval2)) AND 10000b
+				vfnmadd213pd dest, mulval2, addval
+			ELSE
+				vfnmadd132pd dest, addval, mulval2
+			ENDIF
+		ELSE
+		IF which_arg_to_copy EQ 2
+			vmovapd dest, mulval2
+			IF (OPATTR (mulval1)) AND 10000b
+				vfnmadd213pd dest, mulval1, addval
+			ELSE
+				vfnmadd132pd dest, addval, mulval1
+			ENDIF
+		ELSE
+			vmovapd dest, addval
+			IF (OPATTR (mulval1)) AND 10000b
+				vfnmadd231pd dest, mulval1, mulval2
+			ELSE
+				vfnmadd231pd dest, mulval2, mulval1
+			ENDIF
+		ENDIF
+		ENDIF
+	ELSE
+		IF (OPATTR (mulval2)) AND 10000b
+			vmovapd dest, mulval2
+			IF (OPATTR (mulval1)) AND 10000b
+				vfnmadd213pd dest, mulval1, addval
+			ELSE
+				vfnmadd132pd dest, addval, mulval1
+			ENDIF
+		ELSE
+			vmovapd dest, mulval1
+			vfnmadd132pd dest, addval, mulval2
+		ENDIF
+	ENDIF
+	ENDIF
+	ENDIF
+	ENDIF
+	ENDM
+
+yfnmsubpd MACRO dest, mulval1, mulval2, addval, which_arg_to_copy
+	IFIDNI <&dest>, <&addval>
+		IF (OPATTR (mulval1)) AND 10000b
+			vfnmsub231pd addval, mulval1, mulval2
+		ELSE
+			vfnmsub231pd addval, mulval2, mulval1
+		ENDIF
+	ELSE
+	IFIDNI <&dest>, <&mulval1>
+		IF (OPATTR (mulval2)) AND 10000b
+			vfnmsub213pd mulval1, mulval2, addval
+		ELSE
+			vfnmsub132pd mulval1, addval, mulval2
+		ENDIF
+	ELSE
+	IFIDNI <&dest>, <&mulval2>
+		IF (OPATTR (mulval1)) AND 10000b
+			vfnmsub213pd mulval2, mulval1, addval
+		ELSE
+			vfnmsub132pd mulval2, addval, mulval1
+		ENDIF
+	ELSE
+	IFNB <which_arg_to_copy>
+		IF which_arg_to_copy EQ 1
+			vmovapd dest, mulval1
+			IF (OPATTR (mulval2)) AND 10000b
+				vfnmsub213pd dest, mulval2, addval
+			ELSE
+				vfnmsub132pd dest, addval, mulval2
+			ENDIF
+		ELSE
+		IF which_arg_to_copy EQ 2
+			vmovapd dest, mulval2
+			IF (OPATTR (mulval1)) AND 10000b
+				vfnmsub213pd dest, mulval1, addval
+			ELSE
+				vfnmsub132pd dest, addval, mulval1
+			ENDIF
+		ELSE
+			vmovapd dest, addval
+			IF (OPATTR (mulval1)) AND 10000b
+				vfnmsub231pd dest, mulval1, mulval2
+			ELSE
+				vfnmsub231pd dest, mulval2, mulval1
+			ENDIF
+		ENDIF
+		ENDIF
+	ELSE
+		IF (OPATTR (mulval2)) AND 10000b
+			vmovapd dest, mulval2
+			IF (OPATTR (mulval1)) AND 10000b
+				vfnmsub213pd dest, mulval1, addval
+			ELSE
+				vfnmsub132pd dest, addval, mulval1
+			ENDIF
+		ELSE
+			vmovapd dest, mulval1
+			vfnmsub132pd dest, addval, mulval2
+		ENDIF
+	ENDIF
+	ENDIF 
+	ENDIF 
+	ENDIF
+	ENDM
+
+;; The Bulldozer version of yfmaddpd, yfmsubpd, yfnmaddpd, yfnmsubpd
+
+IF (@INSTR(,%yarch,<BULL>) NE 0)
+yfmaddpd MACRO dest, mulval1, mulval2, addval, which_arg_to_copy
+	vfmaddpd dest, mulval1, mulval2, addval
+	ENDM
+yfmsubpd MACRO dest, mulval1, mulval2, addval, which_arg_to_copy
+	vfmsubpd dest, mulval1, mulval2, addval
+	ENDM
+yfnmaddpd MACRO dest, mulval1, mulval2, addval, which_arg_to_copy
+	vfnmaddpd dest, mulval1, mulval2, addval
+	ENDM
+yfnmsubpd MACRO dest, mulval1, mulval2, addval, which_arg_to_copy
+	vfnmsubpd dest, mulval1, mulval2, addval
+	ENDM
+ENDIF
+
+;;
+;; Store the low or high 128-bit parts of a ymm register in memory
+;;
+
+ystorelo MACRO address, reg
+	yyyreg TEXTEQU <&reg>
+	vmovapd XMMWORD PTR address, @CATSTR(x,@SUBSTR(%yyyreg,2))
+	ENDM
+
+ystorehi MACRO address, reg
+	vextractf128 XMMWORD PTR address, reg, 1
+	ENDM
+
+;; Macro that tries to lessen the cost of using 256-bit AVX instructions on Bulldozer
+;; (on Bulldozer a "vmovapd mem, reg" instruction is a slow microcoded instruction)
+
+;; Store a 256-bit ymm register in memory
+
+ystore MACRO address, reg
+	vmovapd address, reg
+	ENDM
+
+;; The Bulldozer version of ystore.
+;; "vmovapd mem, ymmreg" is a slow microcoded instruction on Bulldozer.  It is faster to
+;; do a 128-bit store of the low bits and a vextractf128 to store the high 128-bits.
+
+IF (@INSTR(,%yarch,<BULL>) NE 0)
+ystore MACRO address, reg
+	ystorelo address, reg
+	ystorehi address[16], reg
+	ENDM
+ENDIF
+
+
+;; Create a new 256-bit value using the low 128-bits of two ymm registers
+
+ylow128s MACRO dest, srclow, srchigh
+	vperm2f128 dest, srclow, srchigh, 32
+	ENDM
+
+;; The Bulldozer version of ylow128s
+;; "vpermf128" a slow microcoded 8-uop instruction on Bulldozer.  It is faster to do a vinsertf128.
+
+IF (@INSTR(,%yarch,<BULL>) NE 0)
+ylow128s MACRO dest, srclow, srchigh
+	yyyreg TEXTEQU <&srchigh>
+	vinsertf128 dest, srclow, @CATSTR(x,@SUBSTR(%yyyreg,2)),1
+	ENDM
+ENDIF
+
+;; Create a new 256-bit value using the high 128-bits of two ymm registers
+
+yhigh128s MACRO dest, srclow, srchigh
+	vperm2f128 dest, srclow, srchigh, 49
+	ENDM
+
+;; The Bulldozer version of yhigh128s
+;; "vpermf128" a slow microcoded 8-uop instruction on Bulldozer.  It is faster to do a
+;; vextractf128 and vinsertf128.
+
+IF (@INSTR(,%yarch,<BULL>) NE 0)
+yhigh128s MACRO dest, srclow, srchigh
+	yyyreg TEXTEQU <&dest>
+	vextractf128 @CATSTR(x,@SUBSTR(%yyyreg,2)), srclow, 1
+	vinsertf128 dest, srchigh, @CATSTR(x,@SUBSTR(%yyyreg,2)),0
+	ENDM
+ENDIF
 
 ;;
 ;; Prefetching macros
@@ -16,6 +365,8 @@ L1PREFETCH_NONE		EQU	0		; No L1 prefetching
 L1PREFETCH_EVEN		EQU	1		; L1 prefetching half the time
 L1PREFETCH_ODD		EQU	2		; L1 prefetching half the time
 L1PREFETCH_ALL		EQU	3		; L1 prefetching on
+L1PREFETCH_DEST_NONE	EQU	1000		; No L1 prefetching for destination
+L1PREFETCH_DEST_ALL	EQU	1003		; L1 prefetching on for destination
 
 L1prefetch_toggle = 1
 

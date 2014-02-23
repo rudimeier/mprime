@@ -1,4 +1,4 @@
-; Copyright 2011 Mersenne Research, Inc.  All rights reserved
+; Copyright 2011-2013 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 
@@ -44,8 +44,8 @@ qaddlp:	vmovapd	ymm0, [rdx]		; Load second number
 	vaddpd	ymm0, ymm0, [rcx]	; Add in first number
 	vmovapd	ymm1, [rdx+32]		; Load second number
 	vaddpd	ymm1, ymm1, [rcx+32]	; Add in first number
-	vmovapd	[rsi], ymm0		; Save result
-	vmovapd	[rsi+32], ymm1		; Save result
+	ystore	[rsi], ymm0		; Save result
+	ystore	[rsi+32], ymm1		; Save result
 	bump	rcx, 64			; Next source
 	bump	rdx, 64			; Next source
 	bump	rsi, 64			; Next dest
@@ -681,8 +681,8 @@ qsublp:	vmovapd	ymm0, [rdx]		; Load second number
 	vsubpd	ymm0, ymm0, [rcx]	; Subtract first number
 	vmovapd	ymm1, [rdx+32]		; Load second number
 	vsubpd	ymm1, ymm1, [rcx+32]	; Subtract first number
-	vmovapd	[rsi], ymm0		; Save result
-	vmovapd	[rsi+32], ymm1		; Save result
+	ystore	[rsi], ymm0		; Save result
+	ystore	[rsi+32], ymm1		; Save result
 	bump	rcx, 64			; Next source
 	bump	rdx, 64			; Next source
 	bump	rsi, 64			; Next dest
@@ -1320,10 +1320,10 @@ qaddsublp:
 	vmovapd	ymm2, [rcx+32]		; Load first number
 	vsubpd	ymm3, ymm2, [rdx+32]	; Subtract out second number
 	vaddpd	ymm2, ymm2, [rdx+32]	; Add in second number
-	vmovapd	[rsi], ymm0		; Save result
-	vmovapd	[rbp], ymm1		; Save result
-	vmovapd	[rsi+32], ymm2		; Save result
-	vmovapd	[rbp+32], ymm3		; Save result
+	ystore	[rsi], ymm0		; Save result
+	ystore	[rbp], ymm1		; Save result
+	ystore	[rsi+32], ymm2		; Save result
+	ystore	[rbp+32], ymm3		; Save result
 	bump	rcx, 64			; Next source
 	bump	rdx, 64			; Next source
 	bump	rsi, 64			; Next dest

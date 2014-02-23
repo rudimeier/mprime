@@ -1,4 +1,4 @@
-; Copyright 2011-2012 Mersenne Research, Inc.  All rights reserved
+; Copyright 2011-2014 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -29,18 +29,16 @@ _TEXT SEGMENT
 ; Macro to loop through all the FFT values and apply the proper normalization
 ; routine.
 
+IFNDEF X86_64
+
 saved_rsi	EQU	PPTR [rsp+first_local]
-IFDEF X86_64
-loopcount1	EQU	r10
-ELSE
 loopcount1	EQU	DPTR [rsp+first_local+SZPTR]
-ENDIF
 loopcount2	EQU	DPTR [rsp+first_local+SZPTR+4]
 loopcount3	EQU	DPTR [rsp+first_local+SZPTR+8]
 blk8_counter	EQU	BYTE PTR [rsp+first_local+SZPTR+12]
 
 inorm	MACRO	lab, ttp, zero, echk, const, base2
-	LOCAL	noadd, setlp, ilp0, ilp1, ilp2, not8, done
+	LOCAL	noadd, ilp0, ilp1, ilp2, not8, done
 	PROCFLP	lab
 	int_prolog SZPTR+16,0,0
 echk	vmovapd	ymm6, YMM_MAXERR	;; Load maximum error
@@ -49,7 +47,6 @@ no zero	cmp	edx, THIS_BLOCK
 no zero	jne	short noadd		;; Jump if addin does not occur now
 no zero	mov	edi, ADDIN_OFFSET	;; Get address to add value into
 no zero	vmovsd	xmm0, ADDIN_VALUE	;; Get the requested add-in value
-no zero	vsubpd	ymm7, ymm7, ymm0	;; Do not include addin in sumout
 no zero	vaddsd	xmm0, xmm0, Q [rsi][rdi] ;; Add in the FFT value
 no zero	vmovsd	Q [rsi][rdi], xmm0	;; Save the new value
 noadd:	mov	saved_rsi, rsi		;; Save for top_carry_adjust
@@ -65,9 +62,6 @@ noadd:	mov	saved_rsi, rsi		;; Save for top_carry_adjust
 ttp	movzx	rbx, WORD PTR [rdi]	;; Preload 4 big vs. little & fudge flags
 ilp0:	mov	eax, count2		;; Load wpn count
 	mov	loopcount2, eax		;; Save count
-IFDEF X86_64
-ttp	lea	r9, [rdx+2*YMM_GMD]	;; Prefetch pointer for group multipliers
-ENDIF
 ilp1:	mov	eax, cache_line_multiplier ;; Load inner loop counter
 	mov	loopcount1, rax		;; Save loop counter
 	vmovapd ymm2, [rbp+0*32]	;; Load carries
@@ -77,8 +71,8 @@ ilp2:	ynorm_wpn ttp, base2, zero, echk, const ;; Normalize 8 values
 ttp	bump	rdi, 2			;; Next big/little flags
 	sub	loopcount1, 1		;; Test loop counter
 	jnz	ilp2			;; Loop til done
-	vmovapd [rbp+0*32], ymm2	;; Save carries
-	vmovapd [rbp+1*32], ymm3
+	ystore	[rbp+0*32], ymm2	;; Save carries
+	ystore	[rbp+1*32], ymm3
 	add	rsi, normblkdst		;; Add 0 or 64 every clmblkdst
 	bump	rbp, 64			;; Next set of carries
 	add	blk8_counter, 80h/4	;; Test for a multiple of 8 blocks
@@ -90,7 +84,7 @@ ttp	bump	rdx, 2*YMM_GMD		;; Next set of group multipliers
 	sub	loopcount3, 1		;; Test outer loop counter
 	jnz	ilp0			;; Iterate
 
-echk	vmovapd	YMM_MAXERR, ymm6	;; Save maximum error
+echk	ystore	YMM_MAXERR, ymm6	;; Save maximum error
 
 	; Handle adjusting the carry out of the topmost FFT word
 
@@ -106,12 +100,199 @@ done:	int_epilog SZPTR+16,0,0
 	ENDPP	lab
 	ENDM
 
+ELSE
+
+IFDEF YIMPL_WPN1_FFTS
+
+saved_rsi	EQU	PPTR [rsp+first_local]
+loopcount1	EQU	DPTR [rsp+first_local+SZPTR]
+loopcount2	EQU	DPTR [rsp+first_local+SZPTR+4]
+loopcount3	EQU	DPTR [rsp+first_local+SZPTR+8]
+blk8_counter	EQU	BYTE PTR [rsp+first_local+SZPTR+12]
+
+inorm	MACRO	lab, ttp, zero, echk, const, base2
+	LOCAL	noadd, noinc, ilp0, ilp1, ilp2, not8, done
+	PROCFLP	lab
+	int_prolog SZPTR+16,0,0
+echk	vmovapd	ymm6, YMM_MAXERR	;; Load maximum error
+no zero	mov	edx, ADDIN_ROW		;; Is this the time to do our addin?
+no zero	cmp	edx, THIS_BLOCK
+no zero	jne	short noadd		;; Jump if addin does not occur now
+no zero	mov	edi, ADDIN_OFFSET	;; Get address to add value into
+no zero	vmovsd	xmm0, ADDIN_VALUE	;; Get the requested add-in value
+no zero	vaddsd	xmm0, xmm0, Q [rsi][rdi] ;; Add in the FFT value
+no zero	vmovsd	Q [rsi][rdi], xmm0	;; Save the new value
+noadd:	mov	saved_rsi, rsi		;; Save for top_carry_adjust
+
+	ynorm_wpn_preload ttp, base2, zero, echk, const
+
+	mov	r12, norm_grp_mults	;; Addr of the group multipliers
+	mov	rbp, carries		;; Addr of the carries
+ttp	mov	rdi, norm_ptr1		;; Load big/little & fudge flags array ptr
+	mov	blk8_counter, 0		;; Clear counter
+	mov	eax, count5		;; Load count of grp multipliers (divided by 2)
+	mov	loopcount3, eax		;; Save loop counter
+ilp0:	mov	eax, count4		;; Load wpn count (divided by 2)
+	mov	loopcount2, eax		;; Save count
+	mov	r15, r12		;; Calc 2nd group multiplier pointer
+ttp	cmp	count2, 1		;; If count is one, 2nd group multiplier must point to the next group
+ttp	jne	short noinc		;; If count2 is more than one, 2nd group multiplier is same as 1st group multiplier
+ttp	bump	r15, 2*YMM_GMD		;; Bump 2nd group multiplier pointer
+noinc:
+ttp	lea	r9, [r15+2*YMM_GMD]	;; Prefetch pointer for group multipliers
+ilp1:	mov	eax, cache_line_multiplier ;; Load inner loop counter
+	mov	loopcount1, eax		;; Save loop counter
+ttp	lea	r14, [rdi+2*rax]	;; Calc 2nd big/lit ptr
+	shl	rax, 6			;; Calc 2nd src pointer (rsi + clm * 64 + normblkdst)
+	lea	r13, [rsi+rax]
+	add	r13, normblkdst
+;; OPTIMIZATION - old wpn didn't reload rbx every clm block.  Rearranging big/lit data could achieve this as well (and can save the r14 register in ynorm_wpn)
+ttp	movzx	rbx, WORD PTR [rdi]	;; Preload 4 big vs. little & fudge flags
+ttp	movzx	rcx, WORD PTR [r14]	;; Preload 4 big vs. little & fudge flags
+	vmovapd ymm2, [rbp+0*32]	;; Load carries
+	vmovapd ymm3, [rbp+1*32]
+	vmovapd ymm9, [rbp+2*32]
+	vmovapd ymm10, [rbp+3*32]
+ilp2:	ynorm_wpn ttp, base2, zero, echk, const ;; Normalize 2 sets of 8 values
+	bump	rsi, 64			;; Next cache line
+	bump	r13, 64			;; Next cache line
+ttp	bump	rdi, 2			;; Next big/little flags
+ttp	bump	r14, 2			;; Next big/little flags
+	sub	loopcount1, 1		;; Test loop counter
+	jnz	ilp2			;; Loop til done
+	ystore	[rbp+0*32], ymm2	;; Save carries
+	ystore	[rbp+1*32], ymm3
+	ystore	[rbp+2*32], ymm9
+	ystore	[rbp+3*32], ymm10
+	bump	rbp, 4*32		;; Next set of carries
+ttp	mov	rdi, r14		;; Calculate address of next big/lit ptr
+	mov	rsi, r13		;; Calculate address of next source
+	add	rsi, normblkdst		;; Add 0 or 64 every clmblkdst
+	add	blk8_counter, 80h/2	;; Test for a multiple of 8 blocks
+	jnc	short not8
+	add	rsi, normblkdst8	;; Add 64 or -64 every 8 clmblkdsts
+not8:	sub	loopcount2, 1		;; Test loop counter
+	jnz	ilp1			;; Iterate
+ttp	lea	r12, [r15+2*YMM_GMD]	;; Next set of group multipliers
+	sub	loopcount3, 1		;; Test outer loop counter
+	jnz	ilp0			;; Iterate
+
+echk	ystore	YMM_MAXERR, ymm6	;; Save maximum error
+
+	; Handle adjusting the carry out of the topmost FFT word
+
+	mov	eax, THIS_BLOCK		;; Check for processing last block
+	cmp	eax, LAST_PASS1_BLOCK
+;; BUG - should we jump to 4 common top carry propagate end codes?  does it save much?  there are a lot of inorm variants!
+	jne	done			;; Jump if not last block
+	mov	rsi, saved_rsi		;; Restore FFT data ptr
+;; BUG - isn't rbp pointing just past last carry?? isn't last carry in ymm5 now? ynorm_top_carry_wpn doesn't use this info
+	ynorm_top_carry_wpn ttp, base2	;; Adjust carry if k > 1
+
+done:	int_epilog SZPTR+16,0,0
+	ENDPP	lab
+	ENDM
+ENDIF
+
+;; In wpn4 FFTs we know count2 will be even.  Consequently, we only need one group pointer in ynorm_wpn
+
+IFDEF YIMPL_WPN4_FFTS
+
+saved_rsi	EQU	PPTR [rsp+first_local]
+loopcount2	EQU	DPTR [rsp+first_local+SZPTR+0]
+loopcount3	EQU	DPTR [rsp+first_local+SZPTR+4]
+blk8_counter	EQU	BYTE PTR [rsp+first_local+SZPTR+8]
+
+inorm	MACRO	lab, ttp, zero, echk, const, base2
+	LOCAL	noadd, ilp0, ilp1, ilp2, not8, done
+	PROCFLP	lab
+	int_prolog SZPTR+12,0,0
+echk	vmovapd	ymm6, YMM_MAXERR	;; Load maximum error
+no zero	mov	edx, ADDIN_ROW		;; Is this the time to do our addin?
+no zero	cmp	edx, THIS_BLOCK
+no zero	jne	short noadd		;; Jump if addin does not occur now
+no zero	mov	edi, ADDIN_OFFSET	;; Get address to add value into
+no zero	vmovsd	xmm0, ADDIN_VALUE	;; Get the requested add-in value
+no zero	vaddsd	xmm0, xmm0, Q [rsi][rdi] ;; Add in the FFT value
+no zero	vmovsd	Q [rsi][rdi], xmm0	;; Save the new value
+noadd:	mov	saved_rsi, rsi		;; Save for top_carry_adjust
+
+	ynorm_wpn_preload ttp, base2, zero, echk, const
+
+	mov	r12, norm_grp_mults	;; Addr of the group multipliers
+	mov	rbp, carries		;; Addr of the carries
+ttp	mov	rdi, norm_ptr1		;; Load big/little & fudge flags array ptr
+	mov	blk8_counter, 0		;; Clear counter
+	mov	eax, count5		;; Load count of grp multipliers (divided by 2)
+	mov	loopcount3, eax		;; Save loop counter
+ilp0:	mov	eax, count4		;; Load wpn count (divided by 2)
+	mov	loopcount2, eax		;; Save count
+ttp	lea	r9, [r12+2*YMM_GMD]	;; Prefetch pointer for group multipliers
+ilp1:	mov	eax, cache_line_multiplier ;; Load inner loop counter
+	mov	r15, rax		;; Save loop counter
+ttp	lea	r14, [rdi+2*rax]	;; Calc 2nd big/lit ptr
+	shl	rax, 6			;; Calc 2nd src pointer (rsi + clm * 64 + normblkdst)
+	lea	r13, [rsi+rax]
+	add	r13, normblkdst
+;; OPTIMIZATION - old wpn didn't reload rbx every clm block.  Rearranging big/lit data could achieve this as well (and can save the r14 register in ynorm_wpn)
+ttp	movzx	rbx, WORD PTR [rdi]	;; Preload 4 big vs. little & fudge flags
+ttp	movzx	rcx, WORD PTR [r14]	;; Preload 4 big vs. little & fudge flags
+	vmovapd ymm2, [rbp+0*32]	;; Load carries
+	vmovapd ymm3, [rbp+1*32]
+	vmovapd ymm9, [rbp+2*32]
+	vmovapd ymm10, [rbp+3*32]
+ilp2:	ynorm_wpn ttp, base2, zero, echk, const ;; Normalize 2 sets of 8 values
+	bump	rsi, 64			;; Next cache line
+	bump	r13, 64			;; Next cache line
+ttp	bump	rdi, 2			;; Next big/little flags
+ttp	bump	r14, 2			;; Next big/little flags
+	sub	r15, 1			;; Test loop counter
+	jnz	ilp2			;; Loop til done
+	ystore	[rbp+0*32], ymm2	;; Save carries
+	ystore	[rbp+1*32], ymm3
+	ystore	[rbp+2*32], ymm9
+	ystore	[rbp+3*32], ymm10
+	bump	rbp, 4*32		;; Next set of carries
+ttp	mov	rdi, r14		;; Calculate address of next big/lit ptr
+	mov	rsi, r13		;; Calculate address of next source
+	add	rsi, normblkdst		;; Add 0 or 64 every clmblkdst
+	add	blk8_counter, 80h/2	;; Test for a multiple of 8 blocks
+	jnc	short not8
+	add	rsi, normblkdst8	;; Add 64 or -64 every 8 clmblkdsts
+not8:	sub	loopcount2, 1		;; Test loop counter
+	jnz	ilp1			;; Iterate
+ttp	lea	r12, [r12+2*YMM_GMD]	;; Next set of group multipliers
+	sub	loopcount3, 1		;; Test outer loop counter
+	jnz	ilp0			;; Iterate
+
+echk	ystore	YMM_MAXERR, ymm6	;; Save maximum error
+
+	; Handle adjusting the carry out of the topmost FFT word
+
+	mov	eax, THIS_BLOCK		;; Check for processing last block
+	cmp	eax, LAST_PASS1_BLOCK
+;; BUG - should we jump to 4 common top carry propagate end codes?  does it save much?  there are a lot of inorm variants!
+	jne	done			;; Jump if not last block
+	mov	rsi, saved_rsi		;; Restore FFT data ptr
+;; BUG - isn't rbp pointing just past last carry?? isn't last carry in ymm5 now? ynorm_top_carry_wpn doesn't use this info
+	ynorm_top_carry_wpn ttp, base2	;; Adjust carry if k > 1
+
+done:	int_epilog SZPTR+12,0,0
+	ENDPP	lab
+	ENDM
+ENDIF
+
+ENDIF
+
+
+IFNDEF X86_64
+
 loopcount2z	EQU	DPTR [rsp+first_local]
 loopcount3z	EQU	DPTR [rsp+first_local+4]
 blk8_counterz	EQU	BYTE PTR [rsp+first_local+8]
 
 zpnorm	MACRO	lab, ttp, echk, const, base2, khi, c1, cm1
-	LOCAL	setlp, ilp0, ilp1, ilp2, not8
+	LOCAL	ilp0, ilp1, ilp2, not8
 	PROCFLP	lab
 	int_prolog 12,0,0
 echk	vmovapd	ymm6, YMM_MAXERR	;; Load maximum error
@@ -128,15 +309,15 @@ ttp	movzx	rbx, WORD PTR [rdi]	;; Preload big vs. little & fudge flags
 ilp0:	mov	eax, count2		;; Load wpn count
 	mov	loopcount2z, eax	;; Save loop counter
 ilp1:	mov	ecx, cache_line_multiplier ;; Load inner loop counter
-	vmovapd	ymm2, [rbp+0*32]	;; Preload carries
-	vmovapd	ymm3, [rbp+1*32]
+	ystore	ymm2, [rbp+0*32]	;; Preload carries
+	ystore	ymm3, [rbp+1*32]
 ilp2:	ynorm_wpn_zpad ttp, base2, echk, const, khi, c1, cm1 ;; Normalize 8 values
 	bump	rsi, 64			;; Next cache line
 ttp	bump	rdi, 2			;; Next big/little flags
 	sub	rcx, 1			;; Test loop counter
 	jnz	ilp2			;; Loop til done
-	vmovapd	[rbp+0*32], ymm2	;; Store carries
-	vmovapd	[rbp+1*32], ymm3
+	ystore	[rbp+0*32], ymm2	;; Store carries
+	ystore	[rbp+1*32], ymm3
 	add	rsi, normblkdst		;; Add 0 or 64 every clmblkdst
 	bump	rbp, 64			;; Next set of carries
 	add	blk8_counterz, 80h/4	;; Test for a multiple of 8 blocks
@@ -148,10 +329,167 @@ ttp	bump	rdx, YMM_GMD		;; Next set of group multipliers
 	sub	loopcount3z, 1		;; Test outer loop counter
 	jnz	ilp0			;; Iterate
 
-echk	vmovapd	YMM_MAXERR, ymm6	;; Save maximum error
+echk	ystore	YMM_MAXERR, ymm6	;; Save maximum error
 	int_epilog 12,0,0
 	ENDPP	lab
 	ENDM
+
+ELSE
+
+IFDEF YIMPL_WPN1_FFTS
+
+loopcount2z	EQU	DPTR [rsp+first_local+0]
+
+zpnorm	MACRO	lab, ttp, echk, const, base2, khi, c1, cm1
+	LOCAL	noinc, ilp0, ilp1, ilp2, not8
+	PROCFLP	lab
+	int_prolog 4,0,0
+echk	vmovapd	ymm6, YMM_MAXERR	;; Load maximum error
+
+	ynorm_wpn_zpad_preload ttp, base2, echk, const, khi, c1, cm1
+
+	mov	r12, norm_grp_mults	;; Addr of the group multipliers
+	mov	rbp, carries		;; Addr of the carries
+	mov	rdi, norm_ptr1		;; Load big/little flags array ptr
+	mov	eax, count5		;; Load count of grp multipliers (divided by 2)
+	mov	r10, rax		;; Save loop counter
+ilp0:	mov	eax, count4		;; Load wpn count (divided by 2)
+	mov	loopcount2z, eax	;; Save loop counter
+	mov	r15, r12		;; Calc 2nd group multiplier pointer
+ttp	cmp	count2, 1		;; If count is one, 2nd group multiplier must point to the next group
+ttp	jne	short noinc		;; If count2 is more than one, 2nd group multiplier is same as 1st group multiplier
+ttp	bump	r15, YMM_GMD		;; Bump 2nd group multiplier pointer
+noinc:
+ttp	lea	r9, [r15+YMM_GMD]	;; Prefetch pointer for group multipliers
+ilp1:	mov	eax, cache_line_multiplier ;; Load inner loop counter
+	mov	r8, rax			;; Save loop counter
+ttp	lea	r14, [rdi+2*rax]	;; Calc 2nd big/lit ptr
+	shl	rax, 6			;; Calc 2nd src pointer (rsi + clm * 64 + normblkdst)
+	lea	r13, [rsi+rax]
+	add	r13, normblkdst
+;; OPTIMIZATION - old wpn didn't reload rbx every clm block.  Rearranging big/lit data could achieve this as well (and can save the r14 register in ynorm_wpn)
+ttp	movzx	rbx, WORD PTR [rdi]	;; Preload 4 big vs. little & fudge flags
+ttp	movzx	rcx, WORD PTR [r14]	;; Preload 4 big vs. little & fudge flags
+	vmovapd	ymm2, [rbp+0*32]	;; Preload carries
+	vmovapd	ymm3, [rbp+1*32]
+	vmovapd ymm9, [rbp+2*32]
+	vmovapd ymm10, [rbp+3*32]
+;; OPTIMZATION - always store carries 3/10 in the +BIGVAL format
+IF (@INSTR(,%yarch,<FMA3>) NE 0)
+	vaddpd	ymm3, ymm3, ymm12	;; Add in YMM_BIGVAL
+	vaddpd	ymm10, ymm10, ymm12
+ENDIF
+ilp2:	ynorm_wpn_zpad ttp, base2, echk, const, khi, c1, cm1 ;; Normalize 2 sets of 8 values
+	bump	rsi, 64			;; Next cache line
+	bump	r13, 64			;; Next cache line
+ttp	bump	rdi, 2			;; Next big/little flags
+ttp	bump	r14, 2			;; Next big/little flags
+	sub	r8, 1			;; Test loop counter
+	jnz	ilp2			;; Loop til done
+;; OPTIMZATION - always store carries 3/10 in the +BIGVAL format
+IF (@INSTR(,%yarch,<FMA3>) NE 0)
+	vsubpd	ymm3, ymm3, ymm12	;; Subtract out YMM_BIGVAL
+	vsubpd	ymm10, ymm10, ymm12
+ENDIF
+	ystore	[rbp+0*32], ymm2	;; Store carries
+	ystore	[rbp+1*32], ymm3
+	ystore	[rbp+2*32], ymm9
+	ystore	[rbp+3*32], ymm10
+	bump	rbp, 4*32		;; Next set of carries
+ttp	mov	rdi, r14		;; Calculate address of next big/lit ptr
+	mov	rsi, r13		;; Calculate address of next source
+	add	rsi, normblkdst		;; Add 0 or 64 every clmblkdst
+	add	r10w, 8000h/2		;; Test for a multiple of 8 blocks
+	jnc	short not8
+	add	rsi, normblkdst8	;; Add 64 or -64 every 8 clmblkdsts
+not8:	sub	loopcount2z, 1		;; Test loop counter
+	jnz	ilp1			;; Iterate
+ttp	lea	r12, [r15+YMM_GMD]	;; Next set of group multipliers
+	sub	r10w, 1			;; Test outer loop counter
+	jnz	ilp0			;; Iterate
+
+echk	ystore	YMM_MAXERR, ymm6	;; Save maximum error
+	int_epilog 4,0,0
+	ENDPP	lab
+	ENDM
+
+ENDIF
+
+;; In wpn4 FFTs we know count2 will be even.  Consequently, we only need one group pointer in ynorm_wpn
+
+IFDEF YIMPL_WPN4_FFTS
+
+zpnorm	MACRO	lab, ttp, echk, const, base2, khi, c1, cm1
+	LOCAL	ilp0, ilp1, ilp2, not8
+	PROCFLP	lab
+	int_prolog 0,0,0
+echk	vmovapd	ymm6, YMM_MAXERR	;; Load maximum error
+
+	ynorm_wpn_zpad_preload ttp, base2, echk, const, khi, c1, cm1
+
+	mov	r12, norm_grp_mults	;; Addr of the group multipliers
+	mov	rbp, carries		;; Addr of the carries
+	mov	rdi, norm_ptr1		;; Load big/little flags array ptr
+	mov	eax, count5		;; Load count of grp multipliers (divided by 2)
+	mov	r10, rax		;; Save loop counter
+ilp0:	mov	eax, count4		;; Load wpn count (divided by 2)
+	mov	r15, rax		;; Save loop counter
+ttp	lea	r9, [r12+YMM_GMD]	;; Prefetch pointer for group multipliers
+ilp1:	mov	eax, cache_line_multiplier ;; Load inner loop counter
+	mov	r8, rax			;; Save loop counter
+ttp	lea	r14, [rdi+2*rax]	;; Calc 2nd big/lit ptr
+	shl	rax, 6			;; Calc 2nd src pointer (rsi + clm * 64 + normblkdst)
+	lea	r13, [rsi+rax]
+	add	r13, normblkdst
+;; OPTIMIZATION - old wpn didn't reload rbx every clm block.  Rearranging big/lit data could achieve this as well (and can save the r14 register in ynorm_wpn)
+ttp	movzx	rbx, WORD PTR [rdi]	;; Preload 4 big vs. little & fudge flags
+ttp	movzx	rcx, WORD PTR [r14]	;; Preload 4 big vs. little & fudge flags
+	vmovapd	ymm2, [rbp+0*32]	;; Preload carries
+	vmovapd	ymm3, [rbp+1*32]
+	vmovapd ymm9, [rbp+2*32]
+	vmovapd ymm10, [rbp+3*32]
+;; OPTIMZATION - always store carries 3/10 in the +BIGVAL format
+IF (@INSTR(,%yarch,<FMA3>) NE 0)
+	vaddpd	ymm3, ymm3, ymm12	;; Add in YMM_BIGVAL
+	vaddpd	ymm10, ymm10, ymm12
+ENDIF
+ilp2:	ynorm_wpn_zpad ttp, base2, echk, const, khi, c1, cm1 ;; Normalize 2 sets of 8 values
+	bump	rsi, 64			;; Next cache line
+	bump	r13, 64			;; Next cache line
+ttp	bump	rdi, 2			;; Next big/little flags
+ttp	bump	r14, 2			;; Next big/little flags
+	sub	r8, 1			;; Test loop counter
+	jnz	ilp2			;; Loop til done
+;; OPTIMZATION - always store carries 3/10 in the +BIGVAL format
+IF (@INSTR(,%yarch,<FMA3>) NE 0)
+	vsubpd	ymm3, ymm3, ymm12	;; Subtract out YMM_BIGVAL
+	vsubpd	ymm10, ymm10, ymm12
+ENDIF
+	ystore	[rbp+0*32], ymm2	;; Store carries
+	ystore	[rbp+1*32], ymm3
+	ystore	[rbp+2*32], ymm9
+	ystore	[rbp+3*32], ymm10
+	bump	rbp, 4*32		;; Next set of carries
+ttp	mov	rdi, r14		;; Calculate address of next big/lit ptr
+	mov	rsi, r13		;; Calculate address of next source
+	add	rsi, normblkdst		;; Add 0 or 64 every clmblkdst
+	add	r10w, 8000h/2		;; Test for a multiple of 8 blocks
+	jnc	short not8
+	add	rsi, normblkdst8	;; Add 64 or -64 every 8 clmblkdsts
+not8:	sub	r15, 1			;; Test loop counter
+	jnz	ilp1			;; Iterate
+ttp	lea	r12, [r12+YMM_GMD]	;; Next set of group multipliers
+	sub	r10w, 1			;; Test outer loop counter
+	jnz	ilp0			;; Iterate
+
+echk	ystore	YMM_MAXERR, ymm6	;; Save maximum error
+	int_epilog 0,0,0
+	ENDPP	lab
+	ENDM
+
+ENDIF
+
+ENDIF
 
 ; The 16 different normalization routines.  One for each combination of
 ; rational/irrational, zeroing/no zeroing, error check/no error check, and

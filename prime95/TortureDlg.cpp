@@ -35,10 +35,12 @@ void CTortureDlg::DoDataExchange(CDataExchange* pDX)
 	DDV_MinMaxUInt(pDX, m_thread, 1, NUM_CPUS * CPU_HYPERTHREADS);
 	DDX_Radio(pDX, IDC_L2_CACHE, m_torture_type);
 	DDX_Text(pDX, IDC_MINFFT, m_minfft);
-	DDV_MinMaxInt(pDX, m_minfft, 8,
-		(CPU_FLAGS & CPU_SSE2 ? MAX_FFTLEN_SSE2 : MAX_FFTLEN) / 1024);
+	DDV_MinMaxInt(pDX, m_minfft,
+		(CPU_FLAGS & CPU_AVX) ? 0 : 7,
+		((CPU_FLAGS & CPU_SSE2) ? MAX_FFTLEN_SSE2 : MAX_FFTLEN) / 1024);
 	DDX_Text(pDX, IDC_MAXFFT, m_maxfft);
-	DDV_MinMaxInt(pDX, m_maxfft, 8,
+	DDV_MinMaxInt(pDX, m_maxfft,
+		(CPU_FLAGS & CPU_AVX) ? 1 : 7,
 		(CPU_FLAGS & CPU_SSE2 ? MAX_FFTLEN_SSE2 : MAX_FFTLEN) / 1024);
 	DDX_Check(pDX, IDC_IN_PLACE_FFT, m_in_place_fft);
 	DDX_Text(pDX, IDC_MEMORY, m_memory);
@@ -87,7 +89,7 @@ void CTortureDlg::OnBnClickedL2Cache()
 	else m_maxfft = 64;
 	m_in_place_fft = TRUE;
 	m_memory = 0;
-	m_timefft = 15;
+	m_timefft = 5;
 	UpdateData (0);
 }
 
@@ -98,7 +100,7 @@ void CTortureDlg::OnBnClickedInPlace()
 	m_maxfft = 1024;
 	m_in_place_fft = TRUE;
 	m_memory = 8;
-	m_timefft = 15;
+	m_timefft = 3;
 	UpdateData (0);
 }
 
@@ -109,7 +111,7 @@ void CTortureDlg::OnBnClickedBlend()
 	m_maxfft = 4096;
 	m_in_place_fft = FALSE;
 	m_memory = m_blendmemory;
-	m_timefft = 15;
+	m_timefft = 3;
 	UpdateData (0);
 }
 

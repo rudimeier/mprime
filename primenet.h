@@ -9,7 +9,7 @@
 
 void LoadPrimenet ();
 
-/* There is one routine used to communicate with the Primenet server
+/* There is one routine used to communicate with the Primenet server */
 /* This routine, "PrimeNet", takes two arguments one is an operation_type */
 /* defined below, and the other argument is a pointer to a structure. */
 /* A different structure is declared for each operation type.  All strings */

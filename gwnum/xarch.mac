@@ -1,4 +1,4 @@
-; Copyright 2001-2010 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2001-2013 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -15,6 +15,10 @@ ELSEIF @INSTR(,%ARCH,<CORE>) NE 0
 	xarch	TEXTEQU	<CORE>
 	PREFETCHING = 64
 	TLB_PRIMING = 0
+ELSEIF @INSTR(,%ARCH,<FMA3>) NE 0		; Should only happen when assembling timeit.asm
+	xarch	TEXTEQU	<FMA3>
+	PREFETCHING = 64
+	TLB_PRIMING = 0
 ELSEIF @INSTR(,%ARCH,<P4TP>) NE 0
 	xarch	TEXTEQU	<P4>
 	PREFETCHING = 128
@@ -29,6 +33,10 @@ ELSEIF @INSTR(,%ARCH,<K8>) NE 0
 	TLB_PRIMING = 0
 ELSEIF @INSTR(,%ARCH,<K10>) NE 0
 	xarch	TEXTEQU	<K10>
+	PREFETCHING = 64
+	TLB_PRIMING = 0
+ELSEIF @INSTR(,%ARCH,<BULL>) NE 0		; Should only happen when assembling timeit.asm
+	xarch	TEXTEQU	<BULL>
 	PREFETCHING = 64
 	TLB_PRIMING = 0
 ELSE

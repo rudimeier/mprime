@@ -1,3 +1,10 @@
+/*----------------------------------------------------------------------
+| Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved
+|
+| This file contains routines to QA the gwnum FFT routines.
+| QA can be activated by using Advanced/Time menu choice on exponent 9900.
++---------------------------------------------------------------------*/
+
 /* TODO: test larger values of mul-by-const */
 /*	all_impl should work on small ffts by using the next large fft size */
 /*		to do the comparison (and/or x87) */
@@ -291,6 +298,7 @@ void test_it_all (
 		maxdiff = 0.0;
 		gwsetnormroutine (&gwdata, 0, 1, 0); /* Enable error checking */
 		for (i = 0; i < num_squarings; i++) {
+
 			/* Test POSTFFT sometimes */
 			gwstartnextfft (&gwdata, (i & 3) == 2);
 
@@ -788,7 +796,13 @@ int test_randomly (
 
 /* Test using the default FFT implementation and comparing it to giants */
 
-		gwinit (&gwdata);
+again:		gwinit (&gwdata);
+		{
+			char	numstr[80];
+			gw_as_string (numstr, k, b, n, c);
+			sprintf (buf, "Trying gwsetup on %s.\n", numstr);
+			OutputBoth (thread_num, buf);
+		}
 		gwset_specific_fftlen (&gwdata, SPECIFIC_FFTLEN);
 		gwset_num_threads (&gwdata, threads);
 		gwset_thread_callback (&gwdata, SetAuxThreadPriority);
@@ -805,11 +819,23 @@ int test_randomly (
 			gwdone (&gwdata);
 			continue;
 		}
-//if (gwdata.ZERO_PADDED_FFT || gwdata.GENERAL_MOD) {
-//	gwdone (&gwdata);
-//	continue;
-//}
-		sprintf (buf, "Starting QA run on %s, kbits=%d, cbits=%d\n",
+
+		// Try to QA a rational FFT
+		if ((rand () & 7) == 1 && !SPECIFIC_N && !gwdata.RATIONAL_FFT) {
+			n = n / gwdata.FFTLEN * gwdata.FFTLEN;		// Make n a multiple of the FFT length
+			gwdone (&gwdata);
+			goto again;
+		}
+
+		// Optional reject testing zero-padded and generic modulo FFTs
+		if ((!IniSectionGetInt (INI_FILE, "QA", "TEST_ZERO_PADDED", 1) && gwdata.ZERO_PADDED_FFT) ||
+		    (!IniSectionGetInt (INI_FILE, "QA", "TEST_GENERIC_MOD", 1) && gwdata.GENERAL_MOD)) {
+			gwdone (&gwdata);
+			continue;
+		}
+
+		sprintf (buf, "Starting %s QA run on %s, kbits=%d, cbits=%d\n",
+			 gwdata.RATIONAL_FFT ? "rational" : "irrational",
 			 gwmodulo_as_string (&gwdata), kbits, cbits);
 		OutputBoth (thread_num, buf);
 		gwfft_description (&gwdata, fft_desc);

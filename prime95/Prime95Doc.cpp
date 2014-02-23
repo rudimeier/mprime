@@ -1,6 +1,6 @@
 // Prime95Doc.cpp : implementation of the CPrime95Doc class
 //
-// Copyright 1995-2010 Mersenne Research, Inc.  All rights reserved
+// Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved
 //
 
 #include "stdafx.h"
@@ -795,8 +795,11 @@ void CPrime95Doc::OnTorture()
 	dlg.m_maxfft = 4096;
 	dlg.m_thread = NUM_CPUS * CPU_HYPERTHREADS;
 	mem = physical_memory ();
-	if (mem >= 2000) {
-		dlg.m_blendmemory = GetSuggestedMemory (1600);
+	if (mem >= 3000) {
+		dlg.m_blendmemory = GetSuggestedMemory (2000);
+		dlg.m_in_place_fft = FALSE;
+	} else if (mem >= 2000) {
+		dlg.m_blendmemory = GetSuggestedMemory (1500);
 		dlg.m_in_place_fft = FALSE;
 	} else if (mem >= 500) {
 		dlg.m_blendmemory = GetSuggestedMemory (mem - 256);
@@ -809,7 +812,7 @@ void CPrime95Doc::OnTorture()
 		dlg.m_in_place_fft = TRUE;
 	}
 	dlg.m_memory = dlg.m_blendmemory;
-	dlg.m_timefft = 15;
+	dlg.m_timefft = 3;
 	if (dlg.DoModal () == IDOK) {
 		IniWriteInt (INI_FILE, "MinTortureFFT", dlg.m_minfft);
 		IniWriteInt (INI_FILE, "MaxTortureFFT", dlg.m_maxfft);

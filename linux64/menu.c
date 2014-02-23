@@ -1,4 +1,4 @@
-/* Copyright 1995-2012 Mersenne Research, Inc. */
+/* Copyright 1995-2014 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -947,13 +947,13 @@ void torture (void)
 	} else {
 		blendmemory = 8;
 	}
-	m_timefft = 15;
+	m_timefft = 3;
 
 	if (NUM_CPUS * CPU_HYPERTHREADS > 1)
 		askNum ("Number of torture test threads to run", &m_thread,
 			1, NUM_CPUS * CPU_HYPERTHREADS);
 
-	outputLongLine ("Choose a type of torture test to run.\n  1 = Small FFTs (maximum FPU stress, data fits in L2 cache, RAM not tested much).\n  2 = In-place large FFTs (maximum heat and power consumption, some RAM tested).\n  3 = Blend (tests some of everything, lots of RAM tested).\n  11,12,13 = Allows you to fine tune the above three selections.\nBlend is the default.  NOTE: if you fail the blend test, but can pass the small FFT test then your problem is likely bad memory or a bad memory controller.\n");
+	outputLongLine ("Choose a type of torture test to run.\n  1 = Small FFTs (maximum heat and FPU stress, data fits in L2 cache, RAM not tested much).\n  2 = In-place large FFTs (maximum power consumption, some RAM tested).\n  3 = Blend (tests some of everything, lots of RAM tested).\n  11,12,13 = Allows you to fine tune the above three selections.\nBlend is the default.  NOTE: if you fail the blend test, but can pass the small FFT test then your problem is likely bad memory or a bad memory controller.\n");
 	m_type = 3;
 	askNum ("Type of torture test to run", &m_type, 1, 13);
 
@@ -973,9 +973,9 @@ void torture (void)
 	}
 
 	if (m_type >= 11) {
-		askNum ("Min FFT size (in K)", &m_minfft, 8,
+		askNum ("Min FFT size (in K)", &m_minfft, (CPU_FLAGS & CPU_AVX) ? 0 : 7,
 			(CPU_FLAGS & CPU_SSE2 ? MAX_FFTLEN_SSE2 : MAX_FFTLEN) / 1024);
-		askNum ("Max FFT size (in K)", &m_maxfft, 8,
+		askNum ("Max FFT size (in K)", &m_maxfft, (CPU_FLAGS & CPU_AVX) ? 1 : 7,
 			(CPU_FLAGS & CPU_SSE2 ? MAX_FFTLEN_SSE2 : MAX_FFTLEN) / 1024);
 		if (blendmemory > 8)
 			askNum ("Memory to use (in MB, 0 = in-place FFTs)", &m_memory, 0, mem);
@@ -1002,7 +1002,7 @@ void help_about (void)
 	printf ("GIMPS: Mersenne Prime Search\n");
 	printf ("Web site: http://mersenne.org\n");
 	printf ("%s\n", app_string);
-	printf ("Copyright 1996-2012 Mersenne Research, Inc.\n");
+	printf ("Copyright 1996-2014 Mersenne Research, Inc.\n");
 	printf ("Author: George Woltman\n");
 	printf ("Email:  woltman@alum.mit.edu\n");
 	askOK ();

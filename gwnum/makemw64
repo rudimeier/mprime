@@ -55,6 +55,9 @@ mw64/cpuid.o: cpuid.c cpuid.h
 mw64/gwnum.o: gwnum.c gwnum.h
 	$(CC) $(CFLAGS) -o mw64/gwnum.o -c gwnum.c
 
+mw64/gwtables.o: gwtables.c gwtables.h
+	$(CC) $(CFLAGS) -o mw64/gwtables.o -c gwtables.c
+
 mw64/gwthread.o: gwthread.c gwthread.h
 	$(CC) $(CFLAGS) -o mw64/gwthread.o -c gwthread.c
 

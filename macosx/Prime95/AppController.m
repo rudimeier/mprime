@@ -100,8 +100,8 @@ AppController *myAppController;			// Global variable to allow access to this obj
 		[[NSUserDefaults standardUserDefaults] setObject:workingDir forKey:@"WorkingDirectory"];
 	}
 	workingDir = [workingDir stringByExpandingTildeInPath];
-	[[NSFileManager defaultManager] createDirectoryAtPath:workingDir attributes:nil];
-	[[NSFileManager defaultManager] changeCurrentDirectoryPath:workingDir];
+	[[NSFileManager defaultManager] createDirectoryAtPath:workingDir withIntermediateDirectories: TRUE attributes:nil error:nil];
+        [[NSFileManager defaultManager] changeCurrentDirectoryPath:workingDir];
 
 	/* If no prime.txt file exists, optionally copy one from the application bundle (for SoB) */
 	if (! fileExists ("prime.txt")) {

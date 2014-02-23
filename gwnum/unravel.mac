@@ -1,4 +1,4 @@
-; Copyright 1995-2012 - Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2014 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -1552,10 +1552,32 @@ nonoexec MACRO ops:vararg
 	&ops
 	ENDM
 
+; Macro to execute a statement only in 32-bit or 64-bit mode
+
+x32 MACRO stmt:vararg
+	IFNDEF X86_64
+	&stmt
+	ENDIF
+	ENDM
+
+x64 MACRO stmt:vararg
+	IFDEF X86_64
+	&stmt
+	ENDIF
+	ENDM
+
+; Macros that control whether the AVX FFTs use the wpn1 macros or newer (slower but less memory) wpn4 macros.
+; Also controls whether we use even newer (slower but less memory) reduced sin/cos macros.
+
+;YIMPL_WPN1_FFTS = 1
+YIMPL_WPN4_FFTS = 1
+YIMPL_REDUCED_SINCOS_FFTS = 1
+
 ; Macros to implement all possible implementations of an FFT.  We do this
 ; to find the fastest implementation to include in the final release.
 
 ;IMPL_ALL_CORE = 1
+;IMPL_ALL_FMA3 = 1
 ;IMPL_ALL_P4 = 1
 ;IMPL_ALL_P4TP = 1
 ;IMPL_ALL_K8 = 1
@@ -1745,8 +1767,8 @@ loops_set_prefetch MACRO pfamt, pffreq, pfreg
 
 loops_set_alternate_prefetch_increment MACRO cache_lines_to_prefetch, number_of_loops
 	;; Set increment so that we prefetch at least the requested number of cache lines
-	;; The formula is ceil ((cache_lines_to_prefetch * 64 - 63) / number_of_loops)
-	loops_pfincr = ((cache_lines_to_prefetch) * PREFETCHING - (PREFETCHING - 1) + ((number_of_loops) - 1)) / (number_of_loops)
+	;; The formula is (cache_lines_to_prefetch * 64 - 1) / number_of_loops
+	loops_pfincr = ((cache_lines_to_prefetch) * PREFETCHING - 1) / (number_of_loops)
 	ENDM
 
 ;; Main looping macro.  Normally third argument is blank meaning increment loop counter by 1.

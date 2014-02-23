@@ -1,4 +1,4 @@
-; Copyright 2011-2012 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2011-2013 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -13,6 +13,10 @@ IF @INSTR(,%ARCH,<BLEND>) NE 0
 	TLB_PRIMING = 0
 ELSEIF @INSTR(,%ARCH,<CORE>) NE 0
 	yarch	TEXTEQU	<CORE>
+	PREFETCHING = 64
+	TLB_PRIMING = 0
+ELSEIF @INSTR(,%ARCH,<FMA3>) NE 0
+	yarch	TEXTEQU	<FMA3>
 	PREFETCHING = 64
 	TLB_PRIMING = 0
 ELSEIF @INSTR(,%ARCH,<BULL>) NE 0
@@ -30,17 +34,22 @@ ENDIF
 ;
 
 CORE	= 01h			; Assemble this FFT for CORE architecture
-BULL	= 02h			; Assemble this FFT for Bulldozer architecture
+FMA3	= 02h			; Assemble this FFT for Haswell architecture
+BULL	= 04h			; Assemble this FFT for Bulldozer architecture
 
 IFDEF X86_64
 	CORE_32	= 0
+	FMA3_32	= 0
 	BULL_32	= 0
 	CORE_64	= CORE
+	FMA3_64	= FMA3
 	BULL_64	= BULL
 ELSE
 	CORE_32	= CORE
+	FMA3_32	= FMA3
 	BULL_32	= BULL
 	CORE_64	= 0
+	FMA3_64	= 0
 	BULL_64	= 0
 ENDIF
 
@@ -56,11 +65,17 @@ buildfor MACRO archs, ops:vararg
 	IFDEF IMPL_ALL_CORE
 		local_archs = local_archs OR CORE
 	ENDIF
+	IFDEF IMPL_ALL_FMA3
+		local_archs = local_archs OR FMA3
+	ENDIF
 	IFDEF IMPL_ALL_BULL
 		local_archs = local_archs OR BULL
 	ENDIF
 	;; Conditionally assemble this FFT implementation
 	IF (@INSTR(,%yarch,<CORE>) NE 0) AND (local_archs AND CORE) NE 0
+	&ops
+	ENDIF
+	IF (@INSTR(,%yarch,<FMA3>) NE 0) AND (local_archs AND FMA3) NE 0
 	&ops
 	ENDIF
 	IF (@INSTR(,%yarch,<BULL>) NE 0) AND (local_archs AND BULL) NE 0

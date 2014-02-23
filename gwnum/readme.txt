@@ -17,7 +17,9 @@ Windows:
 		nmake /f compile
 	to build the 32-bit libraries and 
 		nmake /f compil64
-	to build the 64-bit libraries.
+	to build the 64-bit libraries and
+		make -f makemw64
+	to build the MinGW-w64 64-bit libraries.
 
 Linux:
 	The assembly code object files have already been converted to ELF format using
@@ -73,7 +75,7 @@ Haiku:
 
 -> Legal stuff
 
-Copyright (c) 1996-2009, Mersenne Research, Inc.  All rights reserved. 
+Copyright (c) 1996-2014, Mersenne Research, Inc.  All rights reserved. 
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are 

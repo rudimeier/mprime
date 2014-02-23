@@ -2,7 +2,7 @@
 /* so that they can be included in both the command-line mprime version as */
 /* well as the Mac OS X GUI version. */
 
-/* Copyright 1995-2011 Mersenne Research, Inc. */
+/* Copyright 1995-2014 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -316,6 +316,31 @@ void setThreadPriorityAndAffinity (
 #ifdef __FreeBSD__
 	int	i;
 	cpuset_t cset;
+#endif
+
+/* My latest MacBook Pro running OS X Mavericks changes Prime95's priority to background. */
+/* This wouldn't be a problem except that the scheduler feels free to invoke SpeedStep */
+/* when background processes are using 100% of the CPU time.  Thus, we now change the */
+/* task policy to "trick" the scheduler into thinking we are a foreground process. */
+/* Alas, this trick doesn't seem to work.  Code left here in case it might be useful one day. */
+
+#if defined (__APPLE__)
+#include <mach/mach_init.h>
+#include <mach/task_policy.h>
+/* APPLE BUG - the SDK included in XCode 5.0.2 comments out the task_policy_set definition in mach/task_policy.h */
+	kern_return_t	task_policy_set(
+                                    task_t			task,
+                                    task_policy_flavor_t	flavor,
+                                    task_policy_t		policy_info,
+                                    mach_msg_type_number_t	count);
+ 
+	if (IniGetInt (INI_FILE, "SetForegroundPolicy", 0)) {
+		struct task_category_policy tcatpolicy;
+ 
+		tcatpolicy.role = TASK_FOREGROUND_APPLICATION;
+		task_policy_set (mach_task_self (), TASK_CATEGORY_POLICY,
+				 (thread_policy_t) &tcatpolicy, TASK_CATEGORY_POLICY_COUNT);
+	}
 #endif
 
 /* Get the default thread priority when a thread is first launched */

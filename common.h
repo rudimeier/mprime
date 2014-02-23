@@ -44,6 +44,7 @@
 
 #define safe_strcpy(d,s)	memmove (d, s, strlen (s) + 1)
 #ifdef GDEBUG
+#undef strcpy
 #define strcpy(d,s)	assert((d) >= ((s)+strlen(s)+1) || (s) >= (d)+strlen(s)+1), safe_strcpy(d,s)
 #endif
 
