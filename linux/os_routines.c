@@ -6,20 +6,46 @@
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
-
 /* Do some work prior to launching worker threads */
 /* Windows uses this to implement boot delay. */
+/* On the Mac, we use this to disable OS X Mavericks power-saving heuristics */
+
+#ifdef __APPLE__
+#ifndef COMMAND_LINE_MPRIME
+#include <Foundation/NSProcessInfo.h>
+id	activity;
+int	activity_is_set = FALSE;
+#endif
+#endif
 
 void PreLaunchCallback (
 	int	launch_type)
 {
+#ifdef __APPLE__
+#ifndef COMMAND_LINE_MPRIME
+	if (DEFEAT_POWER_SAVE) {
+		activity = [[NSProcessInfo processInfo] beginActivityWithOptions:NSActivityUserInitiated reason:@"Prime Hunting!"];
+		activity_is_set = TRUE;
+	}
+#endif
+#endif
 }
 
 /* Do some work after worker threads have terminated */
+/* NOTE: We can't use DEFEAT_POWER_SAVE in the if statement because the global */
+/* variable can be changed in the preferences page before PostLaunchCallback is called. */
 
 void PostLaunchCallback (
 	int	launch_type)
 {
+#ifdef __APPLE__
+#ifndef COMMAND_LINE_MPRIME
+	if (activity_is_set) {
+		[[NSProcessInfo processInfo] endActivity:activity];
+		activity_is_set = FALSE;
+	}
+#endif
+#endif
 }
 
 /* OSes that must poll for whether the ESC key was hit do it here. */
@@ -289,6 +315,7 @@ void setThreadPriorityAndAffinity (
 
 /* I couldn't get the standard syscall0 declaration of gettid to */
 /* work in my Linux distro.  Use the direct system call instead. */
+
 	thread_id = (pid_t) syscall (__NR_gettid);
 
 /* Set priority.  Map one (prime95's lowest priority) to 19 */
@@ -302,7 +329,7 @@ void setThreadPriorityAndAffinity (
 /* determine which logical hyperthreaded CPUs map to a single physical CPU. */
 
 	CPU_ZERO (&linux_mask);
-	for (i = 0; i < MAX_NUM_WORKER_THREADS; i++)
+	for (i = 0; i < MAX_NUM_WORKER_THREADS && i < CPU_SETSIZE; i++)
 		if (mask[i/32] & (1 << (i & 31))) CPU_SET (i, &linux_mask);
 	errcode = sched_setaffinity (thread_id, sizeof (linux_mask), &linux_mask);
 #endif
@@ -370,7 +397,7 @@ void setThreadPriorityAndAffinity (
 
 #ifdef __FreeBSD__
 	CPU_ZERO (&cset);
-	for (i = 0; i < MAX_NUM_WORKER_THREADS; i++)
+	for (i = 0; i < MAX_NUM_WORKER_THREADS && i < CPU_SETSIZE; i++)
 		if (mask[i/32] & (1 << (i & 31))) CPU_SET (i, &cset);
 	cpuset_setaffinity (CPU_LEVEL_WHICH, CPU_WHICH_TID, -1, sizeof (cset), &cset);
 #endif

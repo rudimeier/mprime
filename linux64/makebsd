@@ -1,12 +1,12 @@
-# Makefile for FreeBSD 64-bit mprime
+# Makefile for FreeBSD 10.0 64-bit mprime
 #
 # Install the curl package.  This will be installed to /usr/local by default.
 #
 
-CC = gcc
+CC = cc
 CFLAGS = -I.. -I../gwnum -I/usr/local/include -DX86_64 -O2
 
-CPP = g++
+CPP = cc
 CPPFLAGS = -I.. -I../gwnum -DX86_64 -O2
 
 LFLAGS = -L/usr/local/lib -Wl,-M

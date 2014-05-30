@@ -3844,8 +3844,8 @@ ynorm_wpn_zpad_nobase2_echk MACRO khi, c1, cm1, negc_const, klo_const, khi_const
 	vroundpd ymm5, ymm5, 0				;; Round high FFTvalue / base to integer		; 9-11
 	vroundpd ymm10, ymm10, 0			;; Next carry = round (low FFTvalue / base)		; 10-12
 	vroundpd ymm13, ymm13, 0			;; Round high FFTvalue / base to integer		; 12-14
-	vsubpd	ymm7, ymm1, ymm0			;; This is the convolution error			; 13-15
-	vsubpd	ymm8, ymm1, ymm1			;; This is the convolution error			; 14-16
+	vsubpd	ymm7, ymm7, ymm0			;; This is the convolution error			; 13-15
+	vsubpd	ymm8, ymm8, ymm1			;; This is the convolution error			; 14-16
 	absval	ymm7					;; Compute absolute value				;	16
 	absval	ymm8					;; Compute absolute value				;	17
 	vmaxpd	ymm6, ymm6, ymm7			;; Compute maximum error				; 17-19

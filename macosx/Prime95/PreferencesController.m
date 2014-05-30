@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/25/09.
-//  Copyright 2009 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2014 Mersenne Research, Inc. All rights reserved.
 //
 
 #import "PreferencesController.h"
@@ -36,6 +36,7 @@
 	[self setNumberOfBackupFiles:NUM_BACKUP_FILES];
 	[self setMakeNoise:!SILENT_VICTORY];
 	[self setRunOnBattery:RUN_ON_BATTERY];
+	[self setDefeatPowerSave:DEFEAT_POWER_SAVE];
 }
 
 - (int)iterationsOutput
@@ -179,6 +180,21 @@
 		spoolMessage (PRIMENET_PROGRAM_OPTIONS, NULL);
 	}
 	runOnBattery = _value;
+}
+
+- (int)defeatPowerSave
+{
+	return defeatPowerSave;
+}
+
+- (void)setDefeatPowerSave:(int) _value
+{
+	if (DEFEAT_POWER_SAVE != _value) {
+		DEFEAT_POWER_SAVE = _value;
+		IniWriteInt (LOCALINI_FILE, "DefeatPowerSave", DEFEAT_POWER_SAVE);
+		stop_workers_for_restart();
+	}
+	defeatPowerSave = _value;
 }
 
 @synthesize modemRetryMinutesEnabled;

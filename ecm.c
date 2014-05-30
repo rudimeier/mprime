@@ -2225,7 +2225,8 @@ int ecm (
 	uint64_t C;		/* Stage 2 ending point */
 	uint64_t sieve_start, prime, m;
 	unsigned long SQRT_B;
-	double	sigma, last_output, one_over_B, one_over_C_minus_B;
+	double	sigma, last_output, last_output_t, one_over_B, one_over_C_minus_B;
+	double	output_frequency, output_title_frequency;
 	unsigned long i, j, curve, min_memory;
 	saveFileState save_file_state;	/* Manage savefile names during reading */
 	char	filename[32], buf[255], fft_desc[100];
@@ -2556,9 +2557,10 @@ for ( ; ; ) {
 /* More random initializations */
 	
 	gwsetnormroutine (&ecmdata.gwdata, 0, ERRCHK, 0);
-	last_output = ecmdata.modinv_count = 0;
+	last_output = last_output_t = ecmdata.modinv_count = 0;
 	gw_clear_fft_count (&ecmdata.gwdata);
 	first_iter_msg = TRUE;
+	calc_output_frequencies (&ecmdata.gwdata, &output_frequency, &output_title_frequency);
 
 /* Compute the number we are factoring */
 
@@ -2739,7 +2741,7 @@ OutputStr (thread_num, buf);
 
 restart0:
 	ecm_stage1_memory_usage (thread_num, &ecmdata);
-	last_output = ecmdata.modinv_count = 0;
+	last_output = last_output_t = ecmdata.modinv_count = 0;
 	gw_clear_fft_count (&ecmdata.gwdata);
 
 /* Allocate memory */
@@ -2804,19 +2806,26 @@ restart1:
 
 		w->pct_complete = prime * one_over_B;
 
+/* Output the title every so often */
+
+		if (first_iter_msg ||
+		    (ITER_OUTPUT != 999999999 &&
+		     gw_get_fft_count (&ecmdata.gwdata) >= last_output_t + 2 * ITER_OUTPUT * output_title_frequency)) {
+			char	mask[80];
+			sprintf (mask, "%%.%df%%%% of %%s ECM curve %%d stage 1", PRECISION);
+			sprintf (buf, mask, trunc_percent (w->pct_complete), gwmodulo_as_string (&ecmdata.gwdata), curve);
+			title (thread_num, buf);
+			last_output_t = gw_get_fft_count (&ecmdata.gwdata);
+		}
+
 /* Print a message every so often */
 
 		if (first_iter_msg ||
 		    (ITER_OUTPUT != 999999999 &&
-		     gw_get_fft_count (&ecmdata.gwdata) >= last_output + 2 * ITER_OUTPUT)) {
+		     gw_get_fft_count (&ecmdata.gwdata) >= last_output + 2 * ITER_OUTPUT * output_frequency)) {
 			char	mask[80];
-			double	pct;
-			pct = trunc_percent (w->pct_complete);
-			sprintf (mask, "%%.%df%%%% of %%s ECM curve %%d stage 1", PRECISION);
-			sprintf (buf, mask, pct, gwmodulo_as_string (&ecmdata.gwdata), curve);
-			title (thread_num, buf);
 			sprintf (mask, "%%s curve %%d stage 1 at prime %%.0f [%%.%df%%%%].", PRECISION);
-			sprintf (buf, mask, gwmodulo_as_string (&ecmdata.gwdata), curve, (double) prime, pct);
+			sprintf (buf, mask, gwmodulo_as_string (&ecmdata.gwdata), curve, (double) prime, trunc_percent (w->pct_complete));
 			end_timer (timers, 0);
 			if (first_iter_msg) {
 				strcat (buf, "\n");
@@ -2854,7 +2863,7 @@ restart1:
 		 gw_get_fft_count (&ecmdata.gwdata), ecmdata.modinv_count);
 	print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
 	OutputStr (thread_num, buf);
-	last_output = ecmdata.modinv_count = 0;
+	last_output = last_output_t = ecmdata.modinv_count = 0;
 	gw_clear_fft_count (&ecmdata.gwdata);
 
 /* Print out round off error */
@@ -3144,7 +3153,7 @@ restart3:
 		 gw_get_fft_count (&ecmdata.gwdata), ecmdata.modinv_count);
 	print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
 	OutputStr (thread_num, buf);
-	last_output = ecmdata.modinv_count = 0;
+	last_output = last_output_t = ecmdata.modinv_count = 0;
 	gw_clear_fft_count (&ecmdata.gwdata);
 
 /* Now do stage 2 */
@@ -3233,19 +3242,26 @@ restart3:
 		w->pct_complete = (prime - B) * one_over_C_minus_B;
 		if (w->pct_complete > 1.0) w->pct_complete = 1.0;
 
+/* Output the title every so often */
+
+		if (first_iter_msg ||
+		    (ITER_OUTPUT != 999999999 &&
+		     gw_get_fft_count (&ecmdata.gwdata) >= last_output_t + 2 * ITER_OUTPUT * output_title_frequency)) {
+			char	mask[80];
+			sprintf (mask, "%%.%df%%%% of %%s ECM curve %%d stage 2", PRECISION);
+			sprintf (buf, mask, trunc_percent (w->pct_complete), gwmodulo_as_string (&ecmdata.gwdata), curve);
+			title (thread_num, buf);
+			last_output_t = gw_get_fft_count (&ecmdata.gwdata);
+		}
+
 /* Print a message every so often */
 
 		if (first_iter_msg ||
 		    (ITER_OUTPUT != 999999999 &&
-		     gw_get_fft_count (&ecmdata.gwdata) >= last_output + 2 * ITER_OUTPUT)) {
+		     gw_get_fft_count (&ecmdata.gwdata) >= last_output + 2 * ITER_OUTPUT * output_frequency)) {
 			char	mask[80];
-			double	pct;
-			pct = trunc_percent (w->pct_complete);
-			sprintf (mask, "%%.%df%%%% of %%s ECM curve %%d stage 2", PRECISION);
-			sprintf (buf, mask, pct, gwmodulo_as_string (&ecmdata.gwdata), curve);
-			title (thread_num, buf);
 			sprintf (mask, "%%s curve %%d stage 2 at prime %%.0f [%%.%df%%%%].", PRECISION);
-			sprintf (buf, mask, gwmodulo_as_string (&ecmdata.gwdata), curve, (double) prime, pct);
+			sprintf (buf, mask, gwmodulo_as_string (&ecmdata.gwdata), curve, (double) prime, trunc_percent (w->pct_complete));
 			end_timer (timers, 0);
 			if (first_iter_msg) {
 				strcat (buf, "\n");
@@ -3294,7 +3310,7 @@ restart3:
 		 gw_get_fft_count (&ecmdata.gwdata), ecmdata.modinv_count);
 	print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
 	OutputStr (thread_num, buf);
-	last_output = ecmdata.modinv_count = 0;
+	last_output = last_output_t = ecmdata.modinv_count = 0;
 	gw_clear_fft_count (&ecmdata.gwdata);
 
 /* Print out round off error */
@@ -4575,7 +4591,8 @@ int pminus1 (
 	int	have_save_file;
 	int	res, stop_reason, stage, saving, near_fft_limit, echk;
 	double	one_over_len, one_over_B, one_pair_pct;
-	double	base_pct_complete, last_output, last_output_r;
+	double	base_pct_complete, last_output, last_output_t, last_output_r;
+	double	output_frequency, output_title_frequency;
 	int	first_iter_msg;
 	int	using_t3;	/* Indicates we are using the gwnum t3 */
 				/* to avoid a gwfftadd3 in stage 2 */
@@ -4684,9 +4701,10 @@ restart:
 
 /* More miscellaneous initializations */
 
-	last_output = last_output_r = 0;
+	last_output = last_output_t = last_output_r = 0;
 	gw_clear_fft_count (&pm1data.gwdata);
 	first_iter_msg = TRUE;
+	calc_output_frequencies (&pm1data.gwdata, &output_frequency, &output_title_frequency);
 
 /* Output message about the FFT length chosen */
 
@@ -4942,18 +4960,26 @@ restart0:
 
 		w->pct_complete = (double) bit_number * one_over_len;
 
+/* Output the title every so often */
+
+		if (first_iter_msg ||
+		    (ITER_OUTPUT != 999999999 &&
+		     gw_get_fft_count (&pm1data.gwdata) >= last_output_t + 2 * ITER_OUTPUT * output_title_frequency)) {
+			char	mask[80];
+			sprintf (mask, "%%.%df%%%% of %%s P-1 stage 1", PRECISION);
+			sprintf (buf, mask, trunc_percent (w->pct_complete), gwmodulo_as_string (&pm1data.gwdata));
+			title (thread_num, buf);
+			last_output_t = gw_get_fft_count (&pm1data.gwdata);
+		}
+
 /* Every N squarings, output a progress report */
 
 		if (first_iter_msg ||
-		    (ITER_OUTPUT != 999999999 && gw_get_fft_count (&pm1data.gwdata) >= last_output + 2 * ITER_OUTPUT)) {
+		    (ITER_OUTPUT != 999999999 &&
+		     gw_get_fft_count (&pm1data.gwdata) >= last_output + 2 * ITER_OUTPUT * output_frequency)) {
 			char	mask[80];
-			double	pct;
-			pct = trunc_percent (w->pct_complete);
-			sprintf (mask, "%%.%df%%%% of %%s P-1 stage 1", PRECISION);
-			sprintf (buf, mask, pct, gwmodulo_as_string (&pm1data.gwdata));
-			title (thread_num, buf);
 			sprintf (mask, "%%s stage 1 is %%.%df%%%% complete.", PRECISION);
-			sprintf (buf, mask, gwmodulo_as_string (&pm1data.gwdata), pct);
+			sprintf (buf, mask, gwmodulo_as_string (&pm1data.gwdata), trunc_percent (w->pct_complete));
 			end_timer (timers, 0);
 			if (first_iter_msg) {
 				strcat (buf, "\n");
@@ -5060,19 +5086,26 @@ restart1:
 
 		stop_reason = stopCheck (thread_num);
 
+/* Output the title every so often */
+
+		if (first_iter_msg ||
+		    (ITER_OUTPUT != 999999999 &&
+		     gw_get_fft_count (&pm1data.gwdata) >= last_output_t + 2 * ITER_OUTPUT * output_title_frequency)) {
+			char	mask[80];
+			sprintf (mask, "%%.%df%%%% of %%s P-1 stage 1", PRECISION);
+			sprintf (buf, mask, trunc_percent (w->pct_complete), gwmodulo_as_string (&pm1data.gwdata));
+			title (thread_num, buf);
+			last_output_t = gw_get_fft_count (&pm1data.gwdata);
+		}
+
 /* Every N primes, output a progress report */
 
 		if (first_iter_msg ||
 		    (ITER_OUTPUT != 999999999 &&
-		     gw_get_fft_count (&pm1data.gwdata) >= last_output + 2 * ITER_OUTPUT)) {
+		     gw_get_fft_count (&pm1data.gwdata) >= last_output + 2 * ITER_OUTPUT * output_frequency)) {
 			char	mask[80];
-			double	pct;
-			pct = trunc_percent (w->pct_complete);
-			sprintf (mask, "%%.%df%%%% of %%s P-1 stage 1", PRECISION);
-			sprintf (buf, mask, pct, gwmodulo_as_string (&pm1data.gwdata));
-			title (thread_num, buf);
 			sprintf (mask, "%%s stage 1 is %%.%df%%%% complete.", PRECISION);
-			sprintf (buf, mask, gwmodulo_as_string (&pm1data.gwdata), pct);
+			sprintf (buf, mask, gwmodulo_as_string (&pm1data.gwdata), trunc_percent (w->pct_complete));
 			end_timer (timers, 0);
 			if (first_iter_msg) {
 				strcat (buf, "\n");
@@ -5133,7 +5166,7 @@ more_B:		pm1data.B = B;
 	print_timer (timers, 1, buf, TIMER_NL | TIMER_CLR);
 	OutputStr (thread_num, buf);
 	clear_timers (timers, sizeof (timers) / sizeof (timers[0]));
-	last_output = last_output_r = 0;
+	last_output = last_output_t = last_output_r = 0;
 	gw_clear_fft_count (&pm1data.gwdata);
 
 /* Print out round off error */
@@ -5444,19 +5477,26 @@ found_a_bit:;
 errchk:		if (gw_test_for_error (&pm1data.gwdata) ||
 		    gw_get_maxerr (&pm1data.gwdata) >= 0.40625) goto error;
 
+/* Output the title every so often */
+
+		if (first_iter_msg ||
+		    (ITER_OUTPUT != 999999999 &&
+		     gw_get_fft_count (&pm1data.gwdata) >= last_output_t + 2 * ITER_OUTPUT * output_title_frequency)) {
+			char	mask[80];
+			sprintf (mask, "%%.%df%%%% of %%s P-1 stage 2 (using %%dMB)", PRECISION);
+			sprintf (buf, mask, trunc_percent (w->pct_complete), gwmodulo_as_string (&pm1data.gwdata), memused);
+			title (thread_num, buf);
+			last_output_t = gw_get_fft_count (&pm1data.gwdata);
+		}
+
 /* Write out a message every now and then */
 
 		if (first_iter_msg ||
 		    (ITER_OUTPUT != 999999999 &&
-		     gw_get_fft_count (&pm1data.gwdata) >= last_output + 2 * ITER_OUTPUT)) {
+		     gw_get_fft_count (&pm1data.gwdata) >= last_output + 2 * ITER_OUTPUT * output_frequency)) {
 			char	mask[80];
-			double	pct;
-			pct = trunc_percent (w->pct_complete);
-			sprintf (mask, "%%.%df%%%% of %%s P-1 stage 2 (using %%dMB)", PRECISION);
-			sprintf (buf, mask, pct, gwmodulo_as_string (&pm1data.gwdata), memused);
-			title (thread_num, buf);
 			sprintf (mask, "%%s stage 2 is %%.%df%%%% complete.", PRECISION);
-			sprintf (buf, mask, gwmodulo_as_string (&pm1data.gwdata), pct);
+			sprintf (buf, mask, gwmodulo_as_string (&pm1data.gwdata), trunc_percent (w->pct_complete));
 			end_timer (timers, 0);
 			if (first_iter_msg) {
 				strcat (buf, "\n");

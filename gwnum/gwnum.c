@@ -769,7 +769,7 @@ again:	zpad_jmptab = NULL;
 			zpad_jmptab = asm_info.avx_cyclic_fft_info;
 		else if (gwdata->cpu_flags & CPU_SSE2)
 			zpad_jmptab = asm_info.sse2_cyclic_fft_info;
-		else zpad_jmptab =
+		else
 			zpad_jmptab = asm_info.x86_cyclic_fft_info;
 
 /* Find the table entry for the FFT that can do a mod 2^2n FFT, handling */
@@ -2412,7 +2412,7 @@ int internal_gwsetup (
 			asm_data->norm_col_mults = NULL;
 		}
 
-#ifdef GDEBUG
+#ifdef GDEBUG_MEM
 	if (gwdata->PASS2_SIZE) {
 		char buf[80];
 		sprintf (buf, "FFTlen: %d, clm: %d, count3: %d, count2: %d\n", (int) gwdata->FFTLEN, (int) gwdata->PASS1_CACHE_LINES, (int) asm_data->count3, (int) asm_data->count2); OutputBoth (0, buf);

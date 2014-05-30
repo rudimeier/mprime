@@ -2,8 +2,8 @@
 
 /* Constants */
 
-#define VERSION		"28.4"
-#define BUILD_NUM	"1"
+#define VERSION		"28.5"
+#define BUILD_NUM	"2"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
 /* Linux (mprime)  #2 */
@@ -25,9 +25,16 @@
 /* We want to increase the max number of worker threads to 64, but 32-bit Windows */
 /* SetThreadAffinityMask only supports 32-bit masks.  So we'll assume any user that */
 /* has a machine powerful enough to need more than 32 workers will run a 64-bit OS. */
+/* 2014 UPDATE: Machines with more than 64 logical CPUs are in the works.  Windows has */
+/* a bizarre affinity mechanism so we'll keep the 64 worker restriction there. */
+/* On other OSes, we'll increase the limit to 512. */
 
 #ifdef X86_64
+#ifdef _WINDOWS_
 #define MAX_NUM_WORKER_THREADS 64	/* Number of launchable work threads */
+#else
+#define MAX_NUM_WORKER_THREADS 512	/* Number of launchable work threads */
+#endif
 #else
 #define MAX_NUM_WORKER_THREADS 32	/* Number of launchable work threads */
 #endif
@@ -158,6 +165,8 @@ extern unsigned int PRIORITY;		/* Desired priority level */
 extern int MANUAL_COMM;			/* Set on if user explicitly starts */
 					/* all communication with the server */
 extern unsigned int volatile CPU_HOURS;	/* Hours per day program will run */
+extern int CLASSIC_OUTPUT;		/* LL and PRP output to worker windows should use the pre-v28.5 classic style */
+extern int OUTPUT_ROUNDOFF;		/* LL and PRP output to worker windows shound include the roundoff error */
 extern unsigned long volatile ITER_OUTPUT;/* Iterations between outputs */
 extern unsigned long volatile ITER_OUTPUT_RES;/* Iterations between results */
 					/* file outputs */
@@ -173,9 +182,10 @@ extern double DAYS_BETWEEN_CHECKINS;	/* Days between sending updated */
 extern int NUM_BACKUP_FILES;		/* Between 1 and 3 backup files (or 99 */
 					/* for overwrite) */
 extern int SILENT_VICTORY;		/* Quiet find of new Mersenne prime */
+extern int SILENT_VICTORY_PRP;		/* Quiet find of new PRP */
 extern int RUN_ON_BATTERY;		/* Run program even on battery power */
-extern int BATTERY_PERCENT;		/* Pause if battery below this */
-					/* percent charged */
+extern int BATTERY_PERCENT;		/* Pause if battery below this percent charged */
+extern int DEFEAT_POWER_SAVE;		/* If possible, call OS to force computer to run at full speed */
 extern int TRAY_ICON;			/* Display tiny tray icon */
 extern int HIDE_ICON;			/* Display no icon */
 extern int MERGE_WINDOWS;		/* Flags indicating which MDI */

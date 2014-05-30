@@ -4,14 +4,14 @@
 ENVP= MACOSX_DEPLOYMENT_TARGET=10.3
 
 CC = gcc
-CFLAGS = -I.. -O2 -m32 -march=i686 -malign-double -fno-exceptions
-CFLAGSD = -I.. -g -DGDEBUG -m32 -march=i686 -malign-double -fno-exceptions
+CFLAGS = -I.. -O2 -m32 -march=i686 -fno-exceptions
+CFLAGSD = -I.. -g -DGDEBUG -m32 -march=i686 -fno-exceptions
 CFLAGS64 = -I.. -O2 -DX86_64 -m64 -fno-exceptions
 CFLAGS64D = -I.. -g -DGDEBUG -DX86_64 -m64 -fno-exceptions
 
 CPP = g++
-CPPFLAGS = -I.. -I../qd -O2 -m32 -march=i686 -malign-double -fno-exceptions -fno-rtti
-CPPFLAGSD = -I.. -I../qd -g -DGDEBUG -m32 -march=i686 -malign-double -fno-exceptions -fno-rtti
+CPPFLAGS = -I.. -I../qd -O2 -m32 -march=i686 -fno-exceptions -fno-rtti
+CPPFLAGSD = -I.. -I../qd -g -DGDEBUG -m32 -march=i686 -fno-exceptions -fno-rtti
 CPPFLAGS64 = -I.. -I../qd -O2 -DX86_64 -m64 -fno-exceptions -fno-rtti
 CPPFLAGS64D = -I.. -I../qd -g -DGDEBUG -DX86_64 -m64 -fno-exceptions -fno-rtti
 

@@ -16,7 +16,7 @@ ENDIF
 
 INCLUDE	unravel.mac
 
-VERSION_NUMBER = 2804		;; Version 28.4
+VERSION_NUMBER = 2805		;; Version 28.5
 
 ;
 ; Global variables needed by FFT setup code
@@ -4024,8 +4024,8 @@ yjmptable DD	0
 	PRCENTRY2		yfft_r4dwpn_1M_12_4, 2419456
 	PRCENTRY2		yfft_r4dwpn_1M_12_2, 2419456
 	PRCENTRY2		yfft_r4dwpn_1M_12_1, 2419456
-	PRCENTRY2		yfft_r4dwpn_1M_11_2, 2419456, I7_64 + FMA3_64 
-	PRCENTRY2		yfft_r4dwpn_1M_11_1, 2419456
+	PRCENTRY2		yfft_r4dwpn_1M_11_2, 2135552, I7_64 + FMA3_64 
+	PRCENTRY2		yfft_r4dwpn_1M_11_1, 2135552
 	PRCENTRY2		yfft_r4dwpn_1M_10_4, 1351680
 	PRCENTRY2		yfft_r4dwpn_1M_10_2, 1351680, I7_32
 	PRCENTRY2		yfft_r4dwpn_1M_10_1, 1351680
@@ -4741,8 +4741,8 @@ yjmptablep DD	0
 	DD	0
 	PRCSTRT	3891000, 196608, 0.001030
 	PRCENTRY2		yfft_r4dwpn_192K_ac_1536_2, 509952, FMA3_64
-	PRCENTRY2		yfft_r4dwpn_192K_ac_768_2, 509952, I7_64
-	PRCENTRY2		yfft_r4dwpn_192K_ac_768_1, 509952
+	PRCENTRY2		yfft_r4dwpn_192K_ac_768_2, 456704, I7_64
+	PRCENTRY2		yfft_r4dwpn_192K_ac_768_1, 456704
 	PRCENTRY2		yfft_r4dwpn_192K_ac_8_4, 239104
 	PRCENTRY2		yfft_r4dwpn_192K_ac_8_2, 239104, I7_32
 	PRCENTRY2		yfft_r4dwpn_192K_ac_8_1, 239104

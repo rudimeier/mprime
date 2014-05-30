@@ -9,13 +9,20 @@
 | Commonb contains information used only during execution
 | Commonc contains information used during setup and execution
 +---------------------------------------------------------------------*/
- 
+
+/* Set a #define for OSes where we cannot set affinities.  This will */
+/* force us into a different code path in a few places. */
+
+#ifdef __APPLE__
+#define OS_CANNOT_SET_AFFINITY
+#endif
+
 /* Globals for error messages */
 
 char ERRMSG0[] = "Iteration: %ld/%ld, %s";
 char ERRMSG1A[] = "ERROR: ILLEGAL SUMOUT\n";
 char ERRMSG1B[] = "ERROR: SUM(INPUTS) != SUM(OUTPUTS), %.16g != %.16g\n";
-char ERRMSG1C[] = "possible error: round off (%.10g) > 0.40\n";
+char ERRMSG1C[] = "Possible error: round off (%.10g) > 0.40\n";
 char ERRMSG1D[] = "ERROR: Shift counter corrupt.\n";
 char ERRMSG1E[] = "ERROR: Illegal double encountered.\n";
 char ERRMSG1F[] = "ERROR: FFT data has been zeroed!\n";
@@ -352,13 +359,13 @@ void affinity_busy_loop (void *arg)
 /* that map to the same physical CPU core to OS's numbering of logical CPUs */
 /* that map to the same physical CPU core. */
 
-char	AFFINITY_SCRAMBLE[MAX_NUM_WORKER_THREADS] = {0};
+short	AFFINITY_SCRAMBLE[MAX_NUM_WORKER_THREADS] = {0};
 char	AFFINITY_SCRAMBLE_STATE = 0;	/* 0 = not initialized, 1 = computed, 2 = read in from local.txt */
 
 void generate_affinity_scramble_thread (void *arg)
 {
-	char	mapped_cpus[MAX_NUM_WORKER_THREADS];  /* Logical CPUs whose mate has been found */
-	char	scramble[MAX_NUM_WORKER_THREADS+1];  /* Affinity scramble from local.txt */
+	char	mapped_cpus[MAX_NUM_WORKER_THREADS];	/* Logical CPUs whose mate has been found */
+	char	scramble[65];				/* Affinity scramble from local.txt.  Up to 64 affinities can be scrambled. */
 	int	mask[MAX_NUM_WORKER_THREADS/32];
 	unsigned int i, j, k, n, diff, num_successes;
 	int	saved_rdtsc_timing, debug;
@@ -573,7 +580,7 @@ no_auto_detect:
 	if (scramble[0] != '*') {
 		OutputStr (MAIN_THREAD_NUM, "Using AffinityScramble2 settings to set affinity mask.\n");
 		AFFINITY_SCRAMBLE_STATE = 2;
-		for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
+		for (i = 0; i < MAX_NUM_WORKER_THREADS && i < strlen (scramble); i++) {
 			if (scramble[i] >= '0' && scramble[i] <= '9')
 				AFFINITY_SCRAMBLE[i] = scramble[i] - '0';
 			else if (scramble[i] >= 'A' && scramble[i] <= 'Z')
@@ -609,9 +616,9 @@ void generate_affinity_scramble (void)
 
 	if (CPU_HYPERTHREADS == 1 || NUM_CPUS == 1) return;
 
-/* There is no need to scare Apple users with error-like messages since we can't set affinity on Apple products */
+/* There is no need to scare users with error-like messages when we can't set affinity */
 
-#ifdef __APPLE__
+#ifdef OS_CANNOT_SET_AFFINITY
 	return;
 #endif
 
@@ -637,12 +644,23 @@ void SetPriority (
 	unsigned int i;
 	int	mask[MAX_NUM_WORKER_THREADS/32];
 
+/* Benchmarking affinity with no hyperthreading. */
+
+	if (info->type == SET_PRIORITY_BENCHMARKING) {
+		int	cpu;
+		cpu = info->thread_num + info->aux_thread_num;
+		memset (mask, 0, sizeof (mask));
+		for (i = 0; i < CPU_HYPERTHREADS; i++) maskset (cpu * CPU_HYPERTHREADS + i);
+	}
+
 /* Benchmarking affinity.  For hyperthreaded CPUs, we put auxiliary */
 /* threads onto the logical CPUs before moving onto the next physical CPU. */  
 
-	if (info->type == SET_PRIORITY_BENCHMARKING) {
+	else if (info->type == SET_PRIORITY_BENCHMARKING_HYPER) {
+		int	cpu;
+		cpu = info->thread_num + info->aux_thread_num / CPU_HYPERTHREADS;
 		memset (mask, 0, sizeof (mask));
-		maskset (info->aux_thread_num);
+		for (i = 0; i < CPU_HYPERTHREADS; i++) maskset (cpu * CPU_HYPERTHREADS + i);
 	}
 
 /* Torture test affinity.  If we're running the same number of torture */
@@ -737,16 +755,17 @@ void SetPriority (
 		}
 	}
 
-/* Apple does not support setting affinities.  Set the mask */
+/* When the OS does not support setting affinities, set the mask */
 /* so that we print out the proper informative message. */
 
-#ifdef __APPLE__
+#ifdef OS_CANNOT_SET_AFFINITY
 	memset (mask, 0xFF, sizeof (mask));
 #endif
 
 /* Output an informative message */
 
-	if (NUM_CPUS > 1 || CPU_HYPERTHREADS > 1) {
+	if (info->type != SET_PRIORITY_BENCHMARKING && info->type != SET_PRIORITY_BENCHMARKING_HYPER &&
+	    (NUM_CPUS > 1 || CPU_HYPERTHREADS > 1)) {
 		char	buf[120];
 
 		if (info->aux_thread_num == 0)
@@ -767,8 +786,7 @@ void SetPriority (
 			sprintf (buf + strlen(buf), "logical CPU%s%s\n",
 				 (count == 1) ? " #" : "s ", cpu_list);
 		}
-		if (info->type != SET_PRIORITY_BENCHMARKING)
-			OutputStr (info->thread_num, buf);
+		OutputStr (info->thread_num, buf);
 	}
 
 /* Call OS-specific routine to set the priority and affinity */
@@ -2686,6 +2704,47 @@ int SleepFive (
 	return (0);
 }
 
+/* Generate the scaling factors for ITER_OUTPUT in the rare cases where the user */
+/* has used some undoc.txt settings to change how often the title is output or to */
+/* make the frequency roughly the same in all windows even if using different FFT sizes. */
+
+void calc_output_frequencies (
+	gwhandle *gwdata,		/* Handle to the gwnum code */
+	double	*output_frequency,	/* Calculated adjustment to ITER_OUTPUT */
+	double	*output_title_frequency)/* Calculated adjustment to ITER_OUTPUT for title */
+{
+	int	scaled_freq, title_freq;
+	double	exp, temp;
+
+	/* Check the flag that says scale ITER_OUTPUT so that messages */
+	/* appear at roughly same rate for all FFT sizes (scale factor */
+	/* should be 1.0 if testing M50000000). */
+	scaled_freq = (int) IniGetInt (INI_FILE, "ScaleOutputFrequency", 0);
+	if (!scaled_freq) {
+		*output_frequency = 1.0;
+	} else {
+		*output_frequency = gwmap_to_timing (1.0, 2, 50000000, -1) /
+				    gwmap_to_timing (gwdata->k, gwdata->b, gwdata->n, gwdata->c);
+		if (gwget_num_threads (gwdata) > 1 && NUM_WORKER_THREADS < NUM_CPUS)
+			*output_frequency /= 1.8 * (gwget_num_threads (gwdata) - 1);
+		/* For prettier output (outputs likely to be a multiple of a power of 10), round the */
+		/* output frequency to the nearest (10,15,20,25,30,40,...90) times a power of ten */
+		exp = floor (log (*output_frequency) / log (10.0));
+		temp = *output_frequency * pow (10.0, -exp);
+		if (temp < 1.25) temp = 1.0;
+		else if (temp <1.75) temp = 1.5;
+		else if (temp < 2.25) temp = 2.0;
+		else if (temp < 2.75) temp = 2.5;
+		else temp = floor (temp + 0.5);
+		*output_frequency = temp * pow (10.0, exp);
+	}
+
+	/* Calculate the title frequency as a multiple of the output frequency */
+	title_freq = (int) IniGetInt (INI_FILE, "TitleOutputFrequency", 1);
+	if (title_freq < 1) title_freq = 1;
+	*output_title_frequency = *output_frequency / (double) title_freq;
+}
+
 /* Truncate a percentage to the requested number of digits. */
 /* Truncating prevents 99.5% from showing up as 100% complete. */
 
@@ -2697,6 +2756,23 @@ double trunc_percent (
 	percent -= 0.5 * pow (10.0, - (double) PRECISION);
 	if (percent < 0.0) return (0.0);
 	return (percent);
+}
+
+/* Format the ETA for output to the worker window */
+
+void formatETA (
+	double	howlong,		/* how long to complete (in seconds) */
+	char	*buf)
+{
+	double days, hours, minutes, seconds;
+	days = floor (howlong / 86400.0);  howlong -= days * 86400.0;
+	hours = floor (howlong / 3600.0);  howlong -= hours * 3600.0;
+	minutes = floor (howlong / 60.0);  howlong -= minutes * 60.0;
+	seconds = floor (howlong);
+	if (days >= 3.0)
+		sprintf (buf, ", ETA: %dd %02d:%02d", (int) days, (int) hours, (int) minutes);
+	else
+		sprintf (buf, ", ETA: %02d:%02d:%02d", (int) (days * 24.0 + hours), (int) minutes, (int) seconds);
 }
 
 /****************************************************************************/
@@ -3290,10 +3366,14 @@ check_stop_code:
 	}
 
 /* If the worker is pausing because we are now on battery power, then */
-/* implement that now. */
+/* implement that now.  Semi-hack:  On Mac OS X, call the post/pre launch */
+/* callback so that we allow the OS to re-enable Intel's power saving SpeedStep */
+/* We pass in a dummy launch_type in case we might use that in the future. */
 
 	if (stop_reason == STOP_BATTERY) {
+		if (thread_num == MAIN_THREAD_NUM) PostLaunchCallback (9999);
 		implement_stop_battery (thread_num);
+		if (thread_num == MAIN_THREAD_NUM) PreLaunchCallback (9999);
 		continue;
 	}
 
@@ -4291,9 +4371,7 @@ int primeFactor (
 				if (first_iter_msg == 2) {
 					sprintf (buf, "M%ld to 2^%d", p, end_bits);
 				} else {
-					sprintf (fmt_mask,
-						 "%%.%df%%%% of M%%ld to 2^%%d",
-						 PRECISION);
+					sprintf (fmt_mask, "%%.%df%%%% of M%%ld to 2^%%d", PRECISION);
 					sprintf (buf, fmt_mask, pct, p, end_bits);
 				}
 				title (thread_num, buf);
@@ -4308,8 +4386,7 @@ int primeFactor (
 					clear_timer (timers, 0);
 				} else {
 					strcat (buf, "  Time: ");
-					print_timer (timers, 0, buf,
-						     TIMER_NL | TIMER_OPT_CLR);
+					print_timer (timers, 0, buf, TIMER_NL | TIMER_OPT_CLR);
 				}
 				OutputStr (thread_num, buf);
 				iters = 0;
@@ -4863,7 +4940,7 @@ int make_error_count_message (
 	counts_buf[0] = 0;
 
 	if (message_type == 1) {
-		sprintf (counts_buf, "errors: %d", count_total);
+		sprintf (counts_buf, ", errors: %d", count_total);
 	}
 
 	if (message_type == 2) {
@@ -5185,6 +5262,7 @@ int prime (
 	double	last_suminp = 0.0;
 	double	last_sumout = 0.0;
 	double	last_maxerr = 0.0;
+	double	output_frequency, output_title_frequency;
 	int	error_count_messages;
 
 /* Initialize */
@@ -5328,6 +5406,7 @@ begin:	gwinit (&lldata.gwdata);
 	strcpy (w->stage, "LL");
 	inverse_p = 1.0 / (double) p;
 	w->pct_complete = (double) counter * inverse_p;
+	calc_output_frequencies (&lldata.gwdata, &output_frequency, &output_title_frequency);
 
 /* Start off with the 1st Lucas number - four (ATH requested making the starting value overriddable). */
 /* Note we do something a little strange here.  We actually set the first number to 4 but shifted by */
@@ -5437,6 +5516,15 @@ begin:	gwinit (&lldata.gwdata);
 		timers[0] += timers[1];
 		iters++;
 
+/* Update min/max round-off error */
+
+		if (echk) {
+			if (gw_get_maxerr (&lldata.gwdata) < reallyminerr && counter > 30)
+				reallyminerr = gw_get_maxerr (&lldata.gwdata);
+			if (gw_get_maxerr (&lldata.gwdata) > reallymaxerr)
+				reallymaxerr = gw_get_maxerr (&lldata.gwdata);
+		}
+
 /* If the sum of the output values is an error (such as infinity) */
 /* then raise an error. */
 
@@ -5537,55 +5625,69 @@ begin:	gwinit (&lldata.gwdata);
 		}
 #endif
 
-/* Update counter, percentage complete, and maximum round-off error */
+/* Update counter, percentage complete */
 
 		counter++;
 		w->pct_complete = (double) counter * inverse_p;
-		if (ERRCHK) {
-			if (gw_get_maxerr (&lldata.gwdata) < reallyminerr && counter > 30)
-				reallyminerr = gw_get_maxerr (&lldata.gwdata);
-			if (gw_get_maxerr (&lldata.gwdata) > reallymaxerr)
-				reallymaxerr = gw_get_maxerr (&lldata.gwdata);
+
+/* Output the title every so often */
+
+		if (counter % (int) (ITER_OUTPUT * output_title_frequency) == 0 || first_iter_msg) {
+			char	fmt_mask[80];
+			sprintf (fmt_mask, "%%.%df%%%% of M%%ld", PRECISION);
+			sprintf (buf, fmt_mask, trunc_percent (w->pct_complete), p);
+			title (thread_num, buf);
 		}
 
 /* Print a message every so often */
 
-		if (counter % ITER_OUTPUT == 0 || first_iter_msg) {
+		if (counter % (int) (ITER_OUTPUT * output_frequency) == 0 || first_iter_msg) {
 			char	fmt_mask[80];
-			double	pct;
-			pct = trunc_percent (w->pct_complete);
-			sprintf (fmt_mask, "%%.%df%%%% of M%%ld", PRECISION);
-			sprintf (buf, fmt_mask, pct, p);
-			title (thread_num, buf);
-			sprintf (fmt_mask,
-				 "Iteration: %%ld / %%ld [%%.%df%%%%]",
-				 PRECISION);
-			sprintf (buf, fmt_mask, counter, p, pct);
+			sprintf (fmt_mask, "Iteration: %%ld / %%ld [%%.%df%%%%]", PRECISION);
+			sprintf (buf, fmt_mask, counter, p, trunc_percent (w->pct_complete));
 			/* Append a short form total errors message */
 			if (error_count_messages == 1)
 				make_error_count_message (error_count, error_count_messages,
 							  buf + strlen (buf),
-							  (int) (sizeof (buf) - strlen (buf)));
-			/* Append optional roundoff message */
-			if (ERRCHK && counter > 30) {
-				sprintf (buf+strlen(buf),
-					 ".  Round off: %10.10f to %10.10f",
-					 reallyminerr, reallymaxerr);
-			}
+					(int) (sizeof (buf) - strlen (buf)));
+			/* Truncate first message */
 			if (first_iter_msg) {
 				strcat (buf, ".\n");
 				clear_timer (timers, 0);
-			} else if (CUMULATIVE_TIMING) {
-				strcat (buf, ".  Total time: ");
-				print_timer (timers, 0, buf, TIMER_NL);
-			} else {
-				strcat (buf, ".  Per iteration time: ");
-				divide_timer (timers, 0, iters);
-				print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+				first_iter_msg = FALSE;
+			}
+			/* In v28.5 and later, format a consise message including the ETA */
+			else if (!CLASSIC_OUTPUT) {
+				double speed;
+				/* Append roundoff error */
+				if ((OUTPUT_ROUNDOFF || ERRCHK) && reallymaxerr >= 0.001)
+					sprintf (buf+strlen(buf), ", roundoff: %5.3f", reallymaxerr);
+				/* Append ms/iter */
+				speed = timer_value (timers, 0) / (double) iters;
+				sprintf (buf+strlen(buf), ", ms/iter: %6.3f", speed * 1000.0);
+				clear_timer (timers, 0);
 				iters = 0;
+				/* Append ETA */
+				formatETA ((p - counter) * speed, buf+strlen(buf));
+				strcat (buf, "\n");
+			}
+			/* Format the classic (pre-v28.5) message */
+			else {
+				/* Append optional roundoff message */
+				if (ERRCHK && counter > 30) {
+					sprintf (buf+strlen(buf), ".  Round off: %10.10f to %10.10f", reallyminerr, reallymaxerr);
+				}
+				if (CUMULATIVE_TIMING) {
+					strcat (buf, ".  Total time: ");
+					print_timer (timers, 0, buf, TIMER_NL);
+				} else {
+					strcat (buf, ".  Per iteration time: ");
+					divide_timer (timers, 0, iters);
+					print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+					iters = 0;
+				}
 			}
 			OutputStr (thread_num, buf);
-			first_iter_msg = FALSE;
 
 /* Output a verbose message showing the error counts.  This way a user is likely to */
 /* notice a problem without reading the results.txt file. */
@@ -5621,8 +5723,7 @@ begin:	gwinit (&lldata.gwdata);
 			sprintf (fmt_mask,
 				 "Stopping primality test of M%%ld at iteration %%ld [%%.%df%%%%]\n",
 				 PRECISION);
-			sprintf (buf, fmt_mask, p, counter,
-				 trunc_percent (w->pct_complete));
+			sprintf (buf, fmt_mask, p, counter, trunc_percent (w->pct_complete));
 			OutputStr (thread_num, buf);
 			lucasDone (&lldata);
 			return (stop_reason);
@@ -7385,7 +7486,7 @@ int primeTime (
 /* Set the process/thread priority */
 
 	sp_info.type = SET_PRIORITY_BENCHMARKING;
-	sp_info.thread_num = thread_num;
+	sp_info.thread_num = 0;
 	sp_info.aux_thread_num = 0;
 	SetPriority (&sp_info);
 
@@ -7533,8 +7634,8 @@ void bench_busy_loop (void *arg)
 
 	cpu_num = (int) (intptr_t) arg;
 	sp_info.type = SET_PRIORITY_BENCHMARKING;
-	sp_info.thread_num = 0;
-	sp_info.aux_thread_num = cpu_num * CPU_HYPERTHREADS;
+	sp_info.thread_num = cpu_num;
+	sp_info.aux_thread_num = 0;
 	SetPriority (&sp_info);
 
 /* Stay busy until last_bench_cpu_num says this CPU thread should close */
@@ -7654,6 +7755,334 @@ int factorBench (
 	return (0);
 }
 
+/* Globals and structures used in primeBenchMultipleWorkers */
+
+int	num_bench_workers = 0;
+int	num_bench_workers_initialized = 0;
+int	bench_worker_finished = 0;
+int	bench_workers_time = 0;			/* Time (in seconds) to bench an FFT */
+gwmutex	bench_workers_mutex;
+gwevent	bench_workers_sync;
+
+struct prime_bench_arg {
+	int	main_thread_num;
+	unsigned long fftlen;
+	int	plus1;
+	int	cpu_num;
+	int	threads;
+	int	hyperthreads;
+	int	impl;
+	int	iterations;
+	double	total_time;
+};
+
+/* Time a few iterations on one worker. */
+
+void primeBenchOneWorker (void *arg)
+{
+	struct PriorityInfo sp_info;
+	llhandle lldata;
+	int	stop_reason;
+	double	timers[2];
+	struct prime_bench_arg *info;
+
+/* Type cast arg, init return info */
+
+	info = (struct prime_bench_arg *) arg;
+	info->iterations = 0;
+	info->total_time = 0.0;
+
+/* Set the affinity so that worker runs on the specified CPU core */
+
+	sp_info.type = (info->hyperthreads > 1) ? SET_PRIORITY_BENCHMARKING_HYPER : SET_PRIORITY_BENCHMARKING;
+	sp_info.thread_num = info->cpu_num;
+	sp_info.aux_thread_num = 0;
+	SetPriority (&sp_info);
+
+/* Initialize this FFT length */
+
+	gwinit (&lldata.gwdata);
+	gwset_sum_inputs_checking (&lldata.gwdata, SUM_INPUTS_ERRCHK);
+	gwset_num_threads (&lldata.gwdata, info->threads);
+	gwset_thread_callback (&lldata.gwdata, SetAuxThreadPriority);
+	gwset_thread_callback_data (&lldata.gwdata, &sp_info);
+	gwset_minimum_fftlen (&lldata.gwdata, info->fftlen);
+	lldata.gwdata.bench_pick_nth_fft = info->impl;
+	stop_reason = lucasSetup (info->main_thread_num, info->fftlen * 17 + 1, info->plus1, &lldata);
+	if (stop_reason) {
+		gwevent_signal (&bench_workers_sync);
+		return;
+	}
+
+/* Fill data space with random values. */
+
+	generateRandomData (&lldata);
+
+/* Pause until all worker threads are initialized */
+
+	gwmutex_lock (&bench_workers_mutex);
+	num_bench_workers_initialized++;
+	if (num_bench_workers_initialized == num_bench_workers) gwevent_signal (&bench_workers_sync);
+	gwmutex_unlock (&bench_workers_mutex);
+	gwevent_wait (&bench_workers_sync, 0);
+
+/* Do one squaring untimed, to prime the caches and start the POSTFFT optimization going. */
+
+	gwsetnormroutine (&lldata.gwdata, 0, 0, 0);
+	gwstartnextfft (&lldata.gwdata, TRUE);
+	gwsquare (&lldata.gwdata, lldata.lldata);
+
+/* Compute numbers in the lucas series.  Keep track of the number of iterations and total time. */
+
+	for ( ; ; ) {
+		stop_reason = stopCheck (info->main_thread_num);
+		if (stop_reason) break;
+		clear_timers (timers, sizeof (timers) / sizeof (timers[0]));
+		start_timer (timers, 0);
+		gwsquare (&lldata.gwdata, lldata.lldata);
+		end_timer (timers, 0);
+		// If any of the bench workers have finished, then do not imclude this timing
+		if (bench_worker_finished) break;
+		// Add in this timing.  If time exceeds our limit, end this worker
+		info->iterations++;
+		info->total_time += timer_value (timers, 0);
+		if (info->total_time > bench_workers_time) {
+			bench_worker_finished = TRUE;
+			break;
+		}
+	}
+	lucasDone (&lldata);
+}
+
+/* Time a few iterations of many FFT lengths on multiple workers.  This let's us */
+/* benchmark the effects of memory bandwidth limitations. */
+
+int primeBenchMultipleWorkers (
+	int	thread_num)
+{
+	llhandle lldata;
+	char	buf[512];
+	int	workers, cpus, hypercpus, impl;
+	int	all_bench, only_time_5678, time_all_complex, plus1, is_a_5678;
+	int	bench_hyperthreading, bench_multithreading, bench_oddballs, bench_one_or_all, bench_arch;
+	int	i, stop_reason;
+	unsigned long fftlen, min_FFT_length, max_FFT_length;
+	double	throughput;
+	gwthread thread_id[MAX_NUM_WORKER_THREADS];
+	struct prime_bench_arg info[MAX_NUM_WORKER_THREADS];
+
+/* Output some initial informative text */
+
+	OutputStr (thread_num, "Benchmarking multiple workers to measure the impact of memory bandwidth\n");
+
+/* Init the worker synchronization primitives */
+
+	gwmutex_init (&bench_workers_mutex);
+	gwevent_init (&bench_workers_sync);
+
+/* Get the amount of time to bench each FFT */
+
+	bench_workers_time = IniGetInt (INI_FILE, "BenchTime", 10);
+
+/* Decide which FFT lengths to time */
+
+	min_FFT_length = 1024;			/* Default lengths to test */
+	max_FFT_length = 8192;
+	time_all_complex = 0;
+	only_time_5678 = 1;
+	if (IniGetInt (INI_FILE, "FullBench", 0)) { /* Obsolete: meant benchmark 4K to 32M FFTs, all-complex too */
+		min_FFT_length = 4;
+		max_FFT_length = 32768;
+		only_time_5678 = 0;
+		time_all_complex = 1;
+	}
+	min_FFT_length = IniGetInt (INI_FILE, "MinBenchFFT", min_FFT_length);
+	max_FFT_length = IniGetInt (INI_FILE, "MaxBenchFFT", max_FFT_length);
+	only_time_5678 = IniGetInt (INI_FILE, "OnlyBench5678", only_time_5678);
+	time_all_complex = IniGetInt (INI_FILE, "BenchAllComplex", time_all_complex);
+	all_bench = IniGetInt (INI_FILE, "AllBench", 0);	/* Benchmark all implementations of each FFT length */
+	bench_hyperthreading = IniGetInt (INI_FILE, "BenchHyperthreads", 1);	/* Benchmark hyperthreading */
+	bench_multithreading = IniGetInt (INI_FILE, "BenchMultithreads", 0);	/* Benchmark multi-threaded FFTs */
+	bench_oddballs = IniGetInt (INI_FILE, "BenchOddMultithreads", 0);	/* Benchmark odd multi-threaded combinations */
+	bench_one_or_all = IniGetInt (INI_FILE, "BenchOneOrAll", 0);		/* Benchmark only 1 or all cpus */
+	bench_arch = IniGetInt (INI_FILE, "BenchArch", 0);			/* CPU architecture to benchmark */
+
+/* Loop over a variety of FFT lengths */
+
+	for (plus1 = 0; plus1 <= 1; plus1++) {
+	  if (plus1 == 0 && time_all_complex == 2) continue;
+	  if (plus1 == 1 && time_all_complex == 0) continue;
+	  for (fftlen = min_FFT_length * 1024; fftlen <= max_FFT_length * 1024; fftlen += 10) {
+
+/* Initialize this FFT length */
+
+	    gwinit (&lldata.gwdata);
+	    gwset_sum_inputs_checking (&lldata.gwdata, SUM_INPUTS_ERRCHK);
+	    gwset_minimum_fftlen (&lldata.gwdata, fftlen);
+	    stop_reason = lucasSetup (thread_num, fftlen * 17 + 1, plus1, &lldata);
+	    if (stop_reason) return (stop_reason);
+
+/* Make sure the FFT length is within the range we are benchmarking */
+
+	    fftlen = gwfftlen (&lldata.gwdata);
+	    if (fftlen > max_FFT_length * 1024) {
+		    lucasDone (&lldata);
+		    break;
+	    }
+
+/* Only bench FFT lengths that are a multiple of 1K */
+
+	    if (fftlen & 0x3FF) {
+		    lucasDone (&lldata);
+		    continue;
+	    }
+
+/* If requested, only bench PFAs of 5,6,7,8 */
+
+	    for (i = fftlen; i >= 9 && (i & 1) == 0; i >>= 1);
+	    is_a_5678 = (i <= 8);
+	    if (only_time_5678 && !is_a_5678) {
+		    lucasDone (&lldata);
+		    continue;
+	    }
+
+/* If requested, only benchmark one architecture */
+
+	    if (bench_arch && bench_arch != lldata.gwdata.ARCH) {
+		    lucasDone (&lldata);
+		    continue;
+	    }
+
+/* Loop over all possible multithread possibilities */
+
+	    for (hypercpus = 1; hypercpus <= (int) CPU_HYPERTHREADS; hypercpus++) {
+	      if (hypercpus > 1 && !bench_hyperthreading) break;
+	      for (cpus = 1; cpus <= (int) NUM_CPUS; cpus++) {
+		if (bench_one_or_all && cpus > 1 && cpus < (int) NUM_CPUS) continue;
+	        for (workers = 1; workers <= cpus; workers++) {
+		  if (cpus > workers && !bench_multithreading) continue;
+		  if (cpus % workers != 0 && !bench_oddballs) continue;
+
+#ifdef OS_CANNOT_SET_AFFINITY
+		  /* If the OS cannot set affinity, then we can only bench hyperthreading on all CPUs */
+		  if (hypercpus > 1 && cpus != NUM_CPUS) continue;
+#endif
+		  /* Only SSE2 code supports multi-threaded FFTs */
+		  if ((cpus > workers || hypercpus > 1) && ! (CPU_FLAGS & CPU_SSE2)) continue;  
+
+/* If timing all implementations of an FFT, loop through all possible implementations */
+
+		  for (impl = 0; ; impl++) {
+			if (!all_bench) {
+				if (impl >= 1) break;
+			} else {
+				if (impl == 0) {
+					lucasDone (&lldata);
+					continue;
+				}
+				gwinit (&lldata.gwdata);
+				gwset_sum_inputs_checking (&lldata.gwdata, SUM_INPUTS_ERRCHK);
+				gwset_minimum_fftlen (&lldata.gwdata, fftlen);
+				lldata.gwdata.bench_pick_nth_fft = impl;
+				stop_reason = lucasSetup (thread_num, fftlen * 17 + 1, plus1, &lldata);
+				if (stop_reason) break;	// Assume stop_reason set because there are no more implementations for this FFT
+			}
+
+/* Output start message for this benchmark */
+
+			sprintf (buf, "Timing %luK%s FFT, %d cpu%s%s, %d worker%s.  ",
+				 fftlen / 1024, plus1 ? " all-complex" : "",
+				 cpus, cpus > 1 ? "s" : "",
+				 hypercpus > 1 ? " hyperthreaded" : "",
+				 workers, workers > 1 ? "s" : "");
+			OutputStr (thread_num, buf);
+
+/* Start the workers */
+
+			num_bench_workers = workers;
+			num_bench_workers_initialized = 0;
+			bench_worker_finished = FALSE;
+			gwevent_reset (&bench_workers_sync);
+			for (i = 0; i < workers; i++) {
+				info[i].main_thread_num = thread_num;
+				info[i].fftlen = fftlen;
+				info[i].plus1 = plus1;
+				info[i].impl = impl;
+				info[i].cpu_num = i * cpus/workers + (i < cpus%workers ? i : cpus%workers);
+				info[i].threads = (cpus/workers + (i < cpus%workers ? 1 : 0)) * hypercpus;
+				info[i].hyperthreads = hypercpus;
+				gwthread_create_waitable (&thread_id[i], &primeBenchOneWorker, (void *) &info[i]);
+			}
+
+/* Wait for all the workers to finish */
+
+			for (i = 0; i < workers; i++)
+				gwthread_wait_for_exit (&thread_id[i]);
+			stop_reason = stopCheck (thread_num);
+			if (stop_reason) return (stop_reason);
+
+/* Print the total throughput and average times for this FFT length */
+
+			strcpy (buf, "Average times: ");
+			throughput = 0.0;
+			for (i = 0; i < workers; i++) {
+				if (i) strcat (buf, ", ");
+				if (info[i].iterations) {
+					sprintf (buf+strlen(buf), "%5.2f", info[i].total_time / info[i].iterations * 1000.0);
+					throughput = throughput + info[i].iterations / info[i].total_time;
+				} else
+					strcat (buf, "INF");
+			}
+			sprintf (buf+strlen(buf), " ms.  Total throughput: %5.2f iter/sec.\n", throughput);
+			OutputStrNoTimeStamp (thread_num, buf);
+
+/* Output to the results file the total throughput and average times for this FFT length */
+
+			if (all_bench) {
+				sprintf (buf,
+					 "FFTlen=%luK%s, Type=%d, Arch=%d, Pass1=%lu, Pass2=%lu, clm=%lu",
+					 fftlen / 1024, plus1 ? " all-complex" : "",
+					 lldata.gwdata.FFT_TYPE, lldata.gwdata.ARCH,
+					 fftlen / (lldata.gwdata.PASS2_SIZE ? lldata.gwdata.PASS2_SIZE : 1),
+					 lldata.gwdata.PASS2_SIZE,
+					 lldata.gwdata.PASS1_CACHE_LINES / ((CPU_FLAGS & CPU_AVX) ? 4 : 2));
+			} else {
+				sprintf (buf, "Timings for %luK%s FFT length",
+					 fftlen / 1024, plus1 ? " all-complex" : "");
+			}
+			sprintf (buf+strlen(buf), " (%d cpu%s%s, %d worker%s): ",
+				 cpus, cpus > 1 ? "s" : "",
+				 hypercpus > 1 ? " hyperthreaded" : "",
+				 workers, workers > 1 ? "s" : "");
+
+			throughput = 0.0;
+			for (i = 0; i < workers; i++) {
+				if (i) strcat (buf, ", ");
+				if (info[i].iterations) {
+					sprintf (buf+strlen(buf), "%5.2f", info[i].total_time / info[i].iterations * 1000.0);
+					throughput = throughput + info[i].iterations / info[i].total_time;
+				} else
+					strcat (buf, "INF");
+			}
+			sprintf (buf+strlen(buf), " ms.  Throughput: %5.2f iter/sec.\n", throughput);
+			writeResults (buf);
+
+/* Benchmark next FFT */
+
+			lucasDone (&lldata);
+	          }  // End impl loop
+		} // End cpus loop
+	      } // End workers loop
+	    } // End hypercpus loop
+	  }  // End fftlen loop
+	}  // End plus1 loop
+
+/* Output completion message */
+
+	OutputStr (thread_num, "Benchmark for multiple workers complete.\n");
+	return (0);
+}
+
 /* Time a few iterations of many FFT lengths */
 
 int primeBench (
@@ -7664,9 +8093,9 @@ int primeBench (
 	unsigned long i, ii, j, iterations;
 	double	best_time, total_time;
 	char	buf[512];
-	unsigned int threads;
+	unsigned int cpu, hypercpu;
 	int	all_bench, only_time_5678, time_all_complex, plus1, stop_reason;
-	int	is_a_5678;
+	int	is_a_5678, bench_hyperthreading, bench_multithreading, bench_one_or_all, bench_arch;
 	unsigned long fftlen, min_FFT_length, max_FFT_length;
 	double	timers[2];
 	struct primenetBenchmarkData pkt;
@@ -7687,11 +8116,9 @@ int primeBench (
 	getCpuDescription (buf, 1);
 	writeResults (buf);
 #ifdef X86_64
-	sprintf (buf, "Prime95 64-bit version %s, RdtscTiming=%d\n",
-		 VERSION, RDTSC_TIMING);
+	sprintf (buf, "Prime95 64-bit version %s, RdtscTiming=%d\n", VERSION, RDTSC_TIMING);
 #else
-	sprintf (buf, "Prime95 32-bit version %s, RdtscTiming=%d\n",
-		 VERSION, RDTSC_TIMING);
+	sprintf (buf, "Prime95 32-bit version %s, RdtscTiming=%d\n", VERSION, RDTSC_TIMING);
 #endif
 	writeResults (buf);
 
@@ -7700,13 +8127,13 @@ int primeBench (
 /* be confined to just one CPU core. */
 
 	sp_info.type = SET_PRIORITY_BENCHMARKING;
-	sp_info.thread_num = thread_num;
+	sp_info.thread_num = 0;
 	sp_info.aux_thread_num = 0;
 	SetPriority (&sp_info);
 
 /* Decide which FFT lengths to time */
 
-	min_FFT_length = 768;			/* Default lengths to test */
+	min_FFT_length = 1024;			/* Default lengths to test */
 	max_FFT_length = 8192;
 	time_all_complex = 0;
 	only_time_5678 = 1;
@@ -7721,6 +8148,10 @@ int primeBench (
 	only_time_5678 = IniGetInt (INI_FILE, "OnlyBench5678", only_time_5678);
 	time_all_complex = IniGetInt (INI_FILE, "BenchAllComplex", time_all_complex);
 	all_bench = IniGetInt (INI_FILE, "AllBench", 0);	/* Benchmark all implementations of each FFT length */
+	bench_hyperthreading = IniGetInt (INI_FILE, "BenchHyperthreads", 1);	/* Benchmark hyperthreading */
+	bench_multithreading = IniGetInt (INI_FILE, "BenchMultithreads", 1);	/* Benchmark multi-threaded FFTs */
+	bench_one_or_all = IniGetInt (INI_FILE, "BenchOneOrAll", 0);		/* Benchmark only 1 or all cpus */
+	bench_arch = IniGetInt (INI_FILE, "BenchArch", 0);	/* CPU architecture to benchmark */
 
 /* Keep CPU cores busy.  This should prevent "turbo boost" from kicking in. */
 /* We do this to hopefully produce more consistent benchmarks.  We don't want to report */
@@ -7733,115 +8164,130 @@ int primeBench (
 		gwthread_create (&thread_id, &bench_busy_loop, (void *) (intptr_t) i);
 	}
 
-/* Loop over all all possible multithread possibilities */
+/* Loop over all possible multithread possibilities */
 
-	for (threads = 1; threads <= NUM_CPUS * CPU_HYPERTHREADS; threads++) {
-	  if (threads > CPU_HYPERTHREADS && threads % CPU_HYPERTHREADS != 0)
-	    continue;
-	  if (threads > 1) {
-	    if (! (CPU_FLAGS & CPU_SSE2)) continue;  // Only SSE2 code supports multi-threaded FFTs
-	    if (CPU_HYPERTHREADS == 1) {
-	      sprintf (buf, "Timing FFTs using %d threads.\n", threads);
-	      OutputBoth (thread_num, buf);
-	    } else {
-	      sprintf (buf, "Timing FFTs using %d threads on %d physical CPUs.\n", threads, (threads + CPU_HYPERTHREADS - 1) / CPU_HYPERTHREADS);
+	for (cpu = 1; cpu <= NUM_CPUS; cpu++) {
+	  if (cpu > 1 && !bench_multithreading) continue;
+	  if (bench_one_or_all && cpu > 1 && cpu < NUM_CPUS) continue;
+	  for (hypercpu = 1; hypercpu <= CPU_HYPERTHREADS; hypercpu++) {
+	    if (hypercpu > 1 && !bench_hyperthreading) break;
+	    /* Only bench hyperthreading on one CPU and all CPUs */
+	    if (hypercpu > 1 && cpu != 1 && cpu != NUM_CPUS) continue;
+#ifdef OS_CANNOT_SET_AFFINITY
+	    /* If the OS cannot set affinity, then we can only bench hyperthreading on all CPUs */
+	    if (hypercpu > 1 && cpu != NUM_CPUS) continue;
+#endif
+	    /* Output a message if using multi-threaded FFT */
+	    if (cpu > 1 || hypercpu > 1) {
+	      if (! (CPU_FLAGS & CPU_SSE2)) continue;  // Only SSE2 code supports multi-threaded FFTs
+	      if (CPU_HYPERTHREADS == 1)
+	        sprintf (buf, "Timing FFTs using %d threads.\n", cpu);
+	      else
+	        sprintf (buf, "Timing FFTs using %d threads on %d physical CPU%s.\n", cpu * hypercpu, cpu, cpu > 1 ? "s" : "");
 	      OutputBoth (thread_num, buf);
 	    }
-	  }
 
-/* Set global that makes sures we are running the correct number of busy loops */
+/* Set global that makes sure we are running the correct number of busy loops */
 
-	  last_bench_cpu_num = (threads-1) / CPU_HYPERTHREADS;
+	    last_bench_cpu_num = cpu - 1;
 
 /* Loop over a variety of FFT lengths */
 
-	  for (plus1 = 0; plus1 <= 1; plus1++) {
-	    if (plus1 == 0 && time_all_complex == 2) continue;
-	    if (plus1 == 1 && time_all_complex == 0) continue;
-	    for (fftlen = min_FFT_length * 1024; fftlen <= max_FFT_length * 1024; fftlen += 10) {
-	      for (ii = 1; ; ii++) {
-		if (ii > 1 && !all_bench) break;
+	    for (plus1 = 0; plus1 <= 1; plus1++) {
+	      if (plus1 == 0 && time_all_complex == 2) continue;
+	      if (plus1 == 1 && time_all_complex == 0) continue;
+	      for (fftlen = min_FFT_length * 1024; fftlen <= max_FFT_length * 1024; fftlen += 10) {
+	        for (ii = 1; ; ii++) {
+		  if (ii > 1 && !all_bench) break;
 
 /* Initialize for this FFT length.  Compute the number of iterations to */
 /* time.  This is based on the fact that it doesn't take too long for */
 /* my 1400 MHz P4 to run 10 iterations of a 1792K FFT. */
 
-		gwinit (&lldata.gwdata);
-		gwset_sum_inputs_checking (&lldata.gwdata, SUM_INPUTS_ERRCHK);
-		if (IniGetInt (LOCALINI_FILE, "UseLargePages", 0))
+		  gwinit (&lldata.gwdata);
+		  gwset_sum_inputs_checking (&lldata.gwdata, SUM_INPUTS_ERRCHK);
+		  if (IniGetInt (LOCALINI_FILE, "UseLargePages", 0))
 			gwset_use_large_pages (&lldata.gwdata);
-		gwset_num_threads (&lldata.gwdata, threads);
-		gwset_thread_callback (&lldata.gwdata, SetAuxThreadPriority);
-		gwset_thread_callback_data (&lldata.gwdata, &sp_info);
-		gwset_minimum_fftlen (&lldata.gwdata, fftlen);
-		if (all_bench) lldata.gwdata.bench_pick_nth_fft = ii;
-		stop_reason = lucasSetup (thread_num, fftlen * 17 + 1, plus1, &lldata);
-		if (stop_reason) {
+		  gwset_num_threads (&lldata.gwdata, cpu * hypercpu);
+		  sp_info.type = (hypercpu > 1) ? SET_PRIORITY_BENCHMARKING_HYPER : SET_PRIORITY_BENCHMARKING;
+		  gwset_thread_callback (&lldata.gwdata, SetAuxThreadPriority);
+		  gwset_thread_callback_data (&lldata.gwdata, &sp_info);
+		  gwset_minimum_fftlen (&lldata.gwdata, fftlen);
+		  if (all_bench) lldata.gwdata.bench_pick_nth_fft = ii;
+		  stop_reason = lucasSetup (thread_num, fftlen * 17 + 1, plus1, &lldata);
+		  if (stop_reason) {
 			/* An error during all_bench is expected.  Continue on to next FFT length. */
-			/* An error during a norm bench is unexpected.  Sett fftlen so that we stop benching. */
+			/* An error during a norm bench is unexpected.  Set fftlen so that we stop benching. */
 			if (!all_bench) fftlen = max_FFT_length * 1024;
 			break;
-		}
-		fftlen = gwfftlen (&lldata.gwdata);
-		if (fftlen > max_FFT_length * 1024) {
+		  }
+		  fftlen = gwfftlen (&lldata.gwdata);
+		  if (fftlen > max_FFT_length * 1024) {
 			lucasDone (&lldata);
 			break;
-		}
+		  }
 
 /* Only bench FFT lengths that are a multiple of 1K */
 
-		if (fftlen & 0x3FF) {
+		  if (fftlen & 0x3FF) {
 			lucasDone (&lldata);
 			break;
-		}
+		  }
 
 /* If requested, only bench PFAs of 5,6,7,8 */
 
-		for (i = fftlen; i >= 9 && (i & 1) == 0; i >>= 1);
-		is_a_5678 = (i <= 8);
-		if (only_time_5678 && !is_a_5678) {
+		  for (i = fftlen; i >= 9 && (i & 1) == 0; i >>= 1);
+		  is_a_5678 = (i <= 8);
+		  if (only_time_5678 && !is_a_5678) {
 			lucasDone (&lldata);
 			break;
-		}
+		  }
+
+/* If requested, only benchmark one architecture */
+
+		  if (bench_arch && bench_arch != lldata.gwdata.ARCH) {
+			lucasDone (&lldata);
+			continue;
+		  }
 
 /* Output a blank line between different FFT lengths when timing all implementations */
 
-		if (all_bench && ii == 1) writeResults ("\n");
+		  if (all_bench && ii == 1) writeResults ("\n");
 
 /* Compute the number of iterations to time.  This is based on the fact that it doesn't */
 /* take too long for my 1400 MHz P4 to run 10 iterations of a 1792K FFT. */
 /* Updated: minimum number of set to 25 for AVX machines */
 
-		iterations = (unsigned long) (10 * 1792 * CPU_SPEED / 1400 / (fftlen / 1024));
-		if (iterations < 10) iterations = 10;
-		if (iterations < 25 && (CPU_FLAGS & CPU_AVX)) iterations = 25;
-		if (iterations > 100) iterations = 100;
+		  iterations = (unsigned long) (10 * 1792 * CPU_SPEED / 1400 / (fftlen / 1024));
+		  if (iterations < 10) iterations = 10;
+		  if (iterations < 25 && (CPU_FLAGS & CPU_AVX)) iterations = 25;
+		  if (iterations > 100) iterations = 100;
 
 /* Output start message for this FFT length */
 
-		sprintf (buf, "Timing %lu iterations of %luK%s FFT length%s.  ",
+		  sprintf (buf, "Timing %lu iterations of %luK%s FFT length%s.  ",
 			 iterations, fftlen / 1024,
 			 plus1 ? " all-complex" : "",
 			 gw_using_large_pages (&lldata.gwdata) ? " using large pages" : "");
-		OutputStr (thread_num, buf);
+		  OutputStr (thread_num, buf);
 
 /* Fill data space with random values. */
 
-		generateRandomData (&lldata);
+		  generateRandomData (&lldata);
 
 /* Do one squaring untimed, to prime the caches and start the */
 /* POSTFFT optimization going. */
 
-		gwsetnormroutine (&lldata.gwdata, 0, 0, 0);
-		gwstartnextfft (&lldata.gwdata, TRUE);
-		gwsquare (&lldata.gwdata, lldata.lldata);
+		  gwsetnormroutine (&lldata.gwdata, 0, 0, 0);
+		  gwstartnextfft (&lldata.gwdata, TRUE);
+		  gwsquare (&lldata.gwdata, lldata.lldata);
 
 /* Compute numbers in the lucas series */
 /* Note that for reasons unknown, we've seen cases where printing out */
 /* the times on each iteration greatly impacts P4 timings. */
 
-		total_time = 0.0;
-		for (j = 0; j < iterations; j++) {
+		  total_time = 0.0;
+		  for (j = 0; j < iterations; j++) {
 			stop_reason = stopCheck (thread_num);
 			if (stop_reason) {
 				OutputStrNoTimeStamp (thread_num, "\n");
@@ -7856,19 +8302,19 @@ int primeBench (
 			end_timer (timers, 0);
 			total_time += timers[0];
 			if (j == 0 || timers[0] < best_time) best_time = timers[0];
-		}
-		lucasDone (&lldata);
+		  }
+		  lucasDone (&lldata);
 
 /* Print the best time for this FFT length */
 
-		timers[0] = best_time;
-		strcpy (buf, "Best time: ");
-		print_timer (timers, 0, buf, TIMER_MS);
-		timers[0] = total_time / iterations;
-		strcat (buf, ", avg time: ");
-		print_timer (timers, 0, buf, TIMER_NL | TIMER_MS);
-		OutputStrNoTimeStamp (thread_num, buf);
-		if (all_bench) {
+		  timers[0] = best_time;
+		  strcpy (buf, "Best time: ");
+		  print_timer (timers, 0, buf, TIMER_MS);
+		  timers[0] = total_time / iterations;
+		  strcat (buf, ", avg time: ");
+		  print_timer (timers, 0, buf, TIMER_NL | TIMER_MS);
+		  OutputStrNoTimeStamp (thread_num, buf);
+		  if (all_bench) {
 			sprintf (buf,
 				 "Time FFTlen=%luK%s, Type=%d, Arch=%d, Pass1=%lu, Pass2=%lu, clm=%lu: ",
 				 fftlen / 1024, plus1 ? " all-complex" : "",
@@ -7881,7 +8327,7 @@ int primeBench (
 			timers[0] = total_time / iterations;
 			strcat (buf, ", ");
 			print_timer (timers, 0, buf, TIMER_NL | TIMER_MS);
-		} else {
+		  } else {
 			sprintf (buf, "Best time for %luK%s FFT length: ",
 				 fftlen / 1024, plus1 ? " all-complex" : "");
 			timers[0] = best_time;
@@ -7889,32 +8335,32 @@ int primeBench (
 			timers[0] = total_time / iterations;
 			strcat (buf, ", avg: ");
 			print_timer (timers, 0, buf, TIMER_NL | TIMER_MS);
-		}
-		writeResults (buf);
+		  }
+		  writeResults (buf);
 
 /* Accumulate best times to send to the server.  Limit the number sent since */
 /* we can only send fifty. */
 
-		if (!all_bench && is_a_5678 && !plus1 &&
-		    (threads == 1 ||
-		     (fftlen / 1024 > 768 && (threads == 2 || threads == 4))) &&
-		    pkt.num_data_points < PRIMENET_BENCH_MAX_DATAPOINTS) {
-			if (threads == 1)
+		  if (!all_bench && is_a_5678 && !plus1 && hypercpu == 1 &&
+		      (cpu == 1 || (fftlen / 1024 > 768 && (cpu == 2 || cpu == 4))) &&
+		      pkt.num_data_points < PRIMENET_BENCH_MAX_DATAPOINTS) {
+			if (cpu == 1)
 				sprintf (pkt.data_points[pkt.num_data_points].bench,
 					 "FFT%luK", fftlen / 1024);
 			else
 				sprintf (pkt.data_points[pkt.num_data_points].bench,
-					 "FFT%luK %dT", fftlen / 1024, threads);
+					 "FFT%luK %dT", fftlen / 1024, cpu);
 			pkt.data_points[pkt.num_data_points].timing = timer_value (timers, 0);
 			pkt.num_data_points++;
-		}
+		  }
 
 /* Time next FFT */
 
-	      }  // End ii implementation loop
-	    }  // End fftlen loop
-	  }  // End plus1 loop
-	} // End threads loop
+	        }  // End ii implementation loop
+	      }  // End fftlen loop
+	    }  // End plus1 loop
+	  } // End hyper loop
+	} // End cpu loop
 
 /* End the threads that are busy looping */
 
@@ -7922,11 +8368,16 @@ int primeBench (
 
 /* Now benchmark the trial factoring code */
 
-	stop_reason = factorBench (thread_num, &pkt);
-	if (stop_reason) return (stop_reason);
-	OutputStr (thread_num, "Benchmark complete.\n");
+	if (IniGetInt (INI_FILE, "BenchTrialFactoring", 0)) {
+		stop_reason = factorBench (thread_num, &pkt);
+		if (stop_reason) return (stop_reason);
+	}
 
-/* Finally, send the benchmark data to the server. */
+/* Single worker benchmark complete */
+
+	OutputStr (thread_num, "Benchmark for single worker complete.\n");
+
+/* Send the benchmark data to the server. */
 
 //bug - send bench data to server. (checkbox to allow sending data to server?)
 //only do this if guid is registered? Or should we auto-register computer
@@ -7934,6 +8385,17 @@ int primeBench (
 
 	if (!all_bench)
 		spoolMessage (PRIMENET_BENCHMARK_DATA, &pkt);
+
+/* Now benchmark running multiple workers.  This will measure the effect of memory bandwidth */
+/* on LL testing. */
+
+	if (NUM_CPUS > 1 && IniGetInt (INI_FILE, "BenchMultipleWorkers", 1)) {
+		OutputBoth (thread_num, "\n");
+		stop_reason = primeBenchMultipleWorkers (thread_num);
+		if (stop_reason) return (stop_reason);
+		OutputBoth (thread_num, "\n");
+	}
+
 	return (0);
 }
 
@@ -8023,6 +8485,23 @@ err:	_close (fd);
 	return (FALSE);
 }
 
+/* Output the good news of a new probable prime to the screen in an infinite loop */
+
+void good_news_prp (void *arg)
+{
+	char	buf[800];
+	int	i = 0;
+
+	title (MAIN_THREAD_NUM, "New Probable Prime!!!");
+	sprintf (buf, "New Probable Prime!!!!  %s is a probable prime!\n", (char *) arg);
+	while (WORKER_THREADS_ACTIVE && ! WORKER_THREADS_STOPPING) {
+		if ((i++ & 127) == 0) OutputStr (MAIN_THREAD_NUM, buf);
+		flashWindowAndBeep ();
+		Sleep (50);
+	}
+	free (arg);
+}
+
 /* Do a PRP test */
 
 int prp (
@@ -8051,6 +8530,7 @@ int prp (
 	double	last_suminp = 0.0;
 	double	last_sumout = 0.0;
 	double	last_maxerr = 0.0;
+	double	output_frequency, output_title_frequency;
 	char	string_rep[80];
 	int	string_rep_truncated;
 	int	error_count_messages;
@@ -8244,6 +8724,7 @@ begin:	gwinit (&gwdata);
 	strcpy (w->stage, "PRP");
 	inverse_Nlen = 1.0 / (double) (Nlen - 1);
 	w->pct_complete = (double) counter * inverse_Nlen;
+	calc_output_frequencies (&gwdata, &output_frequency, &output_title_frequency);
 
 /* If we are near the maximum exponent this fft length can test, then we */
 /* will error check all iterations */
@@ -8339,6 +8820,16 @@ OutputStr (thread_num, "Iteration failed.\n");
 		timers[0] += timers[1];
 		iters++;
 
+/* Update min/max round-off error */
+
+		if (echk) {
+			if (counter > 30 &&
+			    gw_get_maxerr (&gwdata) < reallyminerr)
+				reallyminerr = gw_get_maxerr (&gwdata);
+			if (gw_get_maxerr (&gwdata) > reallymaxerr)
+				reallymaxerr = gw_get_maxerr (&gwdata);
+		}
+
 /* If the sum of the output values is an error (such as infinity) */
 /* then raise an error. */
 
@@ -8405,56 +8896,69 @@ OutputStr (thread_num, "Iteration failed.\n");
 			}
 		}
 
-/* Update counter, percentage complete, and maximum round-off error */
+/* Update counter, percentage complete */
 
 		counter++;
 		w->pct_complete = (double) counter * inverse_Nlen;
-		if (ERRCHK) {
-			if (counter > 30 &&
-			    gw_get_maxerr (&gwdata) < reallyminerr)
-				reallyminerr = gw_get_maxerr (&gwdata);
-			if (gw_get_maxerr (&gwdata) > reallymaxerr)
-				reallymaxerr = gw_get_maxerr (&gwdata);
+
+/* Output the title every so often */
+
+		if (counter % (int) (ITER_OUTPUT * output_title_frequency) == 0 || first_iter_msg) {
+			char	fmt_mask[80];
+			sprintf (fmt_mask, "%%.%df%%%% of %%s", PRECISION);
+			sprintf (buf, fmt_mask, trunc_percent (w->pct_complete), string_rep);
+			title (thread_num, buf);
 		}
 
 /* Print a message every so often */
 
-		if (counter % ITER_OUTPUT == 0 || first_iter_msg) {
+		if (counter % (int) (ITER_OUTPUT * output_frequency) == 0 || first_iter_msg) {
 			char	fmt_mask[80];
-			double	pct;
-			pct = trunc_percent (w->pct_complete);
-			sprintf (fmt_mask, "%%.%df%%%% of %%s", PRECISION);
-			sprintf (buf, fmt_mask, pct, string_rep);
-			title (thread_num, buf);
-			sprintf (fmt_mask,
-				 "Iteration: %%ld / %%ld [%%.%df%%%%]",
-				 PRECISION);
-			sprintf (buf, fmt_mask, counter, Nlen-1, pct);
+			sprintf (fmt_mask, "Iteration: %%ld / %%ld [%%.%df%%%%]", PRECISION);
+			sprintf (buf, fmt_mask, counter, Nlen-1, trunc_percent (w->pct_complete));
 			/* Append a short form total errors message */
 			if (error_count_messages == 1)
 				make_error_count_message (error_count, error_count_messages,
 							  buf + strlen (buf),
 							  (int) (sizeof (buf) - strlen (buf)));
-			/* Append optional roundoff message */
-			if (ERRCHK && counter > 30) {
-				sprintf (buf+strlen(buf),
-					 ".  Round off: %10.10f to %10.10f",
-					 reallyminerr, reallymaxerr);
-			}
+			/* Truncate first message */
 			if (first_iter_msg) {
 				strcat (buf, ".\n");
 				clear_timer (timers, 0);
-			} else if (CUMULATIVE_TIMING) {
-				strcat (buf, ".  Total time: ");
-				print_timer (timers, 0, buf, TIMER_NL);
-			} else {
-				strcat (buf, ".  Per iteration time: ");
-				divide_timer (timers, 0, iters);
-				print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+				first_iter_msg = FALSE;
+			}
+			/* In v28.5 and later, format a consise message including the ETA */
+			else if (!CLASSIC_OUTPUT) {
+				double speed;
+				/* Append roundoff error */
+				if ((OUTPUT_ROUNDOFF || ERRCHK) && reallymaxerr >= 0.001)
+					sprintf (buf+strlen(buf), ", roundoff: %5.3f", reallymaxerr);
+				/* Append ms/iter */
+				speed = timer_value (timers, 0) / (double) iters;
+				sprintf (buf+strlen(buf), ", ms/iter: %6.3f", speed * 1000.0);
+				clear_timer (timers, 0);
 				iters = 0;
+				/* Append ETA */
+				formatETA ((Nlen - 2 - counter) * speed, buf+strlen(buf));
+				strcat (buf, "\n");
+			}
+			/* Format the classic (pre-v28.5) message */
+			else {
+				/* Append optional roundoff message */
+				if (ERRCHK && counter > 30) {
+					sprintf (buf+strlen(buf), ".  Round off: %10.10f to %10.10f", reallyminerr, reallymaxerr);
+				}
+				if (CUMULATIVE_TIMING) {
+					strcat (buf, ".  Total time: ");
+					print_timer (timers, 0, buf, TIMER_NL);
+				} else {
+					strcat (buf, ".  Per iteration time: ");
+					divide_timer (timers, 0, iters);
+					print_timer (timers, 0, buf, TIMER_NL | TIMER_CLR);
+					iters = 0;
+				}
 			}
 			OutputStr (thread_num, buf);
-			first_iter_msg = FALSE;
 
 /* Output a verbose message showing the error counts.  This way a user is likely to */
 /* notice a problem without reading the results.txt file. */
@@ -8618,6 +9122,16 @@ pushg(&gwdata.gdata, 2);}
 /* Delete the continuation files. */
 
 	unlinkSaveFiles (filename);
+
+/* Output good news to the screen in an infinite loop */
+
+	if (isProbablePrime && !SILENT_VICTORY_PRP) {
+		gwthread thread_handle;
+		char	*arg;
+		arg = (char *) malloc (strlen (string_rep) + 1);
+		strcpy (arg, string_rep);
+		gwthread_create (&thread_handle, &good_news_prp, (void *) arg);
+	}
 
 /* Return work unit completed stop reason */
 

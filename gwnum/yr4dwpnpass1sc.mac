@@ -26458,7 +26458,6 @@ c9b:	yr8_rsc_sg8cl_eight_complex_unfft8 rbp, 64, blkdst, 2*blkdst, 4*blkdst, rsi
 	start_timer 17
 	bump	rdi, 2*4*clm*64			;; Sin/cos ptr
 	lea	rdx, [rdi-2*4*clm*32]		;; Weights ptr
-	set_data_prefetch_ptrs			;; Init prefetching pointers
 	yloop_init 8*4*clm			;; 8*4*clm iterations
 	yloop_set_clm_prefetch YSINGLE		;; Prefetch 8 blocks
 	yr4_b4cl_wpn4_four_complex_djbunfft_preload

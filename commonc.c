@@ -41,6 +41,8 @@ unsigned int THREADS_PER_TEST[MAX_NUM_WORKER_THREADS] = {1};
 				/* computations. */
 int	MANUAL_COMM = 0;
 unsigned int volatile CPU_HOURS = 0;
+int	CLASSIC_OUTPUT = 0;
+int	OUTPUT_ROUNDOFF = 0;
 unsigned long volatile ITER_OUTPUT = 0;
 unsigned long volatile ITER_OUTPUT_RES = 999999999;
 unsigned long volatile DISK_WRITE_TIME = 30;
@@ -49,8 +51,10 @@ unsigned int NETWORK_RETRY_TIME = 70;
 double	DAYS_BETWEEN_CHECKINS = 1.0;
 int	NUM_BACKUP_FILES = 3;
 int	SILENT_VICTORY = 0;
+int	SILENT_VICTORY_PRP = 1;
 int	RUN_ON_BATTERY = 1;
 int	BATTERY_PERCENT = 0;
+int	DEFEAT_POWER_SAVE = 1;
 int	TRAY_ICON = TRUE;
 int	HIDE_ICON = FALSE;
 int	MERGE_WINDOWS = 0;		/* Flags indicating which MDI */
@@ -456,8 +460,7 @@ void getCpuDescription (
 
 	sprintf (buf, "%s\nCPU speed: %.2f MHz", CPU_BRAND, UNOFFICIAL_CPU_SPEED);
 	if (NUM_CPUS > 1 && CPU_HYPERTHREADS > 1)
-		sprintf (buf + strlen (buf),
-			 ", %lu hyperthreaded cores", NUM_CPUS);
+		sprintf (buf + strlen (buf), ", %lu hyperthreaded cores", NUM_CPUS);
 	else if (NUM_CPUS > 1)
 		sprintf (buf + strlen (buf), ", %lu cores", NUM_CPUS);
 	else if (CPU_HYPERTHREADS > 1)
@@ -877,6 +880,8 @@ int readIniFiles (void)
 	PRECISION = (unsigned int) IniGetInt (INI_FILE, "PercentPrecision", 2);
 	if (PRECISION > 6) PRECISION = 6;
 
+	CLASSIC_OUTPUT = IniGetInt (INI_FILE, "ClassicOutput", 0);
+	OUTPUT_ROUNDOFF = IniGetInt (INI_FILE, "OutputRoundoff", 0);
 	ITER_OUTPUT = IniGetInt (INI_FILE, "OutputIterations", 10000);
 	if (ITER_OUTPUT > 999999999) ITER_OUTPUT = 999999999;
 	if (ITER_OUTPUT <= 0) ITER_OUTPUT = 1;
@@ -898,8 +903,10 @@ int readIniFiles (void)
 	if (DAYS_BETWEEN_CHECKINS > 7.0) DAYS_BETWEEN_CHECKINS = 7.0;
 	if (DAYS_BETWEEN_CHECKINS < 0.04) DAYS_BETWEEN_CHECKINS = 0.04;
 	SILENT_VICTORY = (int) IniGetInt (INI_FILE, "SilentVictory", 0);
+	SILENT_VICTORY_PRP = (int) IniGetInt (INI_FILE, "SilentVictoryPRP", 1);
 	RUN_ON_BATTERY = (int) IniGetInt (LOCALINI_FILE, "RunOnBattery", 1);
 	BATTERY_PERCENT = (int) IniGetInt (INI_FILE, "BatteryPercent", 0);
+	DEFEAT_POWER_SAVE = (int) IniGetInt (LOCALINI_FILE, "DefeatPowerSave", 1);
 
 	STRESS_TESTER = (int) IniGetInt (INI_FILE, "StressTester", 99);
 	temp = (int) IniGetInt (INI_FILE, "ErrorCheck", 0);
@@ -2527,7 +2534,7 @@ int readWorkToDoFile (void)
 	FILE	*fd;
 	unsigned int tnum, i, linenum;
 	int	rc, mangled;
-	char	line[2048], newFileName[80];
+	char	line[16384], newFileName[80];
 
 /* Grab the lock so that comm thread cannot try to add work units while */
 /* file is being read in. */
@@ -2965,13 +2972,16 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 		goto illegal_line;
 	    }
 
-/* Trim trailing non-digit characters from known factors list */
+/* Trim trailing non-digit characters from known factors list (this should be the closing double quote) */
+/* Turn all non-digit characters into commas (they should be anyway) */
 
 	    if (w->known_factors != NULL) {
 		for (i = (unsigned int) strlen (w->known_factors);
 		     i > 0 && !isdigit (w->known_factors[i-1]);
 		     i--);
 		w->known_factors[i] = 0;
+		for (i = 0; i < (unsigned int) strlen (w->known_factors); i++)
+			if (!isdigit (w->known_factors[i])) w->known_factors[i] = ',';
 	    }
 
 /* Make sure this line of work from the file makes sense. The exponent */
@@ -4984,7 +4994,8 @@ static	time_t	last_time = 0;
 		if (buf != NULL) {
 			_lseek (fd, 100000L, SEEK_SET);
 			strcpy (buf, "Prior log file entries removed.\n");
-			for (p = buf + strlen (buf); (bytes_read = _read (fd, p, 50000)) != 0; p += bytes_read);
+			for (p = buf + strlen (buf); (bytes_read = _read (fd, p, 50000)) != 0; p += bytes_read)
+				/*do nothing*/;
 		       	_close (fd);
 			fd = _open (LOGFILE, _O_TEXT | _O_RDWR | _O_TRUNC, CREATE_FILE_ACCESS);
 			if (fd < 0) {

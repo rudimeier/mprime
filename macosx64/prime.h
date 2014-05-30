@@ -1,4 +1,4 @@
-/* Copyright 1995-2010 Mersenne Research, Inc. */
+/* Copyright 1995-2014 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -104,6 +104,7 @@ void linuxContinue (char *, int, int);
 void Sleep (long);
 void test_user(void);
 void test_welcome(void);
+void test_status(void);
 
 /* Routine definitions */
 

@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2013 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved
 +---------------------------------------------------------------------*/
 
 //#define SERVER_TESTING
@@ -42,8 +42,9 @@ void checkPauseListCallback (void);
 
 #define SET_PRIORITY_NORMAL_WORK	1
 #define SET_PRIORITY_BENCHMARKING	2
-#define SET_PRIORITY_TORTURE		3
-#define SET_PRIORITY_QA			4
+#define SET_PRIORITY_BENCHMARKING_HYPER	3
+#define SET_PRIORITY_TORTURE		4
+#define SET_PRIORITY_QA			5
 struct PriorityInfo {
  	int	type;		/* Type defined above */
 	int	thread_num;	/* Worker thread number */

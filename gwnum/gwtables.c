@@ -1012,7 +1012,7 @@ double *yr4dwpn_build_pass1_table (
 				inv_weights = table;
 				table += N / pass1_increment * gwdata->PASS1_CACHE_LINES;
 
-/* Output the weights after the sin/cos data, used by the yr4_4cl4_wpn_four_complex_djbfft macro. */
+/* Output the weights before the sin/cos data, used by the yr4_4cl_wpn4_four_complex_djbfft macro. */
 /* We apply the two-to-phi weight for the upper AVX words in the group multipliers.  There is a */
 /* reason for doing it there rather than here (it reduces the number of valid fudge factor combinations */
 /* for each AVX word from 16 to 5). */

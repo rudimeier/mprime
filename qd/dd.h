@@ -182,8 +182,7 @@ public:
   static dd_real rand(void);
 
   /* Polynomial Solver */
-  friend dd_real polyroot(const dd_real *c, int n, 
-			  const dd_real &x0, double thresh = 1.0e-30);
+  friend dd_real polyroot(const dd_real *c, int n, const dd_real &x0, double thresh);
   friend dd_real polyeval(const dd_real *c, int n, const dd_real &x);
 
   /* Cast */

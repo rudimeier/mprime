@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/25/09.
-//  Copyright 2009 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2014 Mersenne Research, Inc. All rights reserved.
 //
 
 #import <Cocoa/Cocoa.h>
@@ -21,6 +21,7 @@
 	int	numberOfBackupFiles;
 	int	makeNoise;
 	int	runOnBattery;
+        int     defeatPowerSave;
 }
 
 @property(readwrite, assign) int iterationsOutput;
@@ -35,6 +36,7 @@
 @property(readwrite, assign) int numberOfBackupFiles;
 @property(readwrite, assign) int makeNoise;
 @property(readwrite, assign) int runOnBattery;
+@property(readwrite, assign) int defeatPowerSave;
 
 - (void)reInit;
 
