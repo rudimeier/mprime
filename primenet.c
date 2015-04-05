@@ -9,7 +9,7 @@
 // THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
 // PARTICULAR PURPOSE.
 //
-// Copyright (c) 1997-2010 Mersenne Research, Inc. All Rights Reserved.
+// Copyright (c) 1997-2015 Mersenne Research, Inc. All Rights Reserved.
 //
 //  MODULE:   primenet.c
 //
@@ -66,11 +66,11 @@ typedef int SOCKET;
 unsigned short bswap(unsigned short);
 #endif
 
-char iniSection[] = "PrimeNet";
-char hx[] = "0123456789ABCDEF";
-char szSITEstr[] = "v5.mersenne.org";	/* PrimeNet Server's home domain */
-#define nHostPort 80			/* Internet PrimeNet port */
-char szFILE[] = "/v5server/?";		/* HTTP GET string */
+static const char iniSection[] = "PrimeNet";
+static const char hx[] = "0123456789ABCDEF";
+static const char szSITEstr[] = "v5.mersenne.org";	/* PrimeNet Server's home domain */
+#define nHostPort 80					/* Internet PrimeNet port */
+static const char szFILE[] = "/v5server/?";		/* HTTP GET string */
 
 #define PROXY_HOST_BUFSIZE	120
 #define PROXY_USER_BUFSIZE	50
@@ -137,7 +137,7 @@ void unscramble (char *s)
 
 /* base64 encode for basic proxy passwords */
 
-static int encode[] = {
+static const char encode[] = {
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
   'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
   'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
@@ -154,11 +154,12 @@ void encode64 (
 	char	*data)
 {
 	char	*s, *end, *buf;
-	unsigned int x, length;
+	unsigned int x;
+	size_t	length;
 	int	i, j;
 	char	temp[400];
 
-	length = (unsigned int) strlen (data);
+	length = strlen (data);
 	if (length == 0) return;
 
 	end = data + length - 3;

@@ -45,13 +45,13 @@ protected:
 	HICON	icon;			// Icon to display
 
 public:
-	void base_title (char *);
-	void title (char *);
+	void base_title (const char *);
+	void title (const char *);
 	void ChangeIcon (int);
 	void getCharSize ();
 	void position (int, int, BOOL);
 	void LineFeed ();
-	void RealOutputStr (char *);
+	void RealOutputStr (const char *);
 
 // Generated message map functions
 protected:

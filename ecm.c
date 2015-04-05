@@ -6167,27 +6167,28 @@ void guess_pminus1_bounds (
 	for (h = how_far_factored; ; ) {
 		double	prob1, prob2;
 
-/* If temp < 1.0, then there are no factor to find in this bit level */
+/* If kk < 1.0, then there are no factors to find in this bit level */
 
-		if (logtemp > 0.0) {
+		if (logkk > 0.0) {
 
 /* See how many smooth k's we should find using B1 */
 /* Using Dickman's function (see Knuth pg 382-383) we want k^a <= B1 */
 
 			prob1 = F (logB1 / logkk);
 
-/* See how many smooth k's we should find using B2 */
+/* See how many smooth k's we should find using B2 (if temp < 1.0 then we should find them all) */
 /* Adjust this slightly to eliminate k's that have two primes > B1 and < B2 */
 /* Do this by assuming the largest factor is the average of B1 and B2 */
 /* and the remaining cofactor is B1 smooth */
 
-			prob2 = prob1 + (F (logB2 / logkk) - prob1) *
-				        (F (logB1 / logtemp) / F (logB2 / logtemp));
+			if (logtemp <= 0.0) prob2 = 1.0;
+			else prob2 = prob1 + (F (logB2 / logkk) - prob1) *
+					     (F (logB1 / logtemp) / F (logB2 / logtemp));
 			if (prob2 < 0.0001) break;
 
 /* Add this data in to the total chance of finding a factor */
 
-			prob += prob2 / (h + 0.5);
+			prob += (1.0 - prob) * prob2 / (h + 0.5);
 		}
 
 /* Move to next bit level */
@@ -6290,27 +6291,28 @@ double guess_pminus1_probability (
 	for (h = w->sieve_depth; ; ) {
 		double	prob1, prob2;
 
-/* If temp < 1.0, then there are no factor to find in this bit level */
+/* If kk < 1.0, then there are no factors to find in this bit level */
 
-		if (logtemp > 0.0) {
+		if (logkk > 0.0) {
 
 /* See how many smooth k's we should find using B1 */
 /* Using Dickman's function (see Knuth pg 382-383) we want k^a <= B1 */
 
 			prob1 = F (logB1 / logkk);
 
-/* See how many smooth k's we should find using B2 */
+/* See how many smooth k's we should find using B2 (if temp < 1.0 then we should find them all) */
 /* Adjust this slightly to eliminate k's that have two primes > B1 and < B2 */
 /* Do this by assuming the largest factor is the average of B1 and B2 */
 /* and the remaining cofactor is B1 smooth */
 
-			prob2 = prob1 + (F (logB2 / logkk) - prob1) *
-				        (F (logB1 / logtemp) / F (logB2 / logtemp));
+			if (logtemp <= 0.0) prob2 = 1.0;
+			else prob2 = prob1 + (F (logB2 / logkk) - prob1) *
+					     (F (logB1 / logtemp) / F (logB2 / logtemp));
 			if (prob2 < 0.0001) break;
 
 /* Add this data in to the total chance of finding a factor */
 
-			prob += prob2 / (h + 0.5);
+			prob += (1.0 - prob) * prob2 / (h + 0.5);
 		}
 
 /* Move to next bit level */

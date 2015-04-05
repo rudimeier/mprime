@@ -36,7 +36,7 @@ security:
 	[ ! -e ../secure5.c ] && touch ../secure5.c || true
 
 clean:
-	rm -f $(EXE) $(EXE2) $(LINUXOBJS) $(FACTOROBJ)
+	rm -f $(EXE) $(EXE2) $(LINUXOBJS)
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

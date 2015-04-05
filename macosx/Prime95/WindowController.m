@@ -218,7 +218,7 @@ void destroy_window (
 
 void base_title (
 	int	thread_num,
-	char	*str)
+	const char *str)
 {
 	NSAutoreleasePool *pool;
 	WindowController *view;
@@ -264,7 +264,7 @@ void base_title (
 
 void title (
 	int	thread_num,
-	char	*str)
+	const char *str)
 {
 	NSAutoreleasePool *pool;
 	WindowController *view;
@@ -317,7 +317,7 @@ void flashWindowAndBeep (void)
 	printf ("\007");
 }
 
-void RealOutputStr (int thread_num, char *str)
+void RealOutputStr (int thread_num, const char *str)
 {
 static	int	partial_line_output[MAX_VIEWS] = {FALSE};
 	NSAutoreleasePool *pool;

@@ -38,6 +38,8 @@
 #include "cpuid.h"
 #include "gwthread.h"
 
+#define safe_strcpy(d,s)	memmove (d, s, strlen (s) + 1)
+
 /* Global variables describing the CPU we are running on */
 
 char	CPU_BRAND[49] = "";
@@ -457,7 +459,7 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			memcpy (CPU_BRAND+40, &reg.ECX, 4);
 			memcpy (CPU_BRAND+44, &reg.EDX, 4);
 			CPU_BRAND[48] = 0;
-			while (CPU_BRAND[0] == ' ') strcpy (CPU_BRAND, CPU_BRAND+1);
+			while (CPU_BRAND[0] == ' ') safe_strcpy (CPU_BRAND, CPU_BRAND+1);
 		}
 
 /* If we got the brand string, or this is a very old CPU that perhaps */
@@ -508,11 +510,11 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE;
 		else if ((family == 6 && model == 15) ||
 			 (family == 6 && model == 22) ||
-			 (family == 6 && model == 23))
+			 (family == 6 && model == 23) ||
+			 (family == 6 && model == 29))			// Xeon MP (based on Core 2 technology)
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE_2;
 		else if ((family == 6 && model == 26) ||		// Core i7
 			 (family == 6 && model == 30) ||		// Core i5/i7
-			 (family == 6 && model == 29) ||		// Xeon MP (based on Core i7 technology)
 			 (family == 6 && model == 46) ||		// Xeon MP (based on Core i7 technology)
 			 (family == 6 && model == 47) ||		// Xeon MP (based on Sandy Bridge technology)
 			 (family == 6 && model == 44) ||		// Core i7 (based on Sandy Bridge technology)
@@ -520,7 +522,9 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			 (family == 6 && model == 42) ||		// Core i7 (based on Sandy Bridge technology)
 			 (family == 6 && model == 45) ||		// Core i7 (based on Sandy Bridge-E technology)
 			 (family == 6 && model == 58) ||		// Core i7 (based on Ivy Bridge technology)
+			 (family == 6 && model == 62) ||		// Core i7 (based on Ivy Bridge-E technology)
 			 (family == 6 && model == 60) ||		// Core i7 (based on Haswell technology)
+			 (family == 6 && model == 69) ||		// Core i7, mobile (based on Haswell technology)
 			 (family == 6 && model == 70))			// Core i7 (based on Haswell technology)
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE_I7;
 		else if (family == 6 && model == 28)

@@ -7,7 +7,7 @@
  *  Massive rewrite by G. Woltman for 32-bit support
  *
  *  c. 1997,1998 Perfectly Scientific, Inc.
- *  c. 1998-2013 Mersenne Research, Inc.
+ *  c. 1998-2015 Mersenne Research, Inc.
  *  All Rights Reserved.
  *
  **************************************************************/
@@ -209,12 +209,24 @@ void dbltog (		/* The giant g becomes set to the double i. */
 }
 
 void ctog (		/* The giant g is set to string s. */
-	char	*s,
+	const char *s,
 	giant	g)
 {
+	uint32_t multiplier = 1;
+	uint32_t addin = 0;
 	for (g->sign = 0; isdigit (*s); s++) {
-		ulmulg (10, g);
-		uladdg (*s - '0', g);
+		multiplier = multiplier * 10;
+		addin = addin * 10 + (*s - '0');
+		if (multiplier == 1000000000) {
+			ulmulg (multiplier, g);
+			uladdg (addin, g);
+			multiplier = 1;
+			addin = 0;
+		}
+	}
+	if (multiplier != 1) {
+		ulmulg (multiplier, g);
+		uladdg (addin, g);
 	}
 }
 

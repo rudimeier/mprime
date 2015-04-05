@@ -1,9 +1,9 @@
-/* Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved */
+/* Copyright 1995-2015 Mersenne Research, Inc.  All rights reserved */
 
 /* Constants */
 
-#define VERSION		"28.5"
-#define BUILD_NUM	"2"
+#define VERSION		"28.6"
+#define BUILD_NUM	"1"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
 /* Linux (mprime)  #2 */
@@ -177,7 +177,7 @@ extern unsigned int MODEM_RETRY_TIME;	/* How often to try sending msgs */
 					/* to primenet server whem modem off */
 extern unsigned int NETWORK_RETRY_TIME;	/* How often to try sending msgs */
 					/* to primenet server */
-extern double DAYS_BETWEEN_CHECKINS;	/* Days between sending updated */
+extern float DAYS_BETWEEN_CHECKINS;	/* Days between sending updated */
 					/* completion dates to the server */
 extern int NUM_BACKUP_FILES;		/* Between 1 and 3 backup files (or 99 */
 					/* for overwrite) */
@@ -258,12 +258,14 @@ long IniSectionGetInt (const char *, const char *, const char *, long);
 long IniSectionGetTimedInt (const char *, const char *, const char *, long, unsigned int *);
 void IniSectionWriteString (const char *, const char *, const char *, const char *);
 void IniSectionWriteInt (const char *, const char *, const char *, long);
+void IniSectionWriteFloat (const char *, const char *, const char *, float);
 void IniGetString (const char *, const char *, char *, unsigned int, const char *);
 void IniGetTimedString (const char *, const char *, char *, unsigned int, const char *, unsigned int *);
 long IniGetInt (const char *, const char *, long);
 long IniGetTimedInt (const char *, const char *, long, unsigned int *);
 void IniWriteString (const char *, const char *, const char *);
 void IniWriteInt (const char *, const char *, long);
+void IniWriteFloat (const char *, const char *, float);
 void IniFileReread (const char *);
 void processTimedIniFile (const char *);
 
@@ -290,18 +292,18 @@ int PTOHasOptionChanged (char *shadow_keyword, unsigned int *array, int tnum);
 void create_window (int thread_num);
 void destroy_window (int thread_num);
 void TileViews (void);
-void base_title (int, char *);
-void title (int, char *);
+void base_title (int, const char *);
+void title (int, const char *);
 #define	WORKING_ICON	0
 #define	IDLE_ICON	1
 void ChangeIcon (int, int);
 void BlinkIcon (int, int);
-EXTERNC void OutputBoth (int, char *);
-void OutputStr (int, char *);
-void OutputStrNoTimeStamp (int thread_num, char *buf);
-void RealOutputStr (int, char *);
-void OutputSomewhere (int, char *);
-void LogMsg (char *);
+EXTERNC void OutputBoth (int, const char *);
+void OutputStr (int, const char *);
+void OutputStrNoTimeStamp (int, const char *);
+void RealOutputStr (int, const char *);
+void OutputSomewhere (int, const char *);
+void LogMsg (const char *);
 int OutOfMemory (int);
 
 /* Structures and definitions dealing with the worktodo.ini file */
@@ -409,7 +411,7 @@ int read_checksum (int fd, unsigned long *sum);
 int write_checksum (int fd, unsigned long sum);
 
 void formatMsgForResultsFile (char *, struct work_unit *);
-int writeResults (char	*);
+int writeResults (const char *);
 
 /* Routines called by common routines */
 

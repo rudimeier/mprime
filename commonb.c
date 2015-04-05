@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2015 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
@@ -19,22 +19,22 @@
 
 /* Globals for error messages */
 
-char ERRMSG0[] = "Iteration: %ld/%ld, %s";
-char ERRMSG1A[] = "ERROR: ILLEGAL SUMOUT\n";
-char ERRMSG1B[] = "ERROR: SUM(INPUTS) != SUM(OUTPUTS), %.16g != %.16g\n";
-char ERRMSG1C[] = "Possible error: round off (%.10g) > 0.40\n";
-char ERRMSG1D[] = "ERROR: Shift counter corrupt.\n";
-char ERRMSG1E[] = "ERROR: Illegal double encountered.\n";
-char ERRMSG1F[] = "ERROR: FFT data has been zeroed!\n";
-char ERRMSG2[] = "Possible hardware failure, consult the readme.txt file.\n";
-char ERRMSG3[] = "Continuing from last save file.\n";
-char ERRMSG4[] = "Waiting five minutes before restarting.\n";
-char ERRMSG5[] = "For added safety, redoing iteration using a slower, more reliable method.\n";
-char ERROK[] = "Disregard last error.  Result is reproducible and thus not a hardware problem.\n";
-char READFILEERR[] = "Error reading intermediate file: %s\n";
-char WRITEFILEERR[] = "Error writing intermediate file: %s\n";
-char ALTSAVE_MSG[] = "Trying backup intermediate file: %s\n";
-char ALLSAVEBAD_MSG[] = "All intermediate files bad.  Temporarily abandoning work unit.\n";
+static const char ERRMSG0[] = "Iteration: %ld/%ld, %s";
+static const char ERRMSG1A[] = "ERROR: ILLEGAL SUMOUT\n";
+static const char ERRMSG1B[] = "ERROR: SUM(INPUTS) != SUM(OUTPUTS), %.16g != %.16g\n";
+static const char ERRMSG1C[] = "Possible error: round off (%.10g) > 0.40\n";
+static const char ERRMSG1D[] = "ERROR: Shift counter corrupt.\n";
+static const char ERRMSG1E[] = "ERROR: Illegal double encountered.\n";
+static const char ERRMSG1F[] = "ERROR: FFT data has been zeroed!\n";
+static const char ERRMSG2[] = "Possible hardware failure, consult readme.txt file.\n";
+static const char ERRMSG3[] = "Continuing from last save file.\n";
+static const char ERRMSG4[] = "Waiting five minutes before restarting.\n";
+static const char ERRMSG5[] = "For added safety, redoing iteration using a slower, more reliable method.\n";
+static const char ERROK[] = "Disregard last error.  Result is reproducible and thus not a hardware problem.\n";
+static const char READFILEERR[] = "Error reading intermediate file: %s\n";
+static const char WRITEFILEERR[] = "Error writing intermediate file: %s\n";
+static const char ALTSAVE_MSG[] = "Trying backup intermediate file: %s\n";
+static const char ALLSAVEBAD_MSG[] = "All intermediate files bad.  Temporarily abandoning work unit.\n";
 
 /* PauseWhileRunning globals */
 
@@ -550,7 +550,7 @@ void generate_affinity_scramble_thread (void *arg)
 			if (diff == 99999) {
 				AFFINITY_SCRAMBLE_STATE = 0;
 			} else {
-				OutputStr (MAIN_THREAD_NUM, "Enough information obtained to make a reasonable guess.\n");
+				OutputStr (MAIN_THREAD_NUM, "Have enough information to make a reasonable guess.\n");
 			}
 		}
 		if (AFFINITY_SCRAMBLE_STATE == 0 && scramble[0] == '*') {
@@ -578,7 +578,7 @@ void generate_affinity_scramble_thread (void *arg)
 
 no_auto_detect:
 	if (scramble[0] != '*') {
-		OutputStr (MAIN_THREAD_NUM, "Using AffinityScramble2 settings to set affinity mask.\n");
+		OutputStr (MAIN_THREAD_NUM, "Using AffinityScramble2 setting to set affinity mask.\n");
 		AFFINITY_SCRAMBLE_STATE = 2;
 		for (i = 0; i < MAX_NUM_WORKER_THREADS && i < strlen (scramble); i++) {
 			if (scramble[i] >= '0' && scramble[i] <= '9')
@@ -1063,7 +1063,7 @@ void stop_worker_for_priority_work (
 	int	thread_num)
 {
 	if (WORKER_THREADS_ACTIVE && ! STOP_FOR_PRIORITY_WORK[thread_num]) {
-		OutputStr (thread_num, "Restarting worker to do factoring prior to an LL test.\n");
+		OutputStr (thread_num, "Restarting worker to do factoring prior to LL test.\n");
 		STOP_FOR_PRIORITY_WORK[thread_num] = 1;
 	}
 }
@@ -2737,12 +2737,14 @@ void calc_output_frequencies (
 		else if (temp < 2.75) temp = 2.5;
 		else temp = floor (temp + 0.5);
 		*output_frequency = temp * pow (10.0, exp);
+		if (*output_frequency < 1.0) *output_frequency = 1.0;
 	}
 
 	/* Calculate the title frequency as a multiple of the output frequency */
 	title_freq = (int) IniGetInt (INI_FILE, "TitleOutputFrequency", 1);
 	if (title_freq < 1) title_freq = 1;
 	*output_title_frequency = *output_frequency / (double) title_freq;
+	if (*output_title_frequency < 1.0) *output_title_frequency = 1.0;
 }
 
 /* Truncate a percentage to the requested number of digits. */
@@ -3884,7 +3886,10 @@ int factorSetup (
 	asm_data->EXPONENT = p;
 	asm_data->cpu_flags = CPU_FLAGS;
 #ifdef X86_64
-	if (!IniGetInt (LOCALINI_FILE, "FactorUsingSSE2", 0)) asm_data->cpu_flags &= ~CPU_SSE2;
+	if (CPU_FLAGS & CPU_AVX2);		/* Use AVX2 factoring code */
+	else {
+		if (!IniGetInt (LOCALINI_FILE, "FactorUsingSSE2", 0)) asm_data->cpu_flags &= ~CPU_SSE2;
+	}
 #else
 	if (!IniGetInt (LOCALINI_FILE, "FactorUsingSSE2", 1)) asm_data->cpu_flags &= ~CPU_SSE2;
 #endif
@@ -3929,9 +3934,9 @@ int factorPassSetup (
 	TWO_TO_FACSIZE_PLUS_62	DQ	0.0
 	SSE2_LOOP_COUNTER	DD	0 */
 
-	if (asm_data->cpu_flags & CPU_SSE2) {
+	if (asm_data->cpu_flags & (CPU_AVX2 | CPU_SSE2)) {
 		unsigned long i, p, bits_in_factor;
-		uint32_t *xmm_data;
+		uint32_t *xmm_data, *ymm_data;
 
 /* Compute the number of bits in the factors we will be testing */
 
@@ -3950,22 +3955,25 @@ int factorPassSetup (
 /* Also compute the initial value. */
 
 		xmm_data = asm_data->xmm_data;
+		ymm_data = asm_data->ymm_data;
 		p = asm_data->EXPONENT;
 		for (i = 0; p > bits_in_factor + 59; i++) {
 			xmm_data[48+i*2] = (p & 1) ? 1 : 0;
 			p >>= 1;
 		}
-		xmm_data[0] =			/* XMM_INITVAL */
+		xmm_data[0] =					/* XMM_INITVAL */
 		xmm_data[2] = p >= 90 ? 0 : (1 << (p - 60));
-		xmm_data[40] = 62 - (120 - bits_in_factor);/* XMM_INIT120BS */
-		xmm_data[42] = 62 - (p - bits_in_factor);/* XMM_INITBS */
-		xmm_data[112] = i;		/* SSE2_LOOP_COUNTER */
-		*(double *)(&xmm_data[110]) =	/* TWO_TO_FACSIZE_PLUS_62 */
+		xmm_data[40] = 62 - (120 - bits_in_factor);	/* XMM_INIT120BS */
+		xmm_data[42] = 62 - (p - bits_in_factor);	/* XMM_INITBS */
+		xmm_data[44] = bits_in_factor - 61;		/* Set XMM_BS to 60 - (120 - fac_size + 1) as defined in factor64.mac */
+		xmm_data[112] = i;				/* SSE2_LOOP_COUNTER */
+		*(double *)(&xmm_data[110]) =			/* TWO_TO_FACSIZE_PLUS_62 */
 			pow ((double) 2.0, (int) (bits_in_factor + 62));
 
-/* Set XMM_BS to 60 - (120 - fac_size + 1) as defined in factor64.mac */
-
-		xmm_data[44] = bits_in_factor - 61;
+		ymm_data[0] =					/* YMM_INITVAL */
+		ymm_data[2] =
+		ymm_data[4] =
+		ymm_data[6] = p >= 90 ? 0 : (1 << (p - 60));
 	}
 
 /* Setup complete */
@@ -4069,8 +4077,8 @@ loop:	*res = factorChunk (facdata);
 
 /* Trial factor a Mersenne number prior to running a Lucas-Lehmer test */
 
-char FACMSG[] = "Trial factoring M%%ld to 2^%%d is %%.%df%%%% complete.";
-char SHORT_FACMSG[] = "Trial factoring M%ld to 2^%d.";
+static const char FACMSG[] = "Trial factoring M%%ld to 2^%%d is %%.%df%%%% complete.";
+static const char SHORT_FACMSG[] = "Trial factoring M%ld to 2^%d.";
 
 #define FACTOR_MAGICNUM		0x1567234D
 #define FACTOR_VERSION		1
@@ -5870,26 +5878,23 @@ restart:if (sleep5) OutputBoth (thread_num, ERRMSG2);
 /* Torture test code */
 /*********************/
 
-#define TORTURE1 "Beginning a continuous self-test to check your computer.\n"
+static const char TORTURE1[] = "Beginning a continuous self-test on your computer.\n";
 #if defined (__linux__) || defined (__FreeBSD__) || defined (__EMX__)
-#define TORTURE2 "Please read stress.txt.  Hit ^C to end this test.\n"
+static const char TORTURE2[] = "Please read stress.txt.  Hit ^C to end this test.\n";
 #else
-#define TORTURE2 "Please read stress.txt.  Choose Test/Stop to end this test.\n"
+static const char TORTURE2[] = "Please read stress.txt.  Choose Test/Stop to end this test.\n";
 #endif
-#define SELFMSG1A "The program will now perform a self-test to make sure the\n"
-#define SELFMSG1B "Lucas-Lehmer code is working properly on your computer.\n"
-#define SELFMSG1C "This will take about an hour.\n"
-#define SELF1 "Test %i, %i Lucas-Lehmer iterations of M%ld using %s.\n"
-#define SELFFAIL "FATAL ERROR: Final result was %08lX, expected: %08lX.\n"
-char SELFFAIL1[] = "ERROR: ILLEGAL SUMOUT\n";
-char SELFFAIL2[] = "FATAL ERROR: Resulting sum was %.16g, expected: %.16g\n";
-char SELFFAIL3[] = "FATAL ERROR: Rounding was %.10g, expected less than 0.4\n";
-char SELFFAIL4[] = "Possible hardware failure, consult readme.txt file, restarting test.\n";
-char SELFFAIL5[] = "Hardware failure detected, consult stress.txt file.\n";
-char SELFFAIL6[] = "Maximum number of warnings exceeded.\n";
+static const char SELF1[] = "Test %i, %i Lucas-Lehmer iterations of M%ld using %s.\n";
+static const char SELFFAIL[] = "FATAL ERROR: Final result was %08lX, expected: %08lX.\n";
+static const char SELFFAIL1[] = "ERROR: ILLEGAL SUMOUT\n";
+static const char SELFFAIL2[] = "FATAL ERROR: Resulting sum was %.16g, expected: %.16g\n";
+static const char SELFFAIL3[] = "FATAL ERROR: Rounding was %.10g, expected less than 0.4\n";
+static const char SELFFAIL4[] = "Possible hardware failure, consult readme.txt file, restarting test.\n";
+static const char SELFFAIL5[] = "Hardware failure detected, consult stress.txt file.\n";
+static const char SELFFAIL6[] = "Maximum number of warnings exceeded.\n";
 
-#define SELFPASS "Self-test %i%s passed!\n"
-//char SelfTestIniMask[] = "SelfTest%iPassed";
+static const char SELFPASS[] = "Self-test %i%s passed!\n";
+//static const char SelfTestIniMask[] = "SelfTest%iPassed";
 
 struct self_test_info {
 	unsigned long p;
@@ -5898,7 +5903,7 @@ struct self_test_info {
 };
 
 #define MAX_SELF_TEST_ITERS	405
-struct self_test_info SELF_TEST_DATA[MAX_SELF_TEST_ITERS] = {
+const struct self_test_info SELF_TEST_DATA[MAX_SELF_TEST_ITERS] = {
 {560000001, 100, 0x7F853A0A}, {420000001, 150, 0x89665E7E},
 {280000001, 200, 0xC32CAD46}, {210000001, 300, 0x89823329},
 {140000001, 400, 0x15EF4F24}, {110000001, 500, 0x893C9000},
@@ -6105,7 +6110,7 @@ struct self_test_info SELF_TEST_DATA[MAX_SELF_TEST_ITERS] = {
 };
 
 #define MAX_SELF_TEST_ITERS2	376
-struct self_test_info SELF_TEST_DATA2[MAX_SELF_TEST_ITERS2] = {
+const struct self_test_info SELF_TEST_DATA2[MAX_SELF_TEST_ITERS2] = {
 {560000001, 100, 0x7F853A0A}, {420000001, 150, 0x89665E7E},
 {280000001, 200, 0xC32CAD46}, {210000001, 300, 0x89823329},
 {140000001, 400, 0x15EF4F24}, {110000001, 500, 0x893C9000},
@@ -6297,7 +6302,7 @@ struct self_test_info SELF_TEST_DATA2[MAX_SELF_TEST_ITERS2] = {
 };
 
 #define MAX_SELF_TEST_ITERS3	484
-struct self_test_info SELF_TEST_DATA3[MAX_SELF_TEST_ITERS3] = {
+const struct self_test_info SELF_TEST_DATA3[MAX_SELF_TEST_ITERS3] = {
 {560000001, 400, 0x5D2075F2}, {420000001, 600, 0x76973D8D},
 {280000001, 800, 0xA4B0C213}, {210000001, 1200, 0x9B0FEEA5},
 {140000001, 1600, 0xEC8F25E6}, {110000001, 2000, 0xD7EE8401},
@@ -6550,7 +6555,7 @@ int selfTestInternal (
 	int	*torture_index,	/* Index into self test data array */
 	unsigned int memory,	/* MB of memory the torture test can use */
 	void	*bigbuf,	/* Memory block for the torture test */
-	struct self_test_info *test_data, /* Self test data */
+	const struct self_test_info *test_data, /* Self test data */
 	unsigned int test_data_count,
 	int	*completed,	/* Returned count of tests completed */
 	int	*errors,	/* Returned count of self test errors */
@@ -6802,6 +6807,11 @@ restart_test:	dbltogw (&lldata.gwdata, 4.0, lldata.lldata);
 }
 
 #ifdef ONE_HOUR_SELF_TEST
+
+static const char SELFMSG1A[] = "The program will now perform a self-test to make sure the\n";
+static const char SELFMSG1B[] = "Lucas-Lehmer code is working properly on your computer.\n";
+static const char SELFMSG1C[] = "This will take about an hour.\n";
+
 int selfTest (
 	int	thread_num,
 	struct PriorityInfo *sp_info,
@@ -6852,7 +6862,7 @@ int tortureTest (
 	int	num_threads)
 {
 	struct PriorityInfo sp_info;
-	struct self_test_info *test_data; /* Self test data */
+	const struct self_test_info *test_data; /* Self test data */
 	unsigned int test_data_count;
 	int	num_lengths;		/* Number of FFT lengths we will torture test */
 	unsigned long lengths[500];	/* The FFT lengths we will torture test */
@@ -6897,7 +6907,7 @@ int tortureTest (
 
 /* We used to support a menu option to run the self-test for an hour on */
 /* each FFT length.  If we ever decide to resupport this option, change */
-/* the run_indefiitely variable to an argument and change the output */
+/* the run_indefinitely variable to an argument and change the output */
 /* message below. */
 
 loop:	run_indefinitely = TRUE;
@@ -7308,7 +7318,7 @@ int primeSieveTest (
 			fachi = fachi * 10 + carryl;
 			if (fachi >= 4194304 ||
 			    (fachi >= 4096 && !(CPU_FLAGS & CPU_SSE2))) {
-				sprintf (buf, "%ld%s factor too big.\n", p, fac);
+				sprintf (buf, "%ld %s factor too big.\n", p, fac);
 				OutputBoth (thread_num, buf);
 				goto nextp;
 			}
@@ -7363,15 +7373,15 @@ int primeSieveTest (
 			    facdata.asm_data->FACHSW == fachi &&
 			    facdata.asm_data->FACMSW == facmid &&
 			    facdata.asm_data->FACLSW == faclo) {
-				sprintf (buf, "%ld%s factored OK.\n", p, fac);
+				sprintf (buf, "%ld %s factored OK.\n", p, fac);
 				OutputSomewhere (thread_num, buf);
 				goto nextp;
 			}
-		} while (facdata.asm_data->FACMSW == facmid);
+		} while (facdata.asm_data->FACMSW <= facmid);
 
 /* Uh oh. */
 
-bad:		sprintf (buf, "%ld%s factor not found.\n", p, fac);
+bad:		sprintf (buf, "%ld %s factor not found.\n", p, fac);
 		OutputBoth (thread_num, buf);
 
 /* If an escape key was hit, write out the results and return */
@@ -7645,8 +7655,8 @@ void bench_busy_loop (void *arg)
 
 /* Routine to benchmark the trial factoring code */
 
-#define BENCH1 "Your timings will be written to the results.txt file.\n"
-#define BENCH2 "Compare your results to other computers at http://www.mersenne.org/report_benchmarks\n"
+static const char BENCH1[] = "Your timings will be written to the results.txt file.\n";
+static const char BENCH2[] = "Compare your results to other computers at http://www.mersenne.org/report_benchmarks\n";
 
 int factorBench (
 	int	thread_num,
@@ -8682,9 +8692,14 @@ begin:	gwinit (&gwdata);
 /* Also output the FFT length. */
 
 	gwfft_description (&gwdata, fft_desc);
-	sprintf (buf, "%s PRP test of %s using %s\n",
-		 (counter == 0) ? "Starting" : "Resuming",
-		 string_rep, fft_desc);
+	if (prp_base == 3)
+		sprintf (buf, "%s PRP test of %s using %s\n",
+			 (counter == 0) ? "Starting" : "Resuming",
+			 string_rep, fft_desc);
+	else
+		sprintf (buf, "%s %d-PRP test of %s using %s\n",
+			 (counter == 0) ? "Starting" : "Resuming",
+			 prp_base, string_rep, fft_desc);
 	OutputStr (thread_num, buf);
 
 /* Compute the number we are testing. */
@@ -9064,10 +9079,14 @@ pushg(&gwdata.gdata, 2);}
 
 /* Print results. */
 
-	if (isProbablePrime)
-		sprintf (buf, "%s is a probable prime! We%d: %08lX,%08lX\n",
-			 string_rep, PORT, SEC1 (w->n), error_count);
-	else
+	if (isProbablePrime) {
+		if (prp_base == 3)
+			sprintf (buf, "%s is a probable prime! We%d: %08lX,%08lX\n",
+				 string_rep, PORT, SEC1 (w->n), error_count);
+		else
+			sprintf (buf, "%s is a probable prime (%d-PRP)! We%d: %08lX,%08lX\n",
+				 string_rep, prp_base, PORT, SEC1 (w->n), error_count);
+	} else
 		sprintf (buf, "%s is not prime.  RES64: %s. We%d: %08lX,%08lX\n",
 			 string_rep, res64, PORT, SEC1 (w->n), error_count);
 	OutputStr (thread_num, buf);

@@ -1,3 +1,5 @@
+/* Copyright 1995-2015 Mersenne Research, Inc.  All rights reserved */
+
 // Prime95View.cpp : implementation of the CPrime95View class
 //
 
@@ -16,13 +18,9 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
-#ifdef X86_64
-#define MAX_VIEWS	66	/* 66 MDI windows: Main_thread, comm_thread */
-				/* and 64 worker threads. */
-#else
-#define MAX_VIEWS	34	/* 34 MDI windows: Main_thread, comm_thread */
-				/* and 32 worker threads. */
-#endif
+
+#define MAX_VIEWS	(MAX_NUM_WORKER_THREADS+2)	/* MDI windows: Main_thread, comm_thread and worker threads. */
+
 
 CPrime95View *Views[MAX_VIEWS] = {0};
 char	ThreadTitles[MAX_VIEWS][80] = {0};
@@ -309,8 +307,8 @@ static	int	was_iconic = TRUE;
 			char	buf[1600];
 			buf[0] = 0;
 			for (i = 2; i < MAX_VIEWS; i++) {
-				if (buf[0] && ThreadTitles[i][0])
-					strcat (buf, "\n");
+				if (strlen (buf) > sizeof (buf) - 100) break;	// Quick and dirty check to make sure buf has room
+				if (buf[0] && ThreadTitles[i][0]) strcat (buf, "\n");
 				strcat (buf, ThreadTitles[i]);
 			}
 			pApp->TrayMessage (NIM_MODIFY, buf[0] ? buf : "Not running", 0);
@@ -333,7 +331,7 @@ static	int	was_iconic = TRUE;
 
 void base_title (
 	int	thread_num,
-	char	*str)
+	const char *str)
 {
 	CPrime95View *view;
 
@@ -341,7 +339,7 @@ void base_title (
 
 /* When merging windows, apply some arbitrary rules to decide which */
 /* base title to use. */
-	
+
 	if (MERGE_WINDOWS & MERGE_MAIN_WINDOW &&
 	    MERGE_WINDOWS & MERGE_COMM_WINDOW &&
 	    (MERGE_WINDOWS & MERGE_WORKER_WINDOWS || NUM_WORKER_THREADS == 1))
@@ -368,7 +366,7 @@ void base_title (
 }
 
 void CPrime95View::base_title (
-	char	*str)
+	const char *str)
 {
 	strcpy (BaseTitle, str);
 	PostMessage (WM_COMMAND, USR_TITLE, 0);
@@ -378,7 +376,7 @@ void CPrime95View::base_title (
 
 void title (
 	int	thread_num,
-	char	*str)
+	const char *str)
 {
 	CPrime95View *view;
 	char	merged_title[160];
@@ -419,7 +417,7 @@ void title (
 }
 
 void CPrime95View::title (
-	char	*str)
+	const char *str)
 {
 	strcpy (Title, str);
 	PostMessage (WM_COMMAND, USR_TITLE, 0);
@@ -762,7 +760,7 @@ void CPrime95View::OnScroll ()
 
 void RealOutputStr (
 	int	thread_num,
-	char	*str)
+	const char *str)
 {
 	CPrime95View *view;
 static	int	partial_line_output[MAX_VIEWS] = {FALSE};
@@ -836,7 +834,7 @@ static	int	partial_line_output[MAX_VIEWS] = {FALSE};
 /* Copy a string to be output to our array of lines */
 
 void CPrime95View::RealOutputStr (
-	char	*str)
+	const char *str)
 {
 	char	*p;
 

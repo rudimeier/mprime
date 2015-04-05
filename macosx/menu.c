@@ -1,4 +1,4 @@
-/* Copyright 1995-2014 Mersenne Research, Inc. */
+/* Copyright 1995-2015 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -91,6 +91,29 @@ loop:	get_line (buf);
 		if (newval < min || newval > max) {
 			printf ("Please enter a value between %ld and %ld. ",
 				min, max);
+			goto loop;
+		}
+	}
+	*val = newval;
+}
+
+/* Ask a number question */
+
+void askFloat (
+	char	*str,
+	float	*val,
+	float	min,
+	float	max)
+{
+	char	buf[80];
+	double	newval;
+	printf ("%s (%f): ", str, *val);
+loop:	get_line (buf);
+	if (buf[0] == 0) return;
+	newval = (float) atof (buf);
+	if (min != 0.0 || max != 0.0) {
+		if (newval < min || newval > max) {
+			printf ("Please enter a value between %f and %f. ", min, max);
 			goto loop;
 		}
 	}
@@ -221,20 +244,26 @@ void outputLongLine (
 {
 	char	line[80];
 	char	*p;
-	int	i, j;
+	int	i, chars_to_output;
 
 	for (p = buf; ; ) {
+		chars_to_output = 75;			// Default split point if no natural break found
 		for (i = 0; i < 75; i++) {
 			line[i] = p[i];
-			if (p[i] == 0 || p[i] == '\n') { j = i; break; }
-			if (p[i] == ' ' || p[i] == '.' || p[i] == ',') j = i;
+			if (p[i] == 0) { chars_to_output = i; break; }
+			if (p[i] == '\n') { chars_to_output = i + 1; break; }
+			if (p[i] == ' ') { chars_to_output = i; }
+			//if (p[i] == '.') { chars_to_output = i + 1; }		// Don't split at "mersenne.org"
+			if (p[i] == ',') { chars_to_output = i + 1; }		// Do split "a,b,c"
 		}
-		line[j+1] = 0;
+		line[chars_to_output] = 0;
 		printf ("%s", line);
-		if (p[j] == 0) break;
-		if (p[j] != '\n') printf ("\n");
-		p += j + 1;
-		while (*p == ' ') p++;
+		p += chars_to_output;
+		if (*p == 0) break;
+		if (p[-1] != '\n') {			// Do not change any formatting after an explicit line break
+			printf ("\n");			// Generate a line break
+			while (*p == ' ') p++;		// Eliminate whitespace after a generated line break
+		}
 	}
 }
 
@@ -870,7 +899,8 @@ again:	m_hours = CPU_HOURS;
 void options_preferences (void)
 {
 	unsigned long m_iter, m_r_iter, m_disk_write_time;
-	unsigned long m_modem, m_retry, m_work, m_end_dates, m_backup;
+	unsigned long m_modem, m_retry, m_work, m_backup;
+	float	m_end_dates;
 	int	m_noise, m_battery;
 
 	m_iter = ITER_OUTPUT;
@@ -895,7 +925,7 @@ void options_preferences (void)
 	if (USE_PRIMENET)
 		askNum ("Days of work to queue up", &m_work, 1, 90);
 	if (USE_PRIMENET)
-		askNum ("Days between sending end dates", &m_end_dates, 1, 7);
+		askFloat ("Days between sending end dates", &m_end_dates, 0.125, 7);
 	askNum ("Number of Backup Files", &m_backup, 1, 3);
 	askYN ("Make noise if new Mersenne prime is found", &m_noise);
 	askYN ("Run program even when using laptop battery power", &m_battery);
@@ -921,7 +951,7 @@ void options_preferences (void)
 		IniWriteInt (INI_FILE, "NetworkRetryTime", MODEM_RETRY_TIME);
 		IniWriteInt (INI_FILE, "NetworkRetryTime2", NETWORK_RETRY_TIME);
 		IniWriteInt (INI_FILE, "DaysOfWork", DAYS_OF_WORK);
-		IniWriteInt (INI_FILE, "DaysBetweenCheckins", DAYS_BETWEEN_CHECKINS);
+		IniWriteFloat (INI_FILE, "DaysBetweenCheckins", DAYS_BETWEEN_CHECKINS);
 		IniWriteInt (INI_FILE, "NumBackupFiles", NUM_BACKUP_FILES);
 		IniWriteInt (INI_FILE, "SilentVictory", SILENT_VICTORY);
 		spoolMessage (PRIMENET_PROGRAM_OPTIONS, NULL);
@@ -1002,7 +1032,7 @@ void help_about (void)
 	printf ("GIMPS: Mersenne Prime Search\n");
 	printf ("Web site: http://mersenne.org\n");
 	printf ("%s\n", app_string);
-	printf ("Copyright 1996-2014 Mersenne Research, Inc.\n");
+	printf ("Copyright 1996-2015 Mersenne Research, Inc.\n");
 	printf ("Author: George Woltman\n");
 	printf ("Email:  woltman@alum.mit.edu\n");
 	askOK ();

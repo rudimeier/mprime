@@ -16,7 +16,7 @@
 | threads IF AND ONLY IF each uses a different gwhandle structure
 | initialized by gwinit.
 | 
-|  Copyright 2002-2014 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2002-2015 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 #ifndef _GWNUM_H
@@ -59,9 +59,9 @@ typedef double *gwnum;
 /* gwsetup verifies that the version numbers match.  This prevents bugs */
 /* from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"28.5"
+#define GWNUM_VERSION		"28.6"
 #define GWNUM_MAJOR_VERSION	28
-#define GWNUM_MINOR_VERSION	5
+#define GWNUM_MINOR_VERSION	6
 
 /* Error codes returned by the three gwsetup routines */
 
@@ -1017,7 +1017,7 @@ void gwgiantdealloc (void *);
 /* giants library.  Prime95 will set this routine pointer so that gwnum */
 /* code can cheat while keeping the gwnum library interface clean. */
 
-extern void (*OutputBothRoutine)(int,char *);
+extern void (*OutputBothRoutine)(int, const char *);
 
 /* These routines let me time many assembly language building blocks -- used */
 /* when optimizing these building blocks. */

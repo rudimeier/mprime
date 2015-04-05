@@ -10,7 +10,7 @@
  *	    20 Apr 97  RDW
  *
  *	c. 1997 Perfectly Scientific, Inc.
- *	c. 1998-2009 Mersenne Research, Inc.
+ *	c. 1998-2015 Mersenne Research, Inc.
  *	All Rights Reserved.
  *
  **************************************************************/
@@ -118,7 +118,7 @@ void 	ulltog(uint64_t n, giant g);
 void 	dbltog(double n, giant g);
 
 /* Character string <-> giant. */
-void 	ctog (char *s, giant g);
+void 	ctog (const char *s, giant g);
 void 	gtoc (giant g, char *s, int sbufsize);
 
 /* Returns the sign of g: -1, 0, 1. */

@@ -19,13 +19,13 @@ all:	amd64\factor64.obj linux64\factor64.o amd64\service.obj
 
 # Create 64-bit object files
 
-amd64\factor64.obj: factor64.asm
+amd64\factor64.obj: factor64.asm factor64.mac
     $(masm64) /Foamd64\factor64.obj factor64.asm
     ..\gwnum\strip amd64\factor64.obj
 
 # Create Linux 64-bit object files
 
-linux64\factor64.o: factor64.asm
+linux64\factor64.o: factor64.asm factor64.mac
     $(masm64lx) /Folinux64\factor64.obj factor64.asm
     $(objconv) -felf64 linux64\factor64.obj linux64\factor64.o
     attrib -r linux64\factor64.o

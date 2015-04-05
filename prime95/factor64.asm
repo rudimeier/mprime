@@ -1,4 +1,4 @@
-; Copyright 1995-2012 Mersenne Research, Inc., all rights reserved
+; Copyright 1995-2015 Mersenne Research, Inc., all rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -52,8 +52,8 @@ XMM_SHIFTER		EQU	DWORD PTR [AD_BASE+0*SZPTR+58*4]
 TWO_TO_FACSIZE_PLUS_62	EQU	QWORD PTR [AD_BASE+0*SZPTR+122*4]
 SSE2_LOOP_COUNTER	EQU	DWORD PTR [AD_BASE+0*SZPTR+124*4]
 
-;; If AVX is ever extended to support 256-bit operations on integers
-;; then we could use the YMM registers and the memory area below to do
+;; AVX2 supports 256-bit operations on integers
+;; Use the YMM registers and the memory area below to do
 ;; four trial factors simultaneouly.
 
 ;;pad to match facasm_data structure defined in commonb.c
@@ -67,12 +67,6 @@ YMM_F3			EQU	DWORD PTR [AD_BASE+0*SZPTR+248*4]
 YMM_TWO_120_MODF1	EQU	DWORD PTR [AD_BASE+0*SZPTR+256*4]
 YMM_TWO_120_MODF2	EQU	DWORD PTR [AD_BASE+0*SZPTR+264*4]
 YMM_TWO_120_MODF3	EQU	DWORD PTR [AD_BASE+0*SZPTR+272*4]
-YMM_INIT120BS		EQU	DWORD PTR [AD_BASE+0*SZPTR+280*4]
-YMM_INITBS		EQU	DWORD PTR [AD_BASE+0*SZPTR+288*4]
-YMM_BS			EQU	DWORD PTR [AD_BASE+0*SZPTR+296*4]
-YMM_SHIFTER		EQU	DWORD PTR [AD_BASE+0*SZPTR+304*4]
-;;TWO_TO_FACSIZE_PLUS_62	EQU	QWORD PTR [AD_BASE+0*SZPTR+432*4]
-AVX_LOOP_COUNTER	EQU	DWORD PTR [AD_BASE+0*SZPTR+434*4]
 
 ;XMM_COMPARE_VAL1 DD	0,0,0,0
 XMM_COMPARE_VAL1	EQU	DWORD PTR [AD_BASE+0*SZPTR+440*4]
@@ -185,12 +179,9 @@ XMM_BITS28		DD	0FFFFFFFh,0,0FFFFFFFh,0
 XMM_BITS30		DD	3FFFFFFFh,0,3FFFFFFFh,0
 TWO_TO_30		DQ	1073741824.0				;; 2^30
 	align 32
-YMM_LOWONE		DD	1,0,0,0,0,0,0,0
-YMM_HIGHONE		DD	0,0,1,0,0,0,0,0
-YMM_HIGHERONE		DD	0,0,0,0,1,0,0,0
-YMM_HIGHESTONE		DD	0,0,0,0,0,0,1,0
 YMM_BITS28		DD	0FFFFFFFh,0,0FFFFFFFh,0,0FFFFFFFh,0,0FFFFFFFh,0
 YMM_BITS30		DD	3FFFFFFFh,0,3FFFFFFFh,0,3FFFFFFFh,0,3FFFFFFFh,0
+YMM_28TH_BIT		DD	08000000h,0,08000000h,0,08000000h,0,08000000h,0
 
 ;
 ; Prime data
@@ -1572,8 +1563,14 @@ sievedn:mov	rbx, savefac0		; Load trial factor corresponding
 	mov	rcx, savefac1		; to first sieve bit
 	and	rbx, rbx		; Are we testing 65+ bit factors?
 	jz	short oneword		; No, go do 64 bits or less
+	test	CPU_FLAGS, 20000h	; Is this an AVX2 machine?
+	jz	short notavx2		; No, use non-AVX2 code
+	cmp	rbx, 400h		; Are we testing 75+ bit numbers?
+	jge	atlp86			; Yes, use 75-86 bit AVX2 code
+	jmp	atlp74			; No, use 65-74 bit AVX2 code
+notavx2:
 	test	CPU_FLAGS, 200h		; Is this an SSE2 machine?
-	jz	notsse2			; No, use non-SSE2 code
+	jz	short notsse2		; No, use non-SSE2 code
 	cmp	rbx, 400h		; Are we testing 75+ bit numbers?
 	jge	tlp86			; Yes, use 75-86 bit SSE2 code
 	jmp	tlp74			; No, use 65-74 bit SSE2 code
@@ -4416,6 +4413,425 @@ next86:	sub	rdi, rdi		; Clear queued factors count
 	mov	rax, SAVED_REG2
 	mov	rsi, SAVED_REG1
 	jmp	bsf86			; Test next factor from sieve
+
+
+;************************************
+; For up to 74-bit factors using AVX2
+;************************************
+
+;
+; Check all the bits in the sieve looking for a factor to test
+;
+
+atlp74:	finit				; Set for 64-bit precision
+	mov	rsi, sieve		; Sieve address
+	lea	rbp, [rsi+sievesize]	; Sieve end address
+	mov	edi, queuedcnt		; Count of queued factors to be tested
+	mov	r8, rcx			; Save factor
+	mov	rcx, shift_count
+	dec	rcx
+	mov	r14, 1			; Form trial factor limit
+	ror	r14, cl
+	mov	rcx, r8			; Restore factor
+asvlp74:mov	rax, [rsi]		; Load word from sieve
+	lea	rsi, [rsi+8]		; Bump sieve address
+absf74:	bsf	rdx, rax		; Look for a set bit
+	jnz	atest74			; Found one, go test the factor
+	add	rcx, facdist64      	; Add facdist * 64 to the factor
+	adc	rbx, 0
+	cmp	rbx, r14		; Jump if overflow
+	jae	short aoflow74
+	cmp	rsi, rbp		; End of sieve?
+	jl	short asvlp74		; Loop to test next sieve qword
+
+; Check repetition counter
+
+	mov	savefac1, rcx		; Save for the restart or more sieving
+	mov	savefac0, rbx
+	mov	queuedcnt, edi		; Save count of queued factors
+	dec	reps
+	jnz	initsv
+
+; Return so caller can check for ESC
+
+	shr	rcx, 32
+	mov	FACMSW, ecx
+	mov	FACHSW, ebx
+	mov	rax, 2			; Return for ESC check
+	jmp	done
+
+; Handle overflow
+
+aoflow74:and	rdi, rdi		; Are there untested factors?
+	jnz	short arem74		; Yes, go do remaining trial factors
+	mov	FACHSW, r14d		; Return end point
+	mov	FACMSW, 0
+	mov	rax, 2			; Return for ESC check
+	jmp	done
+arem74:	mov	r8, QWORD PTR YMM_F1	; Copy first trial factor
+	mov	r9, QWORD PTR YMM_F2
+	mov	rdx, QWORD PTR YMM_F3
+	mov	QWORD PTR YMM_F1[rdi*8], r8
+	mov	QWORD PTR YMM_F2[rdi*8], r9
+	mov	QWORD PTR YMM_F3[rdi*8], rdx
+	mov	r8, QWORD PTR YMM_COMPARE_VAL1
+	mov	r9, QWORD PTR YMM_COMPARE_VAL2
+	mov	rdx, QWORD PTR YMM_COMPARE_VAL3
+	mov	QWORD PTR YMM_COMPARE_VAL1[rdi*8], r8
+	mov	QWORD PTR YMM_COMPARE_VAL2[rdi*8], r9
+	mov	QWORD PTR YMM_COMPARE_VAL3[rdi*8], rdx
+	mov	r8, QWORD PTR YMM_INVFAC
+	mov	QWORD PTR YMM_INVFAC[rdi*8], r8
+	inc	rdi			; One more factor queued up
+	cmp	rdi, 4			; Have enough been queued up?
+	jne	short arem74		; No, go copy another
+	jmp	ado74			; Yes, go test them
+
+;
+; Gather trial factors to be tested all at once to minimize
+; processor stalls.
+;
+
+atest74:btr	rax, rdx		; Clear the sieve bit
+	mov	r8, rcx			; Copy base factor
+	mov	r9, rbx
+	add	r8, facdists[rdx*8]	; Determine factor to test
+	adc	r9, 0
+	cmp	r9, r14			; Test for overflow
+	jae	aoflow74		; Jump if overflow
+
+;
+; Compute the factor to test and 63 most significant bits of 1 / factor
+;
+;; OPT...  old 32-bit code....  convert to divpd(in both)???
+
+	mov	fac1[rdi*8], r8		; Save the factor to test
+	mov	fac1hi[rdi*8], r9
+
+	shld	r9, r8, 34
+	mov	temp, r9
+	fild	temp
+	fmul	TWO_TO_30
+	and	r8, 3FFFFFFFh
+	mov	temp, r8
+	fiadd	DWORD PTR temp		; We now have the factor to test
+	fld	TWO_TO_FACSIZE_PLUS_62	; Constant to generate 63 bit inverse
+	fdivrp	st(1), st
+	fistp	QWORD PTR YMM_INVFAC[rdi*8]
+
+; Compute the factor in 30 bit chunks
+;  OPT - just save r8/r9 and use sse2/avx instr to convert to 30 bit chunks ??? (If better, do it in 32-bit code too)
+
+	mov	r8, fac1[rdi*8] 		; Restore the factor to test
+	mov	r9, fac1hi[rdi*8]
+	shld	r9, r8, 4
+	mov	edx, 3FFFFFFFh
+	and	rdx, r8
+	mov	YMM_F3[rdi*8], edx
+	shr	r8, 30
+	and	r8, 3FFFFFFFh
+	mov	YMM_F2[rdi*8], r8d
+	mov	YMM_F1[rdi*8], r9d
+
+; Compute factor + 1 for comparing against when loop is done
+
+;OPT....	replace this with a subtract 1 at loop's end and compare to YMM_F1/F2/F3???  subtract 1 must propgate carry too.
+;OPT....	replace with AVX2 instructions that do the same thing as below
+	mov	r8, fac1[rdi*8] 		; Restore the factor to test
+	mov	r9, fac1hi[rdi*8]
+	inc	r8
+	adc	r9, 0
+	shld	r9, r8, 4
+	mov	edx, 3FFFFFFFh
+	and	rdx, r8
+	mov	YMM_COMPARE_VAL3[rdi*8], edx
+	shr	r8, 30
+	and	r8, 3FFFFFFFh
+	mov	YMM_COMPARE_VAL2[rdi*8], r8d
+	mov	YMM_COMPARE_VAL1[rdi*8], r9d
+
+	inc	rdi			; One more factor queued up
+	cmp	rdi, 4			; Have enough been queued up?
+	jne	absf74			; No, go test more sieve bits
+
+;
+; Now test the accumulated trial factors
+;
+
+;; OPT - save/restore fewer registers  (affects winner checking and avx2_fac_initval code)
+ado74:	mov	SAVED_REG1, rsi		; Save sieve testing registers
+	mov	SAVED_REG2, rax
+	mov	SAVED_REG3, rbx
+	mov	SAVED_REG4, rcx
+	mov	SAVED_REG5, rbp
+
+; Work on initval.
+; This is like the aqloop code except that we avoid the initial squaring.
+
+	avx2_fac_initval
+
+; Square remainder and get new remainder.
+
+	mov	edi, SSE2_LOOP_COUNTER	; Number of times to loop
+aloop74:avx2_fac 74
+	dec	edi			; Decrement loop counter
+	jnz	aloop74
+
+; If result = factor + 1, then we found a divisor of 2**p - 1
+
+	vpcmpeqd ymm2, ymm2, YMM_COMPARE_VAL3	; See if remainder is factor + 1
+	vpcmpeqd ymm1, ymm1, YMM_COMPARE_VAL2
+	vpcmpeqd ymm0, ymm0, YMM_COMPARE_VAL1
+	vpand	ymm2, ymm2, ymm1
+	vpand	ymm2, ymm2, ymm0
+	vpmovmskb rcx, ymm2
+	cmp	cl, 0FFh		; See if we matched
+	je	short awin74_1		; Yes! Factor found
+	cmp	ch, 0FFh		; See if we matched
+	je	short awin74_2		; Yes! Factor found
+	shr	ecx, 16
+	cmp	cl, 0FFh		; See if we matched
+	je	short awin74_3		; Yes! Factor found
+	cmp	ch, 0FFh		; See if we matched
+	je	short awin74_4		; Yes! Factor found
+	jmp	short anext74		; Test next factor from sieve
+awin74_1:mov	edx, 0			; Factor found!!! Return it
+	jmp	short awin74
+awin74_2:mov	edx, 8			; Factor found!!! Return it
+	jmp	short awin74
+awin74_3:mov	edx, 16			; Factor found!!! Return it
+	jmp	short awin74
+awin74_4:mov	edx, 24			; Factor found!!! Return it
+awin74:	mov	eax, YMM_F3[rdx]	; Factor found!!! Return it
+	mov	ebx, YMM_F2[rdx]
+	mov	ecx, YMM_F1[rdx]
+	shl	eax, 2
+	shrd	eax, ebx, 2
+	shl	ebx, 2
+	shrd	ebx, ecx, 4
+	shr	ecx, 4
+	mov	FACLSW, eax
+	mov	FACMSW, ebx
+	mov	FACHSW, ecx
+	mov	rax, 1			; return TRUE
+	jmp	done
+
+anext74:sub	rdi, rdi		; Clear queued factors count
+	mov	rbp, SAVED_REG5		; Restore sieve testing register
+	mov	rcx, SAVED_REG4
+	mov	rbx, SAVED_REG3
+	mov	rax, SAVED_REG2
+	mov	rsi, SAVED_REG1
+	jmp	absf74			; Test next factor from sieve
+
+;************************************
+; For 75 to 86-bit factors using AVX2
+;************************************
+
+;
+; Check all the bits in the sieve looking for a factor to test
+;
+
+atlp86:	finit				; Set for 64-bit precision
+	mov	rsi, sieve		; Sieve address
+	lea	rbp, [rsi+sievesize]	; Sieve end address
+	mov	edi, queuedcnt		; Count of queued factors to be tested
+	mov	r8, rcx			; Save factor
+	mov	rcx, shift_count
+	dec	rcx
+	mov	r14, 1			; Form trial factor limit
+	ror	r14, cl
+	mov	rcx, r8			; Restore factor
+asvlp86:mov	rax, [rsi]		; Load word from sieve
+	lea	rsi, [rsi+8]		; Bump sieve address
+absf86:	bsf	rdx, rax		; Look for a set bit
+	jnz	atest86			; Found one, go test the factor
+	add	rcx, facdist64      	; Add facdist * 64 to the factor
+	adc	rbx, 0
+	cmp	rbx, r14		; Jump if overflow
+	jae	short aoflow86
+	cmp	rsi, rbp		; End of sieve?
+	jl	short asvlp86		; Loop to test next sieve qword
+
+; Check repetition counter
+
+	mov	savefac1, rcx		; Save for the restart or more sieving
+	mov	savefac0, rbx
+	mov	queuedcnt, edi		; Save count of queued factors
+	dec	reps
+	jnz	initsv
+
+; Return so caller can check for ESC
+
+	shr	rcx, 32
+	mov	FACMSW, ecx
+	mov	FACHSW, ebx
+	mov	rax, 2			; Return for ESC check
+	jmp	done
+
+; Handle overflow
+
+aoflow86:and	rdi, rdi		; Are there untested factors?
+	jnz	short arem86		; Yes, go do remaining trial factors
+	mov	FACHSW, r14d		; Return end point
+	mov	FACMSW, 0
+	mov	rax, 2			; Return for ESC check
+	jmp	done
+arem86:	mov	r8, QWORD PTR YMM_F1	; Copy first trial factor
+	mov	r9, QWORD PTR YMM_F2
+	mov	rdx, QWORD PTR YMM_F3
+	mov	QWORD PTR YMM_F1[rdi*8], r8
+	mov	QWORD PTR YMM_F2[rdi*8], r9
+	mov	QWORD PTR YMM_F3[rdi*8], rdx
+	mov	r8, QWORD PTR YMM_COMPARE_VAL1
+	mov	r9, QWORD PTR YMM_COMPARE_VAL2
+	mov	rdx, QWORD PTR YMM_COMPARE_VAL3
+	mov	QWORD PTR YMM_COMPARE_VAL1[rdi*8], r8
+	mov	QWORD PTR YMM_COMPARE_VAL2[rdi*8], r9
+	mov	QWORD PTR YMM_COMPARE_VAL3[rdi*8], rdx
+	mov	r8, QWORD PTR YMM_INVFAC
+	mov	QWORD PTR YMM_INVFAC[rdi*8], r8
+	inc	rdi			; One more factor queued up
+	cmp	rdi, 4			; Have enough been queued up?
+	jne	short arem86		; No, go copy another
+	jmp	ado86			; Yes, go test them
+
+;
+; Gather trial factors to be tested all at once to minimize
+; processor stalls.
+;
+
+atest86:btr	rax, rdx		; Clear the sieve bit
+	mov	r8, rcx			; Copy base factor
+	mov	r9, rbx
+	add	r8, facdists[rdx*8]	; Determine factor to test
+	adc	r9, 0
+	cmp	r9, r14			; Test for overflow
+	jae	aoflow86		; Jump if overflow
+
+;
+; Compute the factor to test and 63 most significant bits of 1 / factor
+;
+;; OPT...  old 32-bit code....  convert to divpd(in both)???
+
+	mov	fac1[rdi*8], r8		; Save the factor to test
+	mov	fac1hi[rdi*8], r9
+
+	shld	r9, r8, 34
+	mov	temp, r9
+	fild	temp
+	fmul	TWO_TO_30
+	and	r8, 3FFFFFFFh
+	mov	temp, r8
+	fiadd	DWORD PTR temp		; We now have the factor to test
+	fld	TWO_TO_FACSIZE_PLUS_62	; Constant to generate 63 bit inverse
+	fdivrp	st(1), st
+	fistp	QWORD PTR YMM_INVFAC[rdi*8]
+
+; Compute the factor in 30 bit chunks
+;  OPT - just save r8/r9 and use sse2/avx instr to convert to 30 bit chunks ??? (If better, do it in 32-bit code too)
+
+	mov	r8, fac1[rdi*8] 		; Restore the factor to test
+	mov	r9, fac1hi[rdi*8]
+	shld	r9, r8, 4
+	mov	edx, 3FFFFFFFh
+	and	rdx, r8
+	mov	YMM_F3[rdi*8], edx
+	shr	r8, 30
+	and	r8, 3FFFFFFFh
+	mov	YMM_F2[rdi*8], r8d
+	mov	YMM_F1[rdi*8], r9d
+
+; Compute factor + 1 for comparing against when loop is done
+
+;OPT....	replace this with a subtract 1 at loop's end and compare to YMM_F1/F2/F3???  subtract 1 must propgate carry too.
+;OPT....	replace with SSE2 instructions that do the same thing as below
+	mov	r8, fac1[rdi*8] 		; Restore the factor to test
+	mov	r9, fac1hi[rdi*8]
+	inc	r8
+	adc	r9, 0
+	shld	r9, r8, 4
+	mov	edx, 3FFFFFFFh
+	and	rdx, r8
+	mov	YMM_COMPARE_VAL3[rdi*8], edx
+	shr	r8, 30
+	and	r8, 3FFFFFFFh
+	mov	YMM_COMPARE_VAL2[rdi*8], r8d
+	mov	YMM_COMPARE_VAL1[rdi*8], r9d
+
+	inc	rdi			; One more factor queued up
+	cmp	rdi, 4			; Have enough been queued up?
+	jne	absf86			; No, go test more sieve bits
+
+;
+; Now test the accumulated trial factors
+;
+
+;; OPT - save/restore fewer registers  (affects winner checking and avx2_fac_initval code)
+ado86:	mov	SAVED_REG1, rsi		; Save sieve testing registers
+	mov	SAVED_REG2, rax
+	mov	SAVED_REG3, rbx
+	mov	SAVED_REG4, rcx
+	mov	SAVED_REG5, rbp
+
+; Work on initval.
+; This is like the aqloop code except that we avoid the initial squaring.
+
+	avx2_fac_initval
+
+; Square remainder and get new remainder.
+
+	mov	edi, SSE2_LOOP_COUNTER	; Number of times to loop
+aloop86:avx2_fac 86
+	dec	edi			; Decrement loop counter
+	jnz	aloop86
+
+; If result = factor + 1, then we found a divisor of 2**p - 1
+
+	vpcmpeqd ymm2, ymm2, YMM_COMPARE_VAL3	; See if remainder is factor + 1
+	vpcmpeqd ymm1, ymm1, YMM_COMPARE_VAL2
+	vpcmpeqd ymm0, ymm0, YMM_COMPARE_VAL1
+	vpand	ymm2, ymm2, ymm1
+	vpand	ymm2, ymm2, ymm0
+	vpmovmskb rcx, ymm2
+	cmp	cl, 0FFh		; See if we matched
+	je	short awin86_1		; Yes! Factor found
+	cmp	ch, 0FFh		; See if we matched
+	je	short awin86_2		; Yes! Factor found
+	shr	ecx, 16
+	cmp	cl, 0FFh		; See if we matched
+	je	short awin86_3		; Yes! Factor found
+	cmp	ch, 0FFh		; See if we matched
+	je	short awin86_4		; Yes! Factor found
+	jmp	short anext86		; Test next factor from sieve
+awin86_1:mov	edx, 0			; Factor found!!! Return it
+	jmp	short awin86
+awin86_2:mov	edx, 8			; Factor found!!! Return it
+	jmp	short awin86
+awin86_3:mov	edx, 16			; Factor found!!! Return it
+	jmp	short awin86
+awin86_4:mov	edx, 24			; Factor found!!! Return it
+awin86:	mov	eax, YMM_F3[rdx]	; Factor found!!! Return it
+	mov	ebx, YMM_F2[rdx]
+	mov	ecx, YMM_F1[rdx]
+	shl	eax, 2
+	shrd	eax, ebx, 2
+	shl	ebx, 2
+	shrd	ebx, ecx, 4
+	shr	ecx, 4
+	mov	FACLSW, eax
+	mov	FACMSW, ebx
+	mov	FACHSW, ecx
+	mov	rax, 1			; return TRUE
+	jmp	done
+
+anext86:sub	rdi, rdi		; Clear queued factors count
+	mov	rbp, SAVED_REG5		; Restore sieve testing register
+	mov	rcx, SAVED_REG4
+	mov	rbx, SAVED_REG3
+	mov	rax, SAVED_REG2
+	mov	rsi, SAVED_REG1
+	jmp	absf86			; Test next factor from sieve
 
 ; Pop registers and return
 

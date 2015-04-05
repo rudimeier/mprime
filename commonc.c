@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2015 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
@@ -11,7 +11,7 @@
 | Commonc contains information used during setup and execution
 +---------------------------------------------------------------------*/
 
-char JUNK[]="Copyright 1996-2014 Mersenne Research, Inc. All rights reserved";
+static const char JUNK[]="Copyright 1996-2015 Mersenne Research, Inc. All rights reserved";
 
 char	INI_FILE[80] = {0};
 char	LOCALINI_FILE[80] = {0};
@@ -48,7 +48,7 @@ unsigned long volatile ITER_OUTPUT_RES = 999999999;
 unsigned long volatile DISK_WRITE_TIME = 30;
 unsigned int MODEM_RETRY_TIME = 2;
 unsigned int NETWORK_RETRY_TIME = 70;
-double	DAYS_BETWEEN_CHECKINS = 1.0;
+float	DAYS_BETWEEN_CHECKINS = 1.0;
 int	NUM_BACKUP_FILES = 3;
 int	SILENT_VICTORY = 0;
 int	SILENT_VICTORY_PRP = 1;
@@ -899,9 +899,9 @@ int readIniFiles (void)
 	if (NETWORK_RETRY_TIME > 300) NETWORK_RETRY_TIME = 300;
 	
 	IniGetString (INI_FILE, "DaysBetweenCheckins", buf, sizeof (buf), "1");
-	DAYS_BETWEEN_CHECKINS = atof (buf);
-	if (DAYS_BETWEEN_CHECKINS > 7.0) DAYS_BETWEEN_CHECKINS = 7.0;
-	if (DAYS_BETWEEN_CHECKINS < 0.04) DAYS_BETWEEN_CHECKINS = 0.04;
+	DAYS_BETWEEN_CHECKINS = (float) atof (buf);
+	if (DAYS_BETWEEN_CHECKINS > 7.0) DAYS_BETWEEN_CHECKINS = 7.0;				/* 7 day maximum */
+	if (DAYS_BETWEEN_CHECKINS * 24.0 < 1.0) DAYS_BETWEEN_CHECKINS = (float) (1.0 / 24.0);	/* 1 hour minimum */
 	SILENT_VICTORY = (int) IniGetInt (INI_FILE, "SilentVictory", 0);
 	SILENT_VICTORY_PRP = (int) IniGetInt (INI_FILE, "SilentVictoryPRP", 1);
 	RUN_ON_BATTERY = (int) IniGetInt (LOCALINI_FILE, "RunOnBattery", 1);
@@ -1739,6 +1739,17 @@ void IniSectionWriteInt (
 	IniSectionWriteString (filename, section, keyword, buf);
 }
 
+void IniSectionWriteFloat (
+	const char *filename,
+	const char *section,
+	const char *keyword,
+	float	val)
+{
+	char	buf[20];
+	sprintf (buf, "%f", val);
+	IniSectionWriteString (filename, section, keyword, buf);
+}
+
 /* Shorthand routines for reading and writing from the global section */
 
 void IniGetTimedString (
@@ -1797,6 +1808,16 @@ void IniWriteInt (
 	long	val)
 {
 	IniSectionWriteInt (filename, NULL, keyword, val);
+}
+
+/* Write a float to the INI file. */
+
+void IniWriteFloat (
+	const char *filename,
+	const char *keyword,
+	float	val)
+{
+	IniSectionWriteFloat (filename, NULL, keyword, val);
 }
 
 /* Reread the INI file. */
@@ -2226,7 +2247,7 @@ int PTOHasOptionChanged (
 
 void OutputSomewhere (
 	int	thread_num,
-	char	*buf)
+	const char *buf)
 {
 	if (NO_GUI) writeResults (buf);
 	else OutputStr (thread_num, buf);
@@ -2237,7 +2258,7 @@ void OutputSomewhere (
 EXTERNC
 void OutputBoth (
 	int	thread_num,
-	char	*buf)
+	const char *buf)
 {
 	OutputStr (thread_num, buf);
 	writeResults (buf);
@@ -2247,7 +2268,7 @@ void OutputBoth (
 
 void OutputStr (
 	int	thread_num,
-	char	*buf)
+	const char *buf)
 {
 
 /* Grab a lock so that multiple threads cannot output at the same time. */
@@ -2281,7 +2302,7 @@ void OutputStr (
 /* Output the prefix for every line in the buffer */ 
 
 		do {
-			char	*eol;
+			const char *eol;
 
 			eol = strchr (buf, '\n');
 			if (eol != NULL) eol++;
@@ -2315,7 +2336,7 @@ void OutputStr (
 
 void OutputStrNoTimeStamp (
 	int	thread_num,
-	char	*buf)
+	const char *buf)
 {
 	gwmutex_lock (&OUTPUT_MUTEX);
 	RealOutputStr (thread_num, buf);
@@ -3022,7 +3043,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 /* A user discovered a case where a computer that dual boots between 32-bit prime95 */
 /* and 64-bit prime95 can run into problems.  If near the FFT limit an FFT length is */
 /* picked and written to worktodo.ini.  When running the other executable, that FFT */
-/* length may not be supported leading to a "cannot iniitialize FFT error".  For */
+/* length may not be supported leading to a "cannot initialize FFT error".  For */
 /* example, the 2800K FFT length is implemented in 64-bit prime95, but not 32-bit prime95. */
 /* The quick workaround here is to ignore FFT lengths from the worktodo file if that FFT */
 /* length is not supported.  This is non-optimal because the proper FFT size will */
@@ -4519,7 +4540,7 @@ void formatMsgForResultsFile (
 /* Open the results file and write a line to the end of it. */
 
 int writeResults (
-	char	*msg)
+	const char *msg)
 {
 static	time_t	last_time = 0;
 	time_t	this_time;
@@ -4962,7 +4983,7 @@ int unreserve (
 /* Output message to screen and prime.log file */
 
 void LogMsg (
-	char	*str)
+	const char *str)
 {
 	int	fd;
 	unsigned long filelen;

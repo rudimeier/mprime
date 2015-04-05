@@ -28,7 +28,7 @@ public:
 	UINT	m_retry;
 	UINT	m_r_iter;
 	UINT	m_work;
-	UINT	m_end_dates;
+	float	m_end_dates;
 	UINT	m_modem;
 	BOOL	m_battery;
 	//}}AFX_DATA

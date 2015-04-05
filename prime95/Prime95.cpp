@@ -1,3 +1,5 @@
+/* Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved */
+
 // Prime95.cpp : Defines the class behaviors for the application.
 //
 
@@ -429,7 +431,7 @@ void CPrime95App::TrayMessage (UINT message, LPCSTR prompt, HICON icon)
 	}
 
 	if (prompt)
-		lstrcpy (tnd.szTip, prompt);
+		truncated_strcpy (tnd.szTip, sizeof (tnd.szTip), prompt);
 	else
 		lstrcpy (tnd.szTip, "Prime95");
 

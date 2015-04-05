@@ -1,4 +1,4 @@
-; Copyright 2011-2014 - Mersenne Research, Inc.  All rights reserved.
+; Copyright 2011-2015 - Mersenne Research, Inc.  All rights reserved.
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -6338,7 +6338,7 @@ ttp	vmulpd	carry1, carry1, [rbp+0*YMM_GMD+YMM_GMD/2][rcx] ;; carry1 *= fudged gr
 ; Also note: The group multiplier will be 1.0 for the first 4 FFT words.
 
 ynorm_op_wpn_final MACRO ttp, base2, carry1, carry2
-	LOCAL	cloop, done
+	LOCAL	cloop, last_iter, done
 
 	ynorm_top_carry_cmn base2, rsi, carry2, 2
 
@@ -6346,12 +6346,15 @@ base2	vsubsd	carry2, carry2, YMM_BIGVAL	;; Remove BIGVAL
 	vmulsd	carry2, carry2, YMM_MINUS_C	;; mul wrap around carry by -c
 base2	vaddsd	carry2, carry2, YMM_BIGVAL	;; Restore BIGVAL
 
-	sub	rdx, rdx			;; Init loop counter
+	mov	dl, SPREAD_CARRY_OVER_EXTRA_WORDS ;; True if can spread carry over 8 words
 
 cloop:
 ttp	movzx	rbx, WORD PTR [rdi]		;; Load big vs. little & fudge flags
 ttp	movzx	eax, bh				;; Big/lit flags 1-2
 ttp	and	rbx, 01ch			;; Fudge flags 2
+
+	cmp	dl, 3*(256/4)			;; Is this the last iteration
+	je	last_iter			;; Yes, last iteration requires special handling
 
 	vaddsd	xmm0, carry2, Q [rsi]		;; x1 = values1 + carry2
 no ttp	vaddsd	xmm1, carry1, Q [rsi+32]	;; x2 = values2 + carry1
@@ -6379,6 +6382,16 @@ ttp	bump	rdi, 2				;; Advance pointers
 	sub	rsi, pass1blkdst		;; Each pass1 block consists of 4 pass 2 blocks
 	bump	rsi, 64				;; Next cache line
 	jmp	cloop				;; No, repeat carry propagation loop
+
+		;; Do last iteration without propagating carries out
+last_iter:
+base2	vsubsd	carry2, carry2, YMM_BIGVAL	;; Subtract rounding constant from carries
+base2	vsubsd	carry1, carry1, YMM_BIGVAL
+ttp	vmulsd	carry1, carry1, Q [rbp+1*YMM_GMD+YMM_GMD/2][rbx*8]
+	vaddsd	xmm0, carry2, Q [rsi]		;; x1 = values1 + carry2
+	vaddsd	xmm1, carry1, Q [rsi+32]	;; x2 = values2 + carry1
+	vmovsd	Q [rsi], xmm0			;; Save new value1
+	vmovsd	Q [rsi+32], xmm1		;; Save new value2
 
 done:	
 	ENDM

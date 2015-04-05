@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2015 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines to QA the gwnum FFT routines.
 | QA can be activated by using Advanced/Time menu choice on exponent 9900.
@@ -141,8 +141,11 @@ void compare (int thread_num, gwhandle *gwdata, gwnum x, giant g)
 				long val, val2;
 				get_fft_value (gwdata, x, i, &val);
 				get_fft_value (gwdata, y, i, &val2);
-				if (val != val2)
-					OutputBoth (thread_num, "mismatched words\n");
+				if (val != val2) {
+					char	buf[90];
+					sprintf (buf, "Mismatch word: %d  was: %ld  sb: %ld\n", i, val, val2);
+					OutputBoth (thread_num, buf);
+				}
 			}
 		}
 		gwfree (gwdata, y);
@@ -341,11 +344,14 @@ void test_it_all (
 		diff = fabs (gwsuminp (&gwdata, x) - gwsumout (&gwdata, x));
 		if (diff > maxdiff) maxdiff = diff;
 
-/* Test square carefully */
+/* Test square and mul carefully */
 
 		gwfree (&gwdata, x3); gwfree (&gwdata, x4);
 		if (abs (c) == 1) gwsetaddin (&gwdata, -42);
 		gwsquare_carefully (&gwdata, x);
+		diff = fabs (gwsuminp (&gwdata, x) - gwsumout (&gwdata, x));
+		if (diff > maxdiff) maxdiff = diff;
+		gwmul_carefully (&gwdata, x, x);
 		gwfree (&gwdata, gwdata.GW_RANDOM); gwdata.GW_RANDOM = NULL;
 		diff = fabs (gwsuminp (&gwdata, x) - gwsumout (&gwdata, x));
 		if (diff > maxdiff) maxdiff = diff;
@@ -591,11 +597,18 @@ void test_it (
 	specialmodg (gwdata, g);
 	if (CHECK_OFTEN) compare (thread_num, gwdata, x, g);
 
-/* Test square carefully */
+/* Test square and mul carefully */
 
 	gwfree (gwdata, x3); gwfree (gwdata, x4);
 	if (abs (gwdata->c) == 1) gwsetaddin (gwdata, -42);
 	gwsquare_carefully (gwdata, x);
+	diff = fabs (gwsuminp (gwdata, x) - gwsumout (gwdata, x));
+	if (diff > maxdiff) maxdiff = diff;
+	squaregi (&gwdata->gdata, g);
+	if (abs (gwdata->c) == 1) iaddg (-42, g);
+	specialmodg (gwdata, g);
+	if (CHECK_OFTEN) compare (thread_num, gwdata, x, g);
+	gwmul_carefully (gwdata, x, x);
 	gwfree (gwdata, gwdata->GW_RANDOM); gwdata->GW_RANDOM = NULL;
 	diff = fabs (gwsuminp (gwdata, x) - gwsumout (gwdata, x));
 	if (diff > maxdiff) maxdiff = diff;
