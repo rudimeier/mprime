@@ -291,7 +291,7 @@
 								</array>
 							</array>
 							<key>PBXSmartGroupTreeModuleOutlineStateVisibleRectKey</key>
-							<string>{{0, 0}, {200, 701}}</string>
+							<string>{{0, 0}, {200, 698}}</string>
 						</dict>
 						<key>PBXTopSmartGroupGIDs</key>
 						<array/>
@@ -301,14 +301,14 @@
 					<key>GeometryConfiguration</key>
 					<dict>
 						<key>Frame</key>
-						<string>{{0, 0}, {202, 719}}</string>
+						<string>{{0, 0}, {202, 716}}</string>
 						<key>GroupTreeTableConfiguration</key>
 						<array>
 							<string>MainColumn</string>
 							<real>200</real>
 						</array>
 						<key>RubberWindowFrame</key>
-						<string>111 118 1284 760 0 0 1440 878 </string>
+						<string>111 121 1284 757 0 0 1440 878 </string>
 					</dict>
 					<key>Module</key>
 					<string>PBXSmartGroupTreeModule</string>
@@ -336,7 +336,7 @@
 										<key>_historyCapacity</key>
 										<integer>0</integer>
 										<key>bookmark</key>
-										<string>5EF6F208184ECFD900E209F1</string>
+										<string>5E6D9B991AE6968900A9CB50</string>
 										<key>history</key>
 										<array>
 											<string>5E5FDD16105CEC6600FD47A2</string>
@@ -347,7 +347,7 @@
 											<string>5E69FB3F1288EA3400CA633E</string>
 											<string>5E7638741311A35000F6BA19</string>
 											<string>5E03120C155755A500D6DA5E</string>
-											<string>5EC3D79C184EBF8D007D3175</string>
+											<string>5E50F8BF1AE69621007BC012</string>
 										</array>
 									</dict>
 									<key>SplitCount</key>
@@ -363,7 +363,7 @@
 								<key>Frame</key>
 								<string>{{0, 0}, {1077, 0}}</string>
 								<key>RubberWindowFrame</key>
-								<string>111 118 1284 760 0 0 1440 878 </string>
+								<string>111 121 1284 757 0 0 1440 878 </string>
 							</dict>
 							<key>Module</key>
 							<string>PBXNavigatorGroup</string>
@@ -372,7 +372,7 @@
 						</dict>
 						<dict>
 							<key>Proportion</key>
-							<string>714pt</string>
+							<string>711pt</string>
 							<key>Tabs</key>
 							<array>
 								<dict>
@@ -386,9 +386,9 @@
 									<key>GeometryConfiguration</key>
 									<dict>
 										<key>Frame</key>
-										<string>{{10, 27}, {1077, 687}}</string>
+										<string>{{10, 27}, {1077, 684}}</string>
 										<key>RubberWindowFrame</key>
-										<string>111 118 1284 760 0 0 1440 878 </string>
+										<string>111 121 1284 757 0 0 1440 878 </string>
 									</dict>
 									<key>Module</key>
 									<string>XCDetailModule</string>
@@ -470,11 +470,11 @@
 			</array>
 			<key>TableOfContents</key>
 			<array>
-				<string>5EF6F1FF184ECFD900E209F1</string>
+				<string>5E6D9B9B1AE6968900A9CB50</string>
 				<string>1CA23ED40692098700951B8B</string>
-				<string>5EF6F200184ECFD900E209F1</string>
+				<string>5E6D9B9C1AE6968900A9CB50</string>
 				<string>5E5FDCB3105CE16100FD47A2</string>
-				<string>5EF6F201184ECFD900E209F1</string>
+				<string>5E6D9B9D1AE6968900A9CB50</string>
 				<string>1CA23EDF0692099D00951B8B</string>
 				<string>1CA23EE00692099D00951B8B</string>
 				<string>1CA23EE10692099D00951B8B</string>
@@ -666,7 +666,7 @@
 		<string>/Users/george/mersenne/macosx/Prime95/Prime95.xcodeproj</string>
 	</array>
 	<key>WindowString</key>
-	<string>111 118 1284 760 0 0 1440 878 </string>
+	<string>111 121 1284 757 0 0 1440 878 </string>
 	<key>WindowToolsV3</key>
 	<array>
 		<dict>

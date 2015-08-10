@@ -7,6 +7,8 @@ CFLAGS = -I.. -DX86_64 -O2
 CPP = cc
 CPPFLAGS = -I.. -I../qd -DX86_64 -O2
 
+AR = ar
+
 LINUXOBJS = cpuid.o gwnum.o gwtables.o gwthread.o gwutil.o gwdbldbl.o giants.o ecmstag1.o
 
 LIB = gwnum.a
@@ -15,10 +17,13 @@ LIB = gwnum.a
 
 $(LIB): $(LINUXOBJS)
 	cp linux64/gwnum.a .
-	ar -rs $(LIB) $(LINUXOBJS)
+	$(AR) -rs $(LIB) $(LINUXOBJS)
 
 clean:
 	rm -f $(LINUXOBJS)
+
+distclean: clean
+	rm -f $(LIB)
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

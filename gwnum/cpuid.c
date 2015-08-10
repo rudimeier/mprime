@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2014 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2015 Mersenne Research, Inc.  All rights reserved
 | Author:  George Woltman
 | Email: woltman@alum.mit.edu
 |
@@ -524,10 +524,24 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			 (family == 6 && model == 58) ||		// Core i7 (based on Ivy Bridge technology)
 			 (family == 6 && model == 62) ||		// Core i7 (based on Ivy Bridge-E technology)
 			 (family == 6 && model == 60) ||		// Core i7 (based on Haswell technology)
+			 (family == 6 && model == 63) ||		// Core i7 (based on Haswell-E technology)
 			 (family == 6 && model == 69) ||		// Core i7, mobile (based on Haswell technology)
-			 (family == 6 && model == 70))			// Core i7 (based on Haswell technology)
+			 (family == 6 && model == 70) ||		// Core i7 (based on Haswell technology)
+			 (family == 6 && model == 61) ||		// Core i7 (based on Broadwell technology)
+			 (family == 6 && model == 71) ||		// Core i7, mobile (based on Broadwell technology)
+			 (family == 6 && model == 86) ||		// Core i7, mobile (based on Broadwell technology)
+			 (family == 6 && model == 94))			// Core i7 (based on Skylake technology)
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_CORE_I7;
-		else if (family == 6 && model == 28)
+		else if ((family == 6 && model == 28) ||
+			 (family == 6 && model == 38) ||
+			 (family == 6 && model == 39) ||
+			 (family == 6 && model == 53) ||
+			 (family == 6 && model == 54) ||
+			 (family == 6 && model == 55) ||
+			 (family == 6 && model == 76) ||
+			 (family == 6 && model == 77) ||
+			 (family == 6 && model == 90) ||
+			 (family == 6 && model == 93))
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_ATOM;
 		else
 			CPU_ARCHITECTURE = CPU_ARCHITECTURE_INTEL_OTHER;

@@ -41,13 +41,13 @@ void destroy_window (
 
 void title (
 	int	thread_num,
-	char	*msg)
+	const char *msg)
 {
 }
 
 void base_title (
 	int	thread_num,
-	char	*msg)
+	const char *msg)
 {
 }
 
@@ -58,7 +58,7 @@ void flashWindowAndBeep ()
 
 void RealOutputStr (
 	int	thread_num,
-	char	*buf)
+	const char *buf)
 {
 	if (DEBUGGING) printf ("thread_num %d: %s", thread_num, buf);
 }

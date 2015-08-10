@@ -1043,23 +1043,20 @@ next1:			while (zpad_jmptab->flags & 0x80000000) INC_JMPTAB_1 (zpad_jmptab);
 /* the weighted_bits_per_output_word for irrational FFTs as using another log2b bits. */
 
 		max_weighted_bits_per_output_word = 2.0 * max_bits_per_input_word + 0.6 * log2 (jmptab->fftlen);
-		weighted_bits_per_output_word =
+		if (k == 1.0 && n % jmptab->fftlen == 0)
+			weighted_bits_per_output_word =	bits_per_output_word;
+		else {
+			weighted_bits_per_output_word =
 				2.0 * ((b_per_input_word + 1.0) * log2b - 1.0) +
 				0.6 * log2 (jmptab->fftlen) + log2k + 1.7 * log2c;
-
-/* Also, testing shows that for small b an unweighted FFT saves about */
-/* log2b output bits, and for larger b saves about 1.4 * log2b output bits. */
-
-		if (k == 1.0 && n % jmptab->fftlen == 0)
-			weighted_bits_per_output_word -= ((log2b <= 4.0) ? log2b : 1.4 * log2b);
 
 /* A pathological case occurs when num_big_words is one and k is greater than one. */
 /* The FFT weights for the small words will not range from 1 to b.  Depending on the */
 /* fractional part of logb(k).  In the worst case scenario, the small word weights */
 /* range from b - epsilon to b.  The example that raised this issue is 28*3^12285-1. */
 
-		else if (num_big_words == 1 && k > 1.0)
-			weighted_bits_per_output_word += log2b;
+			if (num_big_words == 1 && k > 1.0)
+				weighted_bits_per_output_word += log2b;
 
 /* Furthermore, testing shows us that larger b values don't quite need the full log2b */
 /* bits added (except for some pathological cases), probably because there are fewer */
@@ -1073,12 +1070,13 @@ next1:			while (zpad_jmptab->flags & 0x80000000) INC_JMPTAB_1 (zpad_jmptab);
 /* know of) still raise round off errors.  For added safety we assume an extra */
 /* 0.3 bits of output are needed when base is not 2. */
 
-		else if (! is_pathological_distribution (num_big_words, num_small_words)) {
-			weighted_bits_per_output_word -=
+			else if (! is_pathological_distribution (num_big_words, num_small_words)) {
+				weighted_bits_per_output_word -=
 					((log2b <= 3.0) ? (log2b - 1.0) / 2.0 :
 					 (log2b <= 6.0) ? 1.0 + (log2b - 3.0) / 3.0 :
 					 (log2b <= 12.5) ? 2.0 + (log2b - 6.0) / 6.5 : 3.0);
-			if (b != 2) weighted_bits_per_output_word += 0.3;
+				if (b != 2) weighted_bits_per_output_word += 0.3;
+			}
 		}
 
 /* If the bits in an output word is less than the maximum allowed (or the user is trying to force us */
@@ -1591,6 +1589,12 @@ void gwinit2 (
 		guessCpuSpeed ();
 	}
 	gwdata->cpu_flags = CPU_FLAGS;
+
+/* FMA3 FFTs require both AVX and FMA3 instructions.  This will always be the case when CPUID */
+/* is queried.  However, prime95 has an option to turn off just the AVX bit with CpuSupportsAVX=0. */
+/* Handle, this oddball case by also turning off FMA3. */
+
+	if (! (gwdata->cpu_flags & CPU_AVX)) gwdata->cpu_flags &= ~CPU_FMA3;
 
 /* AMD Bulldozer is faster using SSE2 rather than AVX. */
 
@@ -6150,7 +6154,7 @@ void gw_clear_maxerr (
 
 /* Return TRUE if we are operating near the limit of this FFT length */
 /* Input argument is the percentage to consider as near the limit. */
-/* For example, if percent is 1.0 and the FFT can handle 20 bits per word, */
+/* For example, if percent is 0.1 and the FFT can handle 20 bits per word, */
 /* then if there are more than 19.98 bits per word this function will */
 /* return TRUE. */
 

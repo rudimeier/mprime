@@ -9,6 +9,8 @@ CPP = g++
 CPPFLAGS = -I.. -I../qd -DX86_64 -DWINDOWS64 -O2
 #CPPFLAGS = -I.. -I../qd -DX86_64 -DWINDOWS64 -g -O2
 
+AR = ar
+
 WIN64O = mw64/cpuid.o mw64/gwnum.o mw64/gwtables.o mw64/gwthread.o mw64/gwutil.o mw64/gwdbldbl.o mw64/giants.o mw64/ecmstag1.o
 
 WIN64OBJS = amd64/xmult1ax.obj amd64/xmult2.obj amd64/xmult2a_core.obj amd64/xmult2a_k8.obj amd64/xmult2ax.obj \
@@ -37,15 +39,18 @@ all: $(WIN64LIB) $(LIB)
 clean:
 	rm -f $(WIN64O) $(WIN64LIB)
 
+distclean: clean
+	rm -f $(LIB)
+
 $(LIB): $(WIN64O)
 	cp $(WIN64LIB) .
-	ar -rs $(LIB) $(WIN64O)
+	$(AR) -rs $(LIB) $(WIN64O)
 
 $(WIN64LIB): $(WIN64OBJS)
 	# make sure our destination directory exists
 	test -d $(OBJDIR) || mkdir $(OBJDIR)
 	rm -f $(WIN64LIB)
-	ar -rs $(WIN64LIB) $(WIN64OBJS)
+	$(AR) -rs $(WIN64LIB) $(WIN64OBJS)
 
 # Compile C code for 64-bit
 

@@ -59,9 +59,9 @@ typedef double *gwnum;
 /* gwsetup verifies that the version numbers match.  This prevents bugs */
 /* from accidentally linking in the wrong gwnum library. */
 
-#define GWNUM_VERSION		"28.6"
+#define GWNUM_VERSION		"28.7"
 #define GWNUM_MAJOR_VERSION	28
-#define GWNUM_MINOR_VERSION	6
+#define GWNUM_MINOR_VERSION	7
 
 /* Error codes returned by the three gwsetup routines */
 
@@ -580,7 +580,7 @@ void gw_clear_maxerr (gwhandle *gwdata);
 
 /* Return TRUE if we are operating near the limit of this FFT length */
 /* Input argument is the percentage to consider as near the limit. */
-/* For example, if percent is 1.0 and the FFT can handle 20 bits per FFT */
+/* For example, if percent is 0.1 and the FFT can handle 20 bits per FFT */
 /* data word, then if there are more than 19.98 bits per FFT data word */
 /* this function will return TRUE. */
 

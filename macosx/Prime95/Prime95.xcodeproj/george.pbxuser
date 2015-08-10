@@ -165,20 +165,20 @@
 					PBXFileDataSource_Warnings_ColumnID,
 				);
 			};
-			PBXPerProjectTemplateStateSaveDate = 407818187;
-			PBXWorkspaceStateSaveDate = 407818187;
+			PBXPerProjectTemplateStateSaveDate = 451319399;
+			PBXWorkspaceStateSaveDate = 451319399;
 		};
 		perUserProjectItems = {
 			5E03120C155755A500D6DA5E /* PBXTextBookmark */ = 5E03120C155755A500D6DA5E /* PBXTextBookmark */;
+			5E50F8BF1AE69621007BC012 /* PBXTextBookmark */ = 5E50F8BF1AE69621007BC012 /* PBXTextBookmark */;
 			5E5FDD16105CEC6600FD47A2 /* PBXTextBookmark */ = 5E5FDD16105CEC6600FD47A2 /* PBXTextBookmark */;
 			5E69FB3F1288EA3400CA633E /* PBXTextBookmark */ = 5E69FB3F1288EA3400CA633E /* PBXTextBookmark */;
 			5E6D3702124842E800352727 /* PBXTextBookmark */ = 5E6D3702124842E800352727 /* PBXTextBookmark */;
+			5E6D9B991AE6968900A9CB50 /* PBXTextBookmark */ = 5E6D9B991AE6968900A9CB50 /* PBXTextBookmark */;
 			5E7638741311A35000F6BA19 /* PBXTextBookmark */ = 5E7638741311A35000F6BA19 /* PBXTextBookmark */;
 			5E9CCBF611D8F171008344A0 /* PBXTextBookmark */ = 5E9CCBF611D8F171008344A0 /* PBXTextBookmark */;
-			5EC3D79C184EBF8D007D3175 /* PBXTextBookmark */ = 5EC3D79C184EBF8D007D3175 /* PBXTextBookmark */;
 			5EDECAC4116D6E9C007B6FD8 /* PBXTextBookmark */ = 5EDECAC4116D6E9C007B6FD8 /* PBXTextBookmark */;
 			5EEFFD6C126FDC6E00C4AAF4 /* PBXTextBookmark */ = 5EEFFD6C126FDC6E00C4AAF4 /* PBXTextBookmark */;
-			5EF6F208184ECFD900E209F1 /* PBXTextBookmark */ = 5EF6F208184ECFD900E209F1 /* PBXTextBookmark */;
 		};
 		sourceControlManager = 5E5FDCB9105CE16100FD47A2 /* Source Control */;
 		userBuildSettings = {
@@ -219,6 +219,23 @@
 		modificationTime = 407789727.251225;
 		originalNumberOfMultipleMatches = 1;
 		state = 1;
+	};
+	5E50F8BF1AE69621007BC012 /* PBXTextBookmark */ = {
+		isa = PBXTextBookmark;
+		fRef = 5E50F8C01AE69621007BC012 /* commonc.c */;
+		name = "commonc.c: 647";
+		rLen = 0;
+		rLoc = 22799;
+		rType = 0;
+		vrLen = 0;
+		vrLoc = 0;
+	};
+	5E50F8C01AE69621007BC012 /* commonc.c */ = {
+		isa = PBXFileReference;
+		lastKnownFileType = sourcecode.c.c;
+		name = commonc.c;
+		path = /Users/george/mersenne/commonc.c;
+		sourceTree = "<absolute>";
 	};
 	5E52A54712864C4200968B6D /* giants.c */ = {
 		isa = PBXFileReference;
@@ -401,6 +418,22 @@
 		vrLen = 0;
 		vrLoc = 0;
 	};
+	5E6D9B991AE6968900A9CB50 /* PBXTextBookmark */ = {
+		isa = PBXTextBookmark;
+		fRef = 5E6D9B9A1AE6968900A9CB50 /* commonc.c */;
+		name = "commonc.c: 647";
+		rLen = 0;
+		rLoc = 22799;
+		rType = 0;
+		vrLen = 0;
+		vrLoc = 0;
+	};
+	5E6D9B9A1AE6968900A9CB50 /* commonc.c */ = {
+		isa = PBXFileReference;
+		name = commonc.c;
+		path = /Users/george/mersenne/commonc.c;
+		sourceTree = "<absolute>";
+	};
 	5E7361561240253B00D5544C /* gwtest.c */ = {
 		isa = PBXFileReference;
 		lastKnownFileType = sourcecode.c.c;
@@ -564,28 +597,6 @@
 		originalNumberOfMultipleMatches = 1;
 		state = 2;
 		symbolName = xpass2_r4dwpn_2304_levels_CORE;
-	};
-	5EC3D79C184EBF8D007D3175 /* PBXTextBookmark */ = {
-		isa = PBXTextBookmark;
-		fRef = 5EC3D79D184EBF8D007D3175 /* commonc.c */;
-		name = "commonc.c: 651";
-		rLen = 0;
-		rLoc = 22799;
-		rType = 0;
-		vrLen = 0;
-		vrLoc = 0;
-	};
-	5EC3D79D184EBF8D007D3175 /* commonc.c */ = {
-		isa = PBXFileReference;
-		lastKnownFileType = sourcecode.c.c;
-		name = commonc.c;
-		path = /Users/george/mersenne/commonc.c;
-		sourceTree = "<absolute>";
-		uiCtxt = {
-			sepNavIntBoundsRect = "{{0, 0}, {1016, 123614}}";
-			sepNavSelRange = "{22799, 0}";
-			sepNavVisRange = "{0, 0}";
-		};
 	};
 	5ECF0DBF1186938E00D4E8A4 /* gwtest.c:124 */ = {
 		isa = PBXFileBreakpoint;
@@ -775,22 +786,6 @@
 		modificationTime = 407789726.957886;
 		originalNumberOfMultipleMatches = 1;
 		state = 2;
-	};
-	5EF6F208184ECFD900E209F1 /* PBXTextBookmark */ = {
-		isa = PBXTextBookmark;
-		fRef = 5EF6F209184ECFD900E209F1 /* commonc.c */;
-		name = "commonc.c: 651";
-		rLen = 0;
-		rLoc = 22799;
-		rType = 0;
-		vrLen = 0;
-		vrLoc = 0;
-	};
-	5EF6F209184ECFD900E209F1 /* commonc.c */ = {
-		isa = PBXFileReference;
-		name = commonc.c;
-		path = /Users/george/mersenne/commonc.c;
-		sourceTree = "<absolute>";
 	};
 	8D1107260486CEB800E47090 /* Prime95 */ = {
 		activeExec = 0;

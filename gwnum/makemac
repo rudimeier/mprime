@@ -15,6 +15,8 @@ CPPFLAGSD = -I.. -I../qd -g -DGDEBUG -m32 -march=i686 -fno-exceptions -fno-rtti
 CPPFLAGS64 = -I.. -I../qd -O2 -DX86_64 -m64 -fno-exceptions -fno-rtti
 CPPFLAGS64D = -I.. -I../qd -g -DGDEBUG -DX86_64 -m64 -fno-exceptions -fno-rtti
 
+AR = ar
+
 OBJS = release/cpuid.o release/gwnum.o release/gwtables.o release/gwthread.o release/gwutil.o release/gwdbldbl.o release/giants.o release/ecmstag1.o
 OBJSD = debug/cpuid.o debug/gwnum.o debug/gwtables.o debug/gwthread.o debug/gwutil.o debug/gwdbldbl.o debug/giants.o debug/ecmstag1.o
 OBJS64 = amd64/release/cpuid.o amd64/release/gwnum.o amd64/release/gwtables.o amd64/release/gwthread.o amd64/release/gwutil.o amd64/release/gwdbldbl.o amd64/release/giants.o amd64/release/ecmstag1.o
@@ -32,24 +34,27 @@ all: $(LIB) $(LIBD) $(LIB64) $(LIB64D)
 clean:
 	rm -f $(OBJS) $(OBJSD) $(OBJS64) $(OBJS64D)
 
+distclean: clean
+	rm -f $(LIB) $(LIBD) $(LIB64) $(LIB64D)
+
 $(LIB): $(OBJS)
 	cp macosx/gwnum.a release
-	ar -rs $(LIB) $(OBJS)
+	$(AR) -rs $(LIB) $(OBJS)
 	rm -f release/*.o
 
 $(LIBD): $(OBJSD)
 	cp macosx/gwnum.a debug
-	ar -rs $(LIBD) $(OBJSD)
+	$(AR) -rs $(LIBD) $(OBJSD)
 	rm -f debug/*.o
 
 $(LIB64): $(OBJS64)
 	cp macosx64/gwnum.a amd64/release
-	ar -rs $(LIB64) $(OBJS64)
+	$(AR) -rs $(LIB64) $(OBJS64)
 	rm -f amd64/release/*.o
 
 $(LIB64D): $(OBJS64D)
 	cp macosx64/gwnum.a amd64/debug
-	ar -rs $(LIB64D) $(OBJS64D)
+	$(AR) -rs $(LIB64D) $(OBJS64D)
 	rm -f amd64/debug/*.o
 
 release/cpuid.o:

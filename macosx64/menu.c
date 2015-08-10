@@ -39,7 +39,7 @@ unsigned long get_number (
 /* Ask a Yes/No question */
 
 void askYN (
-	char	*str,
+	const char *str,
 	int	*val)
 {
 	char	buf[80];
@@ -52,7 +52,7 @@ void askYN (
 /* Ask a number question */
 
 void askNum (
-	char	*str,
+	const char *str,
 	unsigned long *val,
 	unsigned long min,
 	unsigned long max)
@@ -76,7 +76,7 @@ loop:	get_line (buf);
 /* Ask a number question */
 
 void askInt (
-	char	*str,
+	const char *str,
 	long	*val,
 	long	min,
 	long	max)
@@ -100,7 +100,7 @@ loop:	get_line (buf);
 /* Ask a number question */
 
 void askFloat (
-	char	*str,
+	const char *str,
 	float	*val,
 	float	min,
 	float	max)
@@ -123,7 +123,7 @@ loop:	get_line (buf);
 /* Ask a number question */
 
 void askDbl (
-	char	*str,
+	const char *str,
 	double	*val,
 	double	min,
 	double	max)
@@ -147,7 +147,7 @@ loop:	get_line (buf);
 /* Ask a number question */
 
 void askNumNoDflt (
-	char	*str,
+	const char *str,
 	unsigned long *val,
 	unsigned long min,
 	unsigned long max)
@@ -171,7 +171,7 @@ loop:	get_line (buf);
 /* Ask a string question */
 
 void askStr (
-	char	*str,
+	const char *str,
 	char	*val,
 	unsigned long maxlen)
 {
@@ -240,10 +240,10 @@ int askYesNoCancel (
 /* Output a long string with a max of 75 characters to a line */
 
 void outputLongLine (
-	char	*buf)
+	const char *buf)
 {
 	char	line[80];
-	char	*p;
+	const char *p;
 	int	i, chars_to_output;
 
 	for (p = buf; ; ) {

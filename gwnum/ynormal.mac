@@ -6381,6 +6381,7 @@ ttp	bump	rdi, 2				;; Advance pointers
 	jnc	cloop				;; Loop if not 4th iteration
 	sub	rsi, pass1blkdst		;; Each pass1 block consists of 4 pass 2 blocks
 	bump	rsi, 64				;; Next cache line
+	dec	dl				;; Decrement count of sets of 4 carries we've processed
 	jmp	cloop				;; No, repeat carry propagation loop
 
 		;; Do last iteration without propagating carries out

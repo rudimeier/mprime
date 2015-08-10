@@ -7,6 +7,8 @@ CFLAGS = -I.. -O2 -march=i586 -malign-double
 CPP = g++
 CPPFLAGS = -I.. -I../qd -O2 -march=i586 -malign-double
 
+AR = ar
+
 HAIKUOBJS = cpuid.o gwnum.o gwtables.o gwthread.o gwutil.o gwdbldbl.o giants.o ecmstag1.o
 
 LIB = gwnum.a
@@ -15,10 +17,13 @@ LIB = gwnum.a
 
 $(LIB): $(HAIKUOBJS)
 	cp linux/gwnum.a .
-	ar -rs $(LIB) $(HAIKUOBJS)
+	$(AR) -rs $(LIB) $(HAIKUOBJS)
 
 clean:
 	rm -f $(HAIKUOBJS)
+
+distclean: clean
+	rm -f $(LIB)
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<

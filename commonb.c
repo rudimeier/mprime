@@ -22,7 +22,7 @@
 static const char ERRMSG0[] = "Iteration: %ld/%ld, %s";
 static const char ERRMSG1A[] = "ERROR: ILLEGAL SUMOUT\n";
 static const char ERRMSG1B[] = "ERROR: SUM(INPUTS) != SUM(OUTPUTS), %.16g != %.16g\n";
-static const char ERRMSG1C[] = "Possible error: round off (%.10g) > 0.40\n";
+static const char ERRMSG1C[] = "Possible error: round off (%.10g) > 0.40625\n";
 static const char ERRMSG1D[] = "ERROR: Shift counter corrupt.\n";
 static const char ERRMSG1E[] = "ERROR: Illegal double encountered.\n";
 static const char ERRMSG1F[] = "ERROR: FFT data has been zeroed!\n";
@@ -2737,14 +2737,12 @@ void calc_output_frequencies (
 		else if (temp < 2.75) temp = 2.5;
 		else temp = floor (temp + 0.5);
 		*output_frequency = temp * pow (10.0, exp);
-		if (*output_frequency < 1.0) *output_frequency = 1.0;
 	}
 
-	/* Calculate the title frequency as a multiple of the output frequency */
+	/* Calculate the title frequency as a fraction of the output frequency */
 	title_freq = (int) IniGetInt (INI_FILE, "TitleOutputFrequency", 1);
 	if (title_freq < 1) title_freq = 1;
 	*output_title_frequency = *output_frequency / (double) title_freq;
-	if (*output_title_frequency < 1.0) *output_title_frequency = 1.0;
 }
 
 /* Truncate a percentage to the requested number of digits. */
@@ -5271,6 +5269,7 @@ int prime (
 	double	last_sumout = 0.0;
 	double	last_maxerr = 0.0;
 	double	output_frequency, output_title_frequency;
+	int	actual_frequency;
 	int	error_count_messages;
 
 /* Initialize */
@@ -5422,8 +5421,20 @@ begin:	gwinit (&lldata.gwdata);
 /* different FFT data - thus greatly reducing the chance that a CPU or program error corrupts the results. */
 
 	if (counter == 2) {
-		if (IniGetInt (INI_FILE, "InitialLLValue", 4) != 4) {
-			dbltogw (&lldata.gwdata, (double) IniGetInt (INI_FILE, "InitialLLValue", 4), lldata.lldata);
+		unsigned long S0;
+		if ((S0 = IniGetInt (INI_FILE, "InitialLLValue", 4)) != 4) {
+			if (S0 == 23) {	/* 23 is not a valid start value. Use 23 as a secret code for 2/3.  Courtesy of Batalov. */
+				giant tmp;
+				tmp = allocgiant ((p >> 5) + 5);
+				if (tmp == NULL) return (OutOfMemory (thread_num));
+				ultog (2, tmp);
+				power (tmp, p);
+				iaddg (1, tmp);
+				dbldivg (3, tmp);
+				gianttogw (&lldata.gwdata, tmp, lldata.lldata);
+			} else {
+				dbltogw (&lldata.gwdata, (double) S0, lldata.lldata);
+			}
 			lldata.units_bit = 0;
 		} else {
 			unsigned long i, word, bit_in_word;
@@ -5576,7 +5587,9 @@ begin:	gwinit (&lldata.gwdata);
 /* then repeat the iteration using a safer, slower method.  This can */
 /* happen when operating near the limit of an FFT. */
 
-		if (echk && gw_get_maxerr (&lldata.gwdata) > 0.40625) {
+		if (echk &&
+		    (gw_get_maxerr (&lldata.gwdata) > 0.421875 ||			/* 27/64 */
+		     (!near_fft_limit && gw_get_maxerr (&lldata.gwdata) > 0.40625))) {	/* 26/64 */
 			if (counter == last_counter &&
 			    gw_get_maxerr (&lldata.gwdata) == last_maxerr) {
 				OutputBoth (thread_num, ERROK);
@@ -5640,7 +5653,9 @@ begin:	gwinit (&lldata.gwdata);
 
 /* Output the title every so often */
 
-		if (counter % (int) (ITER_OUTPUT * output_title_frequency) == 0 || first_iter_msg) {
+		actual_frequency = (int) (ITER_OUTPUT * output_title_frequency);
+		if (actual_frequency < 1) actual_frequency = 1;
+		if (counter % actual_frequency == 0 || first_iter_msg) {
 			char	fmt_mask[80];
 			sprintf (fmt_mask, "%%.%df%%%% of M%%ld", PRECISION);
 			sprintf (buf, fmt_mask, trunc_percent (w->pct_complete), p);
@@ -5649,7 +5664,9 @@ begin:	gwinit (&lldata.gwdata);
 
 /* Print a message every so often */
 
-		if (counter % (int) (ITER_OUTPUT * output_frequency) == 0 || first_iter_msg) {
+		actual_frequency = (int) (ITER_OUTPUT * output_frequency);
+		if (actual_frequency < 1) actual_frequency = 1;
+		if (counter % actual_frequency == 0 || first_iter_msg) {
 			char	fmt_mask[80];
 			sprintf (fmt_mask, "Iteration: %%ld / %%ld [%%.%df%%%%]", PRECISION);
 			sprintf (buf, fmt_mask, counter, p, trunc_percent (w->pct_complete));
@@ -8541,6 +8558,7 @@ int prp (
 	double	last_sumout = 0.0;
 	double	last_maxerr = 0.0;
 	double	output_frequency, output_title_frequency;
+	int	actual_frequency;
 	char	string_rep[80];
 	int	string_rep_truncated;
 	int	error_count_messages;
@@ -8801,7 +8819,7 @@ gwtogiant (&gwdata, x, t1);
 				 (counter+1) % INTERIM_RESIDUES > 0));
 #ifdef CHECK_ITER
 squareg (t1);
-if (bitval (N, Nlen-2-counter)) imulg (3, t1);
+if (bitval (N, Nlen-2-counter)) imulg (prp_base, t1);
 specialmodg (&gwdata, t1);
 if (w->known_factors) {	iaddg (1, N); modg (N, t1); iaddg (-1, N); }
 gwstartnextfft (&gwdata, 0);
@@ -8888,7 +8906,9 @@ OutputStr (thread_num, "Iteration failed.\n");
 /* then repeat the iteration using a safer, slower method.  This can */
 /* happen when operating near the limit of an FFT. */
 
-		if (echk && gw_get_maxerr (&gwdata) > 0.40625) {
+		if (echk &&
+		    (gw_get_maxerr (&gwdata) > 0.421875 ||			/* 27/64 */
+		     (!near_fft_limit && gw_get_maxerr (&gwdata) > 0.40625))) {	/* 26/64 */
 			if (counter == last_counter &&
 			    gw_get_maxerr (&gwdata) == last_maxerr) {
 				OutputBoth (thread_num, ERROK);
@@ -8918,7 +8938,9 @@ OutputStr (thread_num, "Iteration failed.\n");
 
 /* Output the title every so often */
 
-		if (counter % (int) (ITER_OUTPUT * output_title_frequency) == 0 || first_iter_msg) {
+		actual_frequency = (int) (ITER_OUTPUT * output_title_frequency);
+		if (actual_frequency < 1) actual_frequency = 1;
+		if (counter % actual_frequency == 0 || first_iter_msg) {
 			char	fmt_mask[80];
 			sprintf (fmt_mask, "%%.%df%%%% of %%s", PRECISION);
 			sprintf (buf, fmt_mask, trunc_percent (w->pct_complete), string_rep);
@@ -8927,7 +8949,9 @@ OutputStr (thread_num, "Iteration failed.\n");
 
 /* Print a message every so often */
 
-		if (counter % (int) (ITER_OUTPUT * output_frequency) == 0 || first_iter_msg) {
+		actual_frequency = (int) (ITER_OUTPUT * output_frequency);
+		if (actual_frequency < 1) actual_frequency = 1;
+		if (counter % actual_frequency == 0 || first_iter_msg) {
 			char	fmt_mask[80];
 			sprintf (fmt_mask, "Iteration: %%ld / %%ld [%%.%df%%%%]", PRECISION);
 			sprintf (buf, fmt_mask, counter, Nlen-1, trunc_percent (w->pct_complete));
