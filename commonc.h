@@ -2,7 +2,7 @@
 
 /* Constants */
 
-#define VERSION		"28.7"
+#define VERSION		"28.8"
 #define BUILD_NUM	"1"
 /* The list of assigned OS ports follows: */
 /* Win9x (prime95) #1 */
@@ -256,6 +256,8 @@ void IniSectionGetString (const char *, const char *, const char *, char *, unsi
 void IniSectionGetTimedString (const char *, const char *, const char *, char *, unsigned int, const char *, unsigned int *);
 long IniSectionGetInt (const char *, const char *, const char *, long);
 long IniSectionGetTimedInt (const char *, const char *, const char *, long, unsigned int *);
+float IniSectionGetFloat (const char *, const char *, const char *, float);
+float IniSectionGetTimedFloat (const char *, const char *, const char *, float, unsigned int *);
 void IniSectionWriteString (const char *, const char *, const char *, const char *);
 void IniSectionWriteInt (const char *, const char *, const char *, long);
 void IniSectionWriteFloat (const char *, const char *, const char *, float);
@@ -263,6 +265,8 @@ void IniGetString (const char *, const char *, char *, unsigned int, const char 
 void IniGetTimedString (const char *, const char *, char *, unsigned int, const char *, unsigned int *);
 long IniGetInt (const char *, const char *, long);
 long IniGetTimedInt (const char *, const char *, long, unsigned int *);
+float IniGetFloat (const char *, const char *, float);
+float IniGetTimedFloat (const char *, const char *, float, unsigned int *);
 void IniWriteString (const char *, const char *, const char *);
 void IniWriteInt (const char *, const char *, long);
 void IniWriteFloat (const char *, const char *, float);

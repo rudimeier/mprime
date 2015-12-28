@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/18/09.
-//  Copyright 2009-2014 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2015 Mersenne Research, Inc. All rights reserved.
 //
 
 #import "WindowController.h"
@@ -11,8 +11,7 @@
 
 gwmutex	VIEW_MUTEX;		/* Lock for accessing Views Array */
 int	VIEW_MUTEX_INITIALIZED = 0;
-#define MAX_VIEWS	34	/* 34 windows: Main_thread, comm_thread */
-				/* and 32 worker threads. */
+#define MAX_VIEWS	(MAX_NUM_WORKER_THREADS+2)	/* Main_thread, comm_thread and each worker thread. */
 WindowController *Views[MAX_VIEWS] = {0};
 char	ThreadTitles[MAX_VIEWS][80] = {0};
 double	currentFontSize = 0.0;

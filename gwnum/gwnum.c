@@ -571,11 +571,18 @@ int calculate_bif (
 //		retval = BIF_BULL;		/* Look for FFTs optimized for Bulldozer */
 		retval = BIF_K10;		/* Look for FFTs optimized for K10 until we write Bulldozer specific FFTs */
 		break;
+	case CPU_ARCHITECTURE_OTHER:		/* Probably a VIA processor */
+		if (! (gwdata->cpu_flags & CPU_AVX))
+			retval = BIF_CORE2;	/* We don't know which FFT is fastest.  For no particularly good reason, use Core 2 FFTs */
+		else if (! (gwdata->cpu_flags & CPU_FMA3))
+			retval = BIF_I7;	/* Look for FFTs optimized for Core i7 (AVX without FMA3) */
+		else
+			retval = BIF_FMA3;	/* Look for FFTs optimized for Haswell CPUs with FMA3 support */
+		break;
 	case CPU_ARCHITECTURE_PRE_SSE2:		/* Cannot happen, gwinfo should have selected x87 FFTs */
-	case CPU_ARCHITECTURE_AMD_OTHER:
-	case CPU_ARCHITECTURE_OTHER:
-	default:
-		retval = BIF_CORE2;		/* For no particularly good reason, look for FFTs optimized for Core 2 */
+	case CPU_ARCHITECTURE_AMD_OTHER:	/* Bulldozer AVX FFTs are slower than SSE2 FFTs, assume same for future AMD processors */
+	default:				/* For no particularly good reason, look for FFTs optimized for Core 2 */
+		retval = BIF_CORE2;
 		break;
 	}
 

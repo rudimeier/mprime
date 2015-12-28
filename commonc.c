@@ -520,7 +520,7 @@ int isPrime (
 	unsigned long p)
 {
 	unsigned long i;
-	for (i = 2; i * i <= p; i = (i + 1) | 1)
+	for (i = 2; i < 0xFFFF && i * i <= p; i = (i + 1) | 1)
 		if (p % i == 0) return (FALSE);
 	return (TRUE);
 }
@@ -822,7 +822,6 @@ int readIniFiles (void)
 	int	rc, temp;
 	int	day_memory;
 	int	night_memory;
-	char	buf[80];
 
 /* Force the INI files to be reread, just in case they were hand edited. */
 /* Incorporate any additions from .add files */
@@ -897,9 +896,8 @@ int readIniFiles (void)
 			   MODEM_RETRY_TIME > 70 ? MODEM_RETRY_TIME : 70);
 	if (NETWORK_RETRY_TIME < 1) NETWORK_RETRY_TIME = 1;
 	if (NETWORK_RETRY_TIME > 300) NETWORK_RETRY_TIME = 300;
-	
-	IniGetString (INI_FILE, "DaysBetweenCheckins", buf, sizeof (buf), "1");
-	DAYS_BETWEEN_CHECKINS = (float) atof (buf);
+
+	DAYS_BETWEEN_CHECKINS = IniGetFloat (INI_FILE, "DaysBetweenCheckins", 1.0);
 	if (DAYS_BETWEEN_CHECKINS > 7.0) DAYS_BETWEEN_CHECKINS = 7.0;				/* 7 day maximum */
 	if (DAYS_BETWEEN_CHECKINS * 24.0 < 1.0) DAYS_BETWEEN_CHECKINS = (float) (1.0 / 24.0);	/* 1 hour minimum */
 	SILENT_VICTORY = (int) IniGetInt (INI_FILE, "SilentVictory", 0);
@@ -1589,6 +1587,29 @@ long IniSectionGetInt (
 	return (IniSectionGetTimedInt (filename, section, keyword, default_val, &seconds));
 }
 
+float IniSectionGetTimedFloat (
+	const char *filename,
+	const char *section,
+	const char *keyword,
+	float	default_val,
+	unsigned int *seconds)
+{
+	char	buf[20], defval[20];
+	sprintf (defval, "%f", default_val);
+	IniSectionGetTimedString (filename, section, keyword, buf, 20, defval, seconds);
+	return ((float) atof (buf));
+}
+
+float IniSectionGetFloat (
+	const char *filename,
+	const char *section,
+	const char *keyword,
+	float	default_val)
+{
+	unsigned int seconds;
+	return (IniSectionGetTimedFloat (filename, section, keyword, default_val, &seconds));
+}
+
 void IniSectionWriteString (
 	const char *filename,
 	const char *section,
@@ -1745,9 +1766,11 @@ void IniSectionWriteFloat (
 	const char *keyword,
 	float	val)
 {
-	char	buf[20];
-	sprintf (buf, "%f", val);
-	IniSectionWriteString (filename, section, keyword, buf);
+	/* Assume FLT_MAX is 3.40282e+038, the maximum significant digits that */
+	/* can be stored in this buf is 12. ((sizeof(buf))-sizeof("-.E+038")) */
+ 	char	buf[20];
+	sprintf (buf, "%11g", val);
+ 	IniSectionWriteString (filename, section, keyword, buf);
 }
 
 /* Shorthand routines for reading and writing from the global section */
@@ -1788,6 +1811,23 @@ long IniGetInt (
 	long	default_val)
 {
 	return (IniSectionGetInt (filename, NULL, keyword, default_val));
+}
+
+float IniGetTimedFloat (
+	const char *filename,
+	const char *keyword,
+	float	default_val,
+	unsigned int *seconds)	     
+{
+	return (IniSectionGetTimedFloat (filename, NULL, keyword, default_val, seconds));
+}
+
+float IniGetFloat (
+	const char *filename,
+	const char *keyword,
+	float	default_val)
+{
+	return (IniSectionGetFloat (filename, NULL, keyword, default_val));
 }
 
 /* Write a string to the INI file. */

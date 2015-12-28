@@ -6346,15 +6346,15 @@ base2	vsubsd	carry2, carry2, YMM_BIGVAL	;; Remove BIGVAL
 	vmulsd	carry2, carry2, YMM_MINUS_C	;; mul wrap around carry by -c
 base2	vaddsd	carry2, carry2, YMM_BIGVAL	;; Restore BIGVAL
 
-	mov	dl, SPREAD_CARRY_OVER_EXTRA_WORDS ;; True if can spread carry over 8 words
+	sub	dl, dl				;; Clear loop counter
 
 cloop:
 ttp	movzx	rbx, WORD PTR [rdi]		;; Load big vs. little & fudge flags
 ttp	movzx	eax, bh				;; Big/lit flags 1-2
 ttp	and	rbx, 01ch			;; Fudge flags 2
 
-	cmp	dl, 3*(256/4)			;; Is this the last iteration
-	je	last_iter			;; Yes, last iteration requires special handling
+	cmp	dl, 3				;; Is this the 4th iteration
+	je	last_iter			;; Yes it's our last.  Last iteration requires special handling
 
 	vaddsd	xmm0, carry2, Q [rsi]		;; x1 = values1 + carry2
 no ttp	vaddsd	xmm1, carry1, Q [rsi+32]	;; x2 = values2 + carry1
@@ -6377,11 +6377,7 @@ no base2 vxorpd	xmm1, xmm1, xmm1		;; Create comparison value
 
 ttp	bump	rdi, 2				;; Advance pointers
 	add	rsi, pass2blkdst		;; Next FFT data ptr
- 	add	dl, 256/4			;; Special increment needed every 4th iteration
-	jnc	cloop				;; Loop if not 4th iteration
-	sub	rsi, pass1blkdst		;; Each pass1 block consists of 4 pass 2 blocks
-	bump	rsi, 64				;; Next cache line
-	dec	dl				;; Decrement count of sets of 4 carries we've processed
+ 	inc	dl				;; Inrement loop counter
 	jmp	cloop				;; No, repeat carry propagation loop
 
 		;; Do last iteration without propagating carries out

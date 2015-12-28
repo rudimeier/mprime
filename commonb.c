@@ -2465,12 +2465,8 @@ double LO_LOAD = 0.0;
 
 void read_load_average_info (void)
 {
-	char	buf[20];
-
-	IniGetString (INI_FILE, "MaxLoad", buf, sizeof (buf), "0");
-	HI_LOAD = atof (buf);
-	IniGetString (INI_FILE, "MinLoad", buf, sizeof (buf), "0");
-	LO_LOAD = atof (buf);
+	HI_LOAD = IniGetFloat (INI_FILE, "MaxLoad", 0.0);
+	LO_LOAD = IniGetFloat (INI_FILE, "MinLoad", 0.0);
 	LOAD_CHECK_TIME = IniGetInt (INI_FILE, "PauseTime", 20);
 }
 
@@ -4075,7 +4071,7 @@ loop:	*res = factorChunk (facdata);
 
 /* Trial factor a Mersenne number prior to running a Lucas-Lehmer test */
 
-static const char FACMSG[] = "Trial factoring M%%ld to 2^%%d is %%.%df%%%% complete.";
+static const char FACMSG[] = "Trial factoring M%ld to 2^%d is %.*f%% complete.";
 static const char SHORT_FACMSG[] = "Trial factoring M%ld to 2^%d.";
 
 #define FACTOR_MAGICNUM		0x1567234D
@@ -4371,21 +4367,18 @@ int primeFactor (
 /* is close to zero. */
 
 			if (++iters >= ITER_OUTPUT || first_iter_msg) {
-				char	fmt_mask[80];
 				double	pct;
 				pct = trunc_percent (w->pct_complete);
 				if (first_iter_msg == 2) {
 					sprintf (buf, "M%ld to 2^%d", p, end_bits);
 				} else {
-					sprintf (fmt_mask, "%%.%df%%%% of M%%ld to 2^%%d", PRECISION);
-					sprintf (buf, fmt_mask, pct, p, end_bits);
+					sprintf (buf, "%.*f%% of M%ld to 2^%d", (int) PRECISION, pct, p, end_bits);
 				}
 				title (thread_num, buf);
 				if (first_iter_msg == 2) {
 					sprintf (buf, SHORT_FACMSG, p, end_bits);
 				} else {
-					sprintf (fmt_mask, FACMSG, PRECISION);
-					sprintf (buf, fmt_mask, p, end_bits, pct);
+					sprintf (buf, FACMSG, p, end_bits, (int) PRECISION, pct);
 				}
 				if (first_iter_msg) {
 					strcat (buf, "\n");
@@ -4401,13 +4394,8 @@ int primeFactor (
 
 /* Output informative message */
 
-			if (++iters_r >= ITER_OUTPUT_RES ||
-			    (NO_GUI && stop_reason)) {
-				char	fmt_mask[80];
-				double	pct;
-				pct = trunc_percent (w->pct_complete);
-				sprintf (fmt_mask, FACMSG, PRECISION);
-				sprintf (buf, fmt_mask, p, end_bits, pct);
+			if (++iters_r >= ITER_OUTPUT_RES || (NO_GUI && stop_reason)) {
+				sprintf (buf, FACMSG, p, end_bits, (int) PRECISION, trunc_percent (w->pct_complete));
 				strcat (buf, "\n");
 				writeResults (buf);
 				iters_r = 0;
@@ -4630,6 +4618,7 @@ int lucasSetup (
 /* Init the FFT code for squaring modulo 1.0*2^p-1.  NOTE: As a kludge for */
 /* the benchmarking and timing code, an odd FFTlen sets up the 1.0*2^p+1 FFT code. */
 
+	gwset_safety_margin (&lldata->gwdata, IniGetFloat (INI_FILE, "ExtraSafetyMargin", 0.0));
 	gwset_specific_fftlen (&lldata->gwdata, fftlen & ~1);
 	if (fftlen & 1)
 		res = gwsetup (&lldata->gwdata, 1.0, 2, p, 1);
@@ -4684,21 +4673,44 @@ void lucasDone (
 
 int generateResidue64 (
 	llhandle *lldata,
+	unsigned long p,	/* Exponent under LL test */
 	unsigned long *reshi,
 	unsigned long *reslo)
 {
+	uint64_t res64;
 	giant	tmp;
 	int	err_code;
 
 	*reshi = *reslo = 0;
-	tmp = popg (&lldata->gwdata.gdata, ((int) lldata->gwdata.bit_length >> 5) + 5);
+	tmp = popg (&lldata->gwdata.gdata, (p >> 5) + 5);
 	err_code = gwtogiant (&lldata->gwdata, lldata->lldata, tmp);
-	if (err_code < 0) return (err_code);
-	if (tmp->sign == 0) return (0);
+	if (err_code < 0) {
+		pushg (&lldata->gwdata.gdata, 1);
+		return (err_code);
+	}
+	if (tmp->sign == 0) {
+		pushg (&lldata->gwdata.gdata, 1);
+		return (0);
+	}
+
+	/* If the shift count is large, we will need some of the bottom bits too */
+	res64 = 0;
+	if (lldata->units_bit + 64 > p) {
+		if (tmp->sign > 0) res64 = tmp->n[0];
+		if (tmp->sign > 1) res64 += ((uint64_t) tmp->n[1]) << 32;
+		res64 <<= p - lldata->units_bit;
+		if (p < 64) res64 &= (((uint64_t) 1) << p) - 1;
+	}
+
+	/* Apply the shift count and get the low 64 bits */
 	gshiftright (lldata->units_bit, tmp);
-	if (tmp->sign > 0) *reslo = tmp->n[0];
-	if (tmp->sign > 1) *reshi = tmp->n[1];
+	if (tmp->sign > 0) res64 += tmp->n[0];
+	if (tmp->sign > 1) res64 += ((uint64_t) tmp->n[1]) << 32;
 	pushg (&lldata->gwdata.gdata, 1);
+
+	/* Return the calculated 64-bit residue */
+	*reslo = (uint32_t) res64;
+	*reshi = (uint32_t) (res64 >> 32);
 	return (1);
 }
 
@@ -5076,8 +5088,7 @@ int pick_fft_size (
 /* Get the info on how what percentage of exponents on either side of */
 /* an FFT crossover we will do this 1000 iteration test. */
 
-	IniGetString (INI_FILE, "SoftCrossover", buf, sizeof (buf), "0.2");
-	softpct = atof (buf) / 100.0;
+	softpct = IniGetFloat (INI_FILE, "SoftCrossover", (float) 0.2) / 100.0;
 
 /* If this exponent is not close to an FFT crossover, then we are done */
 
@@ -5094,8 +5105,7 @@ int pick_fft_size (
 	max_avg_error = 0.241 + 0.002 *
 		(log ((double) small_fftlen) - log ((double) 262144.0)) /
 		(log ((double) 4194304.0) - log ((double) 262144.0));
-	IniGetString (INI_FILE, "SoftCrossoverAdjust", buf, sizeof (buf), "0");
-	max_avg_error += atof (buf);
+	max_avg_error += IniGetFloat (INI_FILE, "SoftCrossoverAdjust", 0.0);
 
 /* Print message to let user know what is going on */
 
@@ -5168,9 +5178,7 @@ int pick_fft_size (
 int exponent_near_fft_limit (
 	gwhandle *gwdata)		/* Handle returned by gwsetup */
 {
-	char	pct[30];
-	IniGetString (INI_FILE, "NearFFTLimitPct", pct, sizeof(pct), "0.5");
-	return (gwnear_fft_limit (gwdata, atof (pct)));
+	return (gwnear_fft_limit (gwdata, IniGetFloat (INI_FILE, "NearFFTLimitPct", 0.5)));
 }
 
 /* Do an LL iteration very carefully.  This is done after a normal */
@@ -5656,9 +5664,7 @@ begin:	gwinit (&lldata.gwdata);
 		actual_frequency = (int) (ITER_OUTPUT * output_title_frequency);
 		if (actual_frequency < 1) actual_frequency = 1;
 		if (counter % actual_frequency == 0 || first_iter_msg) {
-			char	fmt_mask[80];
-			sprintf (fmt_mask, "%%.%df%%%% of M%%ld", PRECISION);
-			sprintf (buf, fmt_mask, trunc_percent (w->pct_complete), p);
+			sprintf (buf, "%.*f%% of M%ld", (int) PRECISION, trunc_percent (w->pct_complete), p);
 			title (thread_num, buf);
 		}
 
@@ -5667,14 +5673,12 @@ begin:	gwinit (&lldata.gwdata);
 		actual_frequency = (int) (ITER_OUTPUT * output_frequency);
 		if (actual_frequency < 1) actual_frequency = 1;
 		if (counter % actual_frequency == 0 || first_iter_msg) {
-			char	fmt_mask[80];
-			sprintf (fmt_mask, "Iteration: %%ld / %%ld [%%.%df%%%%]", PRECISION);
-			sprintf (buf, fmt_mask, counter, p, trunc_percent (w->pct_complete));
+			sprintf (buf, "Iteration: %ld / %ld [%.*f%%]", counter, p, (int) PRECISION, trunc_percent (w->pct_complete));
 			/* Append a short form total errors message */
 			if (error_count_messages == 1)
 				make_error_count_message (error_count, error_count_messages,
 							  buf + strlen (buf),
-					(int) (sizeof (buf) - strlen (buf)));
+							  (int) (sizeof (buf) - strlen (buf)));
 			/* Truncate first message */
 			if (first_iter_msg) {
 				strcat (buf, ".\n");
@@ -5744,11 +5748,8 @@ begin:	gwinit (&lldata.gwdata);
 /* If an escape key was hit, write out the results and return */
 
 		if (stop_reason) {
-			char	fmt_mask[80];
-			sprintf (fmt_mask,
-				 "Stopping primality test of M%%ld at iteration %%ld [%%.%df%%%%]\n",
-				 PRECISION);
-			sprintf (buf, fmt_mask, p, counter, trunc_percent (w->pct_complete));
+			sprintf (buf, "Stopping primality test of M%ld at iteration %ld [%.*f%%]\n",
+				 p, counter, (int) PRECISION, trunc_percent (w->pct_complete));
 			OutputStr (thread_num, buf);
 			lucasDone (&lldata);
 			return (stop_reason);
@@ -5759,7 +5760,7 @@ begin:	gwinit (&lldata.gwdata);
 /* residues to programs that start counter at zero or one. */
 
 		if (INTERIM_RESIDUES && counter % INTERIM_RESIDUES <= 2) {
-			generateResidue64 (&lldata, &high32, &low32);
+			generateResidue64 (&lldata, p, &high32, &low32);
 			sprintf (buf, 
 				 "M%ld interim We%d residue %08lX%08lX at iteration %ld\n",
 				 p, PORT, high32, low32, counter);
@@ -5802,7 +5803,7 @@ begin:	gwinit (&lldata.gwdata);
 /* We found a prime if result is zero */
 /* Note that all values of -1 is the same as zero */
 
-	rc = generateResidue64 (&lldata, &high32, &low32);
+	rc = generateResidue64 (&lldata, p, &high32, &low32);
 	if (rc < 0) {
 		sprintf (buf, ERRMSG0, counter, p, ERRMSG1E);
 		OutputBoth (thread_num, buf);
@@ -6783,7 +6784,7 @@ restart_test:	dbltogw (&lldata.gwdata, 4.0, lldata.lldata);
 
 /* Compare final 32 bits with the pre-computed array of correct residues */
 
-		generateResidue64 (&lldata, &reshi, &reslo);
+		generateResidue64 (&lldata, p, &reshi, &reslo);
 		lucasDone (&lldata);
 		free (gwarray);
 		(*completed)++;
@@ -7255,7 +7256,7 @@ int lucas_QA (
 
 /* Generate residue and cleanup */
 
-		generateResidue64 (&lldata, &reshi, &reslo);
+		generateResidue64 (&lldata, p, &reshi, &reslo);
 		lucasDone (&lldata);
 		}
 
@@ -8616,6 +8617,7 @@ begin:	gwinit (&gwdata);
 	gwset_thread_callback (&gwdata, SetAuxThreadPriority);
 	gwset_thread_callback_data (&gwdata, sp_info);
 	gwset_specific_fftlen (&gwdata, w->forced_fftlen);
+	gwset_safety_margin (&gwdata, IniGetFloat (INI_FILE, "ExtraSafetyMargin", 0.0));
 	res = gwsetup (&gwdata, w->k, w->b, w->n, w->c);
 
 /* If we were unable to init the FFT code, then print an error message */
@@ -8941,9 +8943,7 @@ OutputStr (thread_num, "Iteration failed.\n");
 		actual_frequency = (int) (ITER_OUTPUT * output_title_frequency);
 		if (actual_frequency < 1) actual_frequency = 1;
 		if (counter % actual_frequency == 0 || first_iter_msg) {
-			char	fmt_mask[80];
-			sprintf (fmt_mask, "%%.%df%%%% of %%s", PRECISION);
-			sprintf (buf, fmt_mask, trunc_percent (w->pct_complete), string_rep);
+			sprintf (buf, "%.*f%% of %s", (int) PRECISION, trunc_percent (w->pct_complete), string_rep);
 			title (thread_num, buf);
 		}
 
@@ -8952,9 +8952,7 @@ OutputStr (thread_num, "Iteration failed.\n");
 		actual_frequency = (int) (ITER_OUTPUT * output_frequency);
 		if (actual_frequency < 1) actual_frequency = 1;
 		if (counter % actual_frequency == 0 || first_iter_msg) {
-			char	fmt_mask[80];
-			sprintf (fmt_mask, "Iteration: %%ld / %%ld [%%.%df%%%%]", PRECISION);
-			sprintf (buf, fmt_mask, counter, Nlen-1, trunc_percent (w->pct_complete));
+			sprintf (buf, "Iteration: %ld / %ld [%.*f%%]", counter, Nlen-1, (int) PRECISION, trunc_percent (w->pct_complete));
 			/* Append a short form total errors message */
 			if (error_count_messages == 1)
 				make_error_count_message (error_count, error_count_messages,
@@ -9029,12 +9027,8 @@ OutputStr (thread_num, "Iteration failed.\n");
 /* If an escape key was hit, write out the results and return */
 
 		if (stop_reason) {
-			char	fmt_mask[80];
-			sprintf (fmt_mask,
-				 "Stopping PRP test of %%s at iteration %%ld [%%.%df%%%%]\n",
-				 PRECISION);
-			sprintf (buf, fmt_mask, string_rep,
-				 counter, trunc_percent (w->pct_complete));
+			sprintf (buf, "Stopping PRP test of %s at iteration %ld [%.*f%%]\n",
+				 string_rep, counter, (int) PRECISION, trunc_percent (w->pct_complete));
 			OutputStr (thread_num, buf);
 			goto exit;
 		}
@@ -9047,8 +9041,7 @@ OutputStr (thread_num, "Iteration failed.\n");
 			tmp = popg (&gwdata.gdata, ((unsigned long) gwdata.bit_length >> 5) + 5);
 			gwtogiant (&gwdata, x, tmp);
 			if (w->known_factors) {	iaddg (1, N); modg (N, tmp); iaddg (-1, N); }
-			sprintf (buf, 
-				 "%s interim We%d residue %08lX%08lX at iteration %ld\n",
+			sprintf (buf, "%s interim We%d residue %08lX%08lX at iteration %ld\n",
 				 string_rep, PORT, (unsigned long) tmp->n[1], (unsigned long) tmp->n[0], counter);
 			OutputBoth (thread_num, buf);
 			pushg (&gwdata.gdata, 1);
