@@ -5,7 +5,7 @@
  * Comm95b contains information used only during execution
  * Comm95c contains information used during setup and execution
  *
- * Copyright 1995-2011 Mersenne Research, Inc.  All rights reserved
+ * Copyright 1995-2016 Mersenne Research, Inc.  All rights reserved
  *
  */ 
 
@@ -420,10 +420,41 @@ BOOL WINAPI Enum16 (DWORD dwThreadId, WORD hMod16, WORD hTask16,
 
 /* The 64-bit version does not need to dynamically load DLLs. */
 
+#include <tlhelp32.h>
 #include <psapi.h>
 
 void checkPauseListCallback (void)
 {
+
+// The code below is our second attempt, trying to solve the running as administrator problem
+// This gets the name of the executable, but not the full path name.  Thus this is a partial fix
+// and we must include both methods.
+
+	HANDLE hProcessSnap;
+	PROCESSENTRY32 pe32;
+
+// Take a snapshot of all processes in the system.
+
+	hProcessSnap = CreateToolhelp32Snapshot (TH32CS_SNAPPROCESS, 0);
+	if (hProcessSnap != INVALID_HANDLE_VALUE) {
+
+// Retrieve information about the first process, then next processes
+// looking for any process that forces us to pause
+
+		pe32.dwSize = sizeof (PROCESSENTRY32);
+		if (Process32First (hProcessSnap, &pe32)) do {
+			isInPauseList (pe32.szExeFile);
+		} while (Process32Next (hProcessSnap, &pe32));
+
+// Cleanup
+
+		CloseHandle( hProcessSnap );
+	}
+
+// The code below was our original attempt, but there was a complaint that this will not
+// detect some processes running as administrator (not enough privilege to OpenProcess).
+
+	{
 	LPDWORD		lpdwPIDs = NULL;
 	DWORD		dwSize, dwSize2, dwIndex;
 	char		szFileName[ MAX_PATH ];
@@ -488,6 +519,7 @@ void checkPauseListCallback (void)
 		isInPauseList (szFileName);
 	}
 ntdone:	if (lpdwPIDs) HeapFree (GetProcessHeap(), 0, lpdwPIDs);
+	}
 }
 
 #endif

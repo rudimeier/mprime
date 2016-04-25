@@ -1,4 +1,4 @@
-; Copyright 2011-2014 - Mersenne Research, Inc.  All rights reserved
+; Copyright 2011-2016 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -199,7 +199,7 @@ no swiz	ystore	[srcreg+d2+32], ymm6		;; Save I3
 no swiz	ystore	[srcreg+d2+d1], ymm3		;; Save R4
 no swiz	ystore	[srcreg+d2+d1+32], ymm4		;; Save I4
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 swiz	vmovapd	ymm0, [srcreg]			;; Reload saved R1
 swiz	vshufpd	ymm1, ymm0, ymm2, 0		;; Shuffle R1 and R2 to create R1/R2 low
@@ -1799,7 +1799,7 @@ bcast	vbroadcastsd ymm4, Q [screg1]		;; Sine
 
 yr4_4c_djbunfft_swiz MACRO srcreg,srcinc,d1,d2,bcast,screg1,screg2,scoff,screg,scinc,maxrpt,L1pt,L1pd
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]			;; R1
 	vmovapd	ymm7, [srcreg+d1]		;; R2
@@ -2805,7 +2805,7 @@ yr4_fs4cl_four_complex_first_djbfft MACRO srcreg,srcinc,d1,d2,screg,scinc,maxrpt
 	;;	2	10	...
 	;;	3	11	...
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm7, ymm4, ymm0, 0		;; Shuffle R1 and R2 to create 0 8 2 10
 	vshufpd	ymm4, ymm4, ymm0, 15		;; Shuffle R1 and R2 to create 1 9 3 11
@@ -3371,7 +3371,7 @@ yr4_s4cl_four_complex_last_unfft MACRO srcreg,srcinc,d1,d2,screg,scinc,maxrpt,L1
 	;;	16	...
 	;;	24	...
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]			;; R1
 	vmovapd	ymm7, [srcreg+d1]		;; R2
@@ -5624,7 +5624,7 @@ yr4_sg4cl_four_complex_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,screg,
 	;;	2K	...
 	;;	3K	...
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]			;; R1
 	vmovapd	ymm7, [srcreg+d1]		;; R2
@@ -5774,7 +5774,7 @@ yr4_sg4cl_four_complex_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,screg,
 	;;	2K	...
 	;;	3K	...
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]			;; R1
 	vmovapd	ymm7, [srcreg+d1]		;; R2
@@ -5920,7 +5920,7 @@ yr4_sg4cl_four_complex_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,screg,
 	;;	2K	...
 	;;	3K	...
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]			;; R1
 	vmovapd	ymm2, [srcreg+d1]		;; R2
@@ -5942,27 +5942,27 @@ yr4_sg4cl_four_complex_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,screg,
 	vshufpd	ymm6, ymm7, ymm8, 15		;; Shuffle I3 and I4 to create I3/I4 hi			; 7
 	vshufpd	ymm7, ymm7, ymm8, 0		;; Shuffle I3 and I4 to create I3/I4 low		; 8
 
-	ylow128s ymm8, ymm0, ymm2		;; Shuffle R1/R2 hi and R3/R4 hi (new R2)		; 9-10
-	yhigh128s ymm0, ymm0, ymm2		;; Shuffle R1/R2 hi and R3/R4 hi (new R4)		; 10-11
+	ylow128s ymm8, ymm0, ymm2		;; Shuffle R1/R2 hi and R3/R4 hi (new R2)		; 9-11
+	yhigh128s ymm0, ymm0, ymm2		;; Shuffle R1/R2 hi and R3/R4 hi (new R4)		; 10-12
 	L1prefetch srcreg+L1pd, L1pt
 	L1prefetchw dstreg+L1pd, L1pt - L1PREFETCH_DEST_NONE
 
-	ylow128s ymm2, ymm1, ymm3		;; Shuffle R1/R2 low and R3/R4 low (new R1)		; 11-12
-	yhigh128s ymm1, ymm1, ymm3		;; Shuffle R1/R2 low and R3/R4 low (new R3)		; 12-13
+	ylow128s ymm2, ymm1, ymm3		;; Shuffle R1/R2 low and R3/R4 low (new R1)		; 11-13
+	yhigh128s ymm1, ymm1, ymm3		;; Shuffle R1/R2 low and R3/R4 low (new R3)		; 12-14
 
 	yfmaddpd ymm3, ymm8, ymm15, ymm0	;; R2 + R4 (newer R2)					; 12-14
 	yfmsubpd ymm8, ymm8, ymm15, ymm0	;; R2 - R4 (newer R4)					; 12-16
 	L1prefetch srcreg+d1+L1pd, L1pt
 	L1prefetchw dstreg+e1+L1pd, L1pt - L1PREFETCH_DEST_NONE
 
-	ylow128s ymm0, ymm4, ymm6		;; Shuffle I1/I2 hi and I3/I4 hi (new I2)		; 13-14
-	yhigh128s ymm4, ymm4, ymm6		;; Shuffle I1/I2 hi and I3/I4 hi (new I4)		; 14-15
+	ylow128s ymm0, ymm4, ymm6		;; Shuffle I1/I2 hi and I3/I4 hi (new I2)		; 13-15
+	yhigh128s ymm4, ymm4, ymm6		;; Shuffle I1/I2 hi and I3/I4 hi (new I4)		; 14-16
 
 	yfmaddpd ymm6, ymm2, ymm15, ymm1	;; R1 + R3 (newer R1)					; 14-16
 	yfmsubpd ymm2, ymm2, ymm15, ymm1	;; R1 - R3 (newer R3)					; 14-18
 
-	ylow128s ymm1, ymm5, ymm7		;; Shuffle I1/I2 low and I3/I4 low (new I1)		; 15-16
-	yhigh128s ymm5, ymm5, ymm7		;; Shuffle I1/I2 low and I3/I4 low (new I3)		; 16-17
+	ylow128s ymm1, ymm5, ymm7		;; Shuffle I1/I2 low and I3/I4 low (new I1)		; 15-17
+	yhigh128s ymm5, ymm5, ymm7		;; Shuffle I1/I2 low and I3/I4 low (new I3)		; 16-18
 
 	yfmsubpd ymm7, ymm0, ymm15, ymm4	;; I2 - I4 (newer I4)					; 16-18
 	yfmaddpd ymm0, ymm0, ymm15, ymm4	;; I2 + I4 (newer I2)					; 16-20
@@ -5982,7 +5982,7 @@ yr4_sg4cl_four_complex_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,screg,
 
 	yfmsubpd ymm7, ymm3, ymm15, ymm0	;; I1 - I2 (final I2)					; 21-23
 	yfmaddpd ymm3, ymm3, ymm15, ymm0	;; I1 + I2 (final I1)					; 21-25
-	vmovapd	ymm13, [screg+128]		;; sine for R2//I2
+	vmovapd	ymm13, [screg+128]		;; sine for R2/I2
 
 	yfmaddpd ymm0, ymm1, ymm15, ymm8	;; I3 + R4 (final I3)					; 23-25
 	yfmsubpd ymm1, ymm1, ymm15, ymm8	;; I3 - R4 (final I4)					; 23-27
@@ -6211,7 +6211,7 @@ next	yfmaddpd y4, y4, ymm15, y0			;; R1 + R2 (final R1)			;	16-20
 next	yfmsubpd y0, y5, ymm15, y1			;; I2 - I4 (newer I4)			; 19-23
 next	yfmaddpd y5, y5, ymm15, y1			;; I2 + I4 (newer I2)			;	19-23
 
-this	vmovapd	y1, [screg+iter*scinc+128]		;; sine for R2//I2
+this	vmovapd	y1, [screg+iter*scinc+128]		;; sine for R2/I2
 this	vmulpd	y14, y14, y1				;; A2 = A2 * sine (final R2)		; 38-42
 this	vmulpd	y10, y10, y1				;; B2 = B2 * sine (final I2)		;	38-42
 
@@ -6332,7 +6332,7 @@ yr4_sg4cl_four_complex_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,scre
 
 	L1prefetch srcreg+d2+L1pd, L1pt
 
-	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm2, ymm1, ymm0, 0		;; Shuffle I1 and I2 to create I1/I2 low
 	vshufpd	ymm1, ymm1, ymm0, 15		;; Shuffle I1 and I2 to create I1/I2 hi
@@ -6363,7 +6363,7 @@ yr4_sg4cl_four_complex_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,scre
 	ystore	[dstreg+e1+32], ymm0		;; Save I2
 	ystore	[dstreg+e2+e1+32], ymm1		;; Save I4
 
-	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm0, ymm3, ymm6, 0		;; Shuffle R1 and R2 to create R1/R2 low
 	vshufpd	ymm3, ymm3, ymm6, 15		;; Shuffle R1 and R2 to create R1/R2 hi
@@ -6882,7 +6882,7 @@ yr4_s8r_fft_cmn MACRO srcreg,srcinc,srcoff,d1,d2,screg1,screg2,screg5,scregA,sci
 	vmulpd	ymm2, ymm2, ymm0	;; A3 = A3 * sine (final R3)		;  29-33
 	vmulpd	ymm6, ymm6, ymm0	;; B3 = B3 * sine (final I3)		;  30-34
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]		;; Reload saved R1
 
@@ -7327,7 +7327,7 @@ yr4_s8r_fft_cmn MACRO srcreg,srcinc,srcoff,d1,d2,screg1,screg2,screg5,scregA,sci
 	vmulpd	ymm2, ymm2, ymm0		;; A3 = A3 * sine (final R3)		;  29-33
 	vmulpd	ymm6, ymm6, ymm0		;; B3 = B3 * sine (final I3)		;  30-34
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm0, ymm10, ymm3, 0		;; Shuffle R1 and R2 to create 0 8 2 10
 	vshufpd	ymm1, ymm10, ymm3, 15		;; Shuffle R1 and R2 to create 1 9 3 11
@@ -7442,7 +7442,7 @@ yr4_s8r_fft_cmn MACRO srcreg,srcinc,srcoff,d1,d2,screg1,screg2,screg5,scregA,sci
 	bump	scregA, scincA
 	bump	scregB, scincB
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm8, ymm4, ymm6, 0		;; Shuffle R1 and R2 to create 0 8 2 10
 	vshufpd	ymm4, ymm4, ymm6, 15		;; Shuffle R1 and R2 to create 1 9 3 11
@@ -7660,7 +7660,7 @@ yr4_s8r_unfft_cmn MACRO srcreg,srcinc,d1,d2,screg1,screg2,screg5,scregA,scincA,s
 	;;	16	...
 	;;	24	...
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]		;; R1
 	vmovapd	ymm7, [srcreg+d1]	;; R2
@@ -8116,7 +8116,7 @@ yr4_s8r_unfft_cmn MACRO srcreg,srcinc,d1,d2,screg1,screg2,screg5,scregA,scincA,s
 	;;	16	...
 	;;	24	...
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]		;; R1
 	vmovapd	ymm7, [srcreg+d1]	;; R2
@@ -8256,7 +8256,7 @@ yr4_s8r_unfft_cmn MACRO srcreg,srcinc,d1,d2,screg1,screg2,screg5,scregA,scincA,s
 	;;	16	...
 	;;	24	...
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]			;; R1
 	vmovapd	ymm7, [srcreg+d1]		;; R2
@@ -9040,7 +9040,7 @@ yr4_sg4cl_2sc_eight_reals_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,scr
 	;;	2K	...
 	;;	3K	...
 
-	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 8 shufpds and 8 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vmovapd	ymm1, [srcreg]			;; R1
 	vmovapd	ymm7, [srcreg+d1]		;; R2
@@ -9255,7 +9255,7 @@ yr4_sg4cl_2sc_eight_reals_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,s
 	vsubpd	ymm5, ymm7, ymm1	;; R3 - R7 (final R7)
 	vaddpd	ymm7, ymm7, ymm1	;; R3 + R7 (final R3)
 
-	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm1, ymm3, ymm6, 0		;; Shuffle R1 and R2 to create R1/R2 low
 	vshufpd	ymm3, ymm3, ymm6, 15		;; Shuffle R1 and R2 to create R1/R2 hi
@@ -9278,7 +9278,7 @@ yr4_sg4cl_2sc_eight_reals_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,s
 	ystore	[dstreg+e1], ymm6		;; Save R2
 	ystore	[dstreg+e2+e1], ymm3		;; Save R4
 
-	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm0, ymm4, ymm2, 0		;; Shuffle R5 and R6 to create R5/R6 low
 	vshufpd	ymm4, ymm4, ymm2, 15		;; Shuffle R5 and R6 to create R5/R6 hi
@@ -12241,6 +12241,7 @@ yr4_rsc_sg4cl_four_complex_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,sc
 ;; Haswell FMA3 version
 ;; Timed at 36.8 clocks.
 
+;;IFDEF ORIGINAL_SWIZZLE_CODE
 IF (@INSTR(,%yarch,<FMA3>) NE 0)
 
 yr4_rsc_sg4cl_four_complex_fft4_preload MACRO
@@ -12293,7 +12294,7 @@ yr4_rsc_sg4cl_four_complex_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,sc
 
 	yfmsubpd ymm7, ymm0, ymm15, ymm4	;; I2 - I4 (newer I4)					; 16-20
 	yfmaddpd ymm0, ymm0, ymm15, ymm4	;; I2 + I4 (newer I2)					; 16-20
-	vmovapd	ymm10, [screg+128]		;; sine for R2//I2
+	vmovapd	ymm10, [screg+128]		;; sine for R2/I2
 
 	L1prefetch srcreg+d2+L1pd, L1pt
 	L1prefetchw dstreg+e2+L1pd, L1pt - L1PREFETCH_DEST_NONE
@@ -12356,7 +12357,133 @@ yr4_rsc_sg4cl_four_complex_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,sc
 	ystore	[dstreg+e2+e1+32], ymm1		;; Save I4						; 38+4
 	bump	dstreg, dstinc
 	ENDM
+ENDIF
+;;ENDIF
 
+;; Haswell FMA3 version --- On Skylake, new sizzle code is between minus one and one clocks faster (within our benchmarking margin of error)
+;; This code makes much less use of port 5, but increases use of the port 2&3 load units.
+
+IFDEF NEW_SWIZZLE_CODE
+IF (@INSTR(,%yarch,<FMA3>) NE 0)
+
+yr4_rsc_sg4cl_four_complex_fft4_preload MACRO
+	vmovapd	ymm15, YMM_ONE
+	ENDM
+
+yr4_rsc_sg4cl_four_complex_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,screg,scinc,maxrpt,L1pt,L1pd
+
+;; 16 arithmetic ops on ports 01
+;; 24 load ops on ports 23
+;; 4 prefetch ops on 23
+;; 8 shuffle ops on port 5
+
+	vmovapd	xmm1, [srcreg]					;; R1 low			;   1
+	vmovapd	xmm7, [srcreg+d1]				;; R2 low			;   1
+	vinsertf128 ymm1, ymm1, [srcreg+d2], 1			;; R3/R1 low			;   2
+	vinsertf128 ymm7, ymm7, [srcreg+d2+d1], 1		;; R4/R2 low			;   2
+	vshufpd	ymm0, ymm1, ymm7, 15		;; Shuffle R3/R1 and R4/R2 lows (first R2)	;  3
+	vshufpd	ymm1, ymm1, ymm7, 0		;; Shuffle R3/R1 and R4/R2 lows (first R1)	;  4
+
+	vmovapd	xmm5, [srcreg][16]				;; R1 hi			;   3
+	vmovapd	xmm7, [srcreg+d1][16]				;; R2 hi			;   3
+	vinsertf128 ymm5, ymm5, [srcreg+d2][16], 1		;; R3/R1 hi			;   4
+	vinsertf128 ymm7, ymm7, [srcreg+d2+d1][16], 1		;; R4/R2 hi			;   4
+	vshufpd	ymm4, ymm5, ymm7, 15		;; Shuffle R3/R1 hi and R4/R2 hi (first R4)	;  5
+	vshufpd	ymm5, ymm5, ymm7, 0		;; Shuffle R3/R1 hi and R4/R2 hi (first R3)	;  6
+
+	vmovapd	xmm10, [srcreg+32]				;; I1 low			;   5
+	vmovapd	xmm9, [srcreg+d1+32]				;; I2 low			;   5
+	vinsertf128 ymm10, ymm10, [srcreg+d2+32], 1		;; I3/I1 low			;   6
+	vinsertf128 ymm9, ymm9, [srcreg+d2+d1+32], 1		;; I4/I2 low			;   6
+
+	yfmaddpd ymm3, ymm0, ymm15, ymm4	;; R2 + R4 (newer R2)				; 6-10		n 12
+	yfmsubpd ymm0, ymm0, ymm15, ymm4	;; R2 - R4 (newer R4)				; 6-10		n 17
+	vmovapd	xmm13, [srcreg+32][16]				;; I1 hi			;   7
+
+	yfmaddpd ymm6, ymm1, ymm15, ymm5	;; R1 + R3 (newer R1)				; 7-11		n 12
+	yfmsubpd ymm1, ymm1, ymm15, ymm5	;; R1 - R3 (newer R3)				; 7-11		n 15
+	vmovapd	xmm14, [srcreg+d1+32][16]			;; I2 hi			;   7
+
+	vshufpd	ymm7, ymm10, ymm9, 15		;; Shuffle I3/I1 and I4/I2 lows (first I2)	;  7
+	vshufpd	ymm10, ymm10, ymm9, 0		;; Shuffle I3/I1 and I4/I2 lows (first I1)	;  8
+
+	vinsertf128 ymm13, ymm13, [srcreg+d2+32][16], 1		;; I3/I1 hi			;   8
+	vinsertf128 ymm14, ymm14, [srcreg+d2+d1+32][16], 1	;; I4/I2 hi			;   8
+	vshufpd	ymm9, ymm13, ymm14, 15		;; Shuffle I3/I1 hi and I4/I2 hi (first I4)	;  9
+	vshufpd	ymm13, ymm13, ymm14, 0		;; Shuffle I3/I1 hi and I4/I2 hi (first I3)	;  10
+
+	yfmsubpd ymm14, ymm7, ymm15, ymm9	;; I2 - I4 (newer I4)				; 10-14		n 15
+	yfmaddpd ymm7, ymm7, ymm15, ymm9	;; I2 + I4 (newer I2)				; 10-14		n 16
+	L1prefetch srcreg+L1pd, L1pt
+	L1prefetchw dstreg+L1pd, L1pt - L1PREFETCH_DEST_NONE
+
+	yfmaddpd ymm9, ymm10, ymm15, ymm13	;; I1 + I3 (newer I1)				; 11-15		n 16
+	yfmsubpd ymm10, ymm10, ymm15, ymm13	;; I1 - I3 (newer I3)				; 11-15		n 17
+	L1prefetch srcreg+d1+L1pd, L1pt
+	L1prefetchw dstreg+e1+L1pd, L1pt - L1PREFETCH_DEST_NONE
+
+	yfmsubpd ymm13, ymm6, ymm15, ymm3	;; R1 - R2 (final R2)				; 12-16		n 18
+	yfmaddpd ymm6, ymm6, ymm15, ymm3	;; R1 + R2 (final R1)				; 12-16		n 19
+	vmovapd	ymm2, [screg+128+32]		;; cosine for R2/I2
+	L1prefetch srcreg+d2+L1pd, L1pt
+	L1prefetchw dstreg+e2+L1pd, L1pt - L1PREFETCH_DEST_NONE
+
+	yfmsubpd ymm3, ymm1, ymm15, ymm14	;; R3 - I4 (final R3)				; 15-19		n 20
+	yfmaddpd ymm1, ymm1, ymm15, ymm14	;; R3 + I4 (final R4)				; 15-19		n 21
+	vmovapd	ymm8, [screg+128]		;; sine for R2/I2
+	L1prefetch srcreg+d2+d1+L1pd, L1pt
+	L1prefetchw dstreg+e2+e1+L1pd, L1pt - L1PREFETCH_DEST_NONE
+
+	yfmsubpd ymm14, ymm9, ymm15, ymm7	;; I1 - I2 (final I2)				; 16-20
+	yfmaddpd ymm9, ymm9, ymm15, ymm7	;; I1 + I2 (final I1)				; 16-20
+	vmovapd	ymm11, [screg+0+32]		;; cosine for R1/I1
+
+	yfmaddpd ymm7, ymm10, ymm15, ymm0	;; I3 + R4 (final I3)				; 17-21
+	yfmsubpd ymm10, ymm10, ymm15, ymm0	;; I3 - R4 (final I4)				; 17-21
+	vmovapd	ymm12, [screg+0]		;; sine for R1/I1
+
+	vmulpd	ymm0, ymm13, ymm2		;; A2 = R2 * cosine				; 18-22
+	vmulpd	ymm13, ymm13, ymm8		;; B2 = R2 * sine				; 18-22
+	vmovapd	ymm4, [screg+64+32]		;; cosine for R3/I3
+
+	vmulpd	ymm5, ymm6, ymm11		;; A1 = R1 * cosine				; 19-23
+	vmulpd	ymm6, ymm6, ymm12		;; B1 = R1 * sine				; 19-23
+	bump	srcreg, srcinc
+
+	yfnmaddpd ymm0, ymm14, ymm8, ymm0	;; A2 = A2 - I2 * sine (final R2)		; 23-27
+	yfmaddpd ymm13, ymm14, ymm2, ymm13	;; B2 = I2 * cosine + B2 (final I2)		; 23-27
+
+	vmovapd	ymm8, [screg+64]		;; sine for R3/I3
+	vmulpd	ymm2, ymm3, ymm4		;; A3 = R3 * cosine				; 20-24
+	vmulpd	ymm3, ymm3, ymm8		;; B3 = R3 * sine				; 20-24
+	vmovapd	ymm14, [screg+192+32]		;; cosine for R4/I4
+
+	yfnmaddpd ymm5, ymm9, ymm12, ymm5	;; A1 = A1 - I1 * sine (final R1)		; 24-28
+	yfmaddpd ymm6, ymm9, ymm11, ymm6	;; B1 = I1 * cosine + B1 (final I1)		; 24-28
+
+	vmovapd	ymm12, [screg+192]		;; sine for R4/I4
+	vmulpd	ymm11, ymm1, ymm14		;; A4 = R4 * cosine				; 21-25
+	vmulpd	ymm1, ymm1, ymm12		;; B4 = R4 * sine				; 21-25
+	bump	screg, scinc
+
+	yfnmaddpd ymm2, ymm7, ymm8, ymm2	;; A3 = A3 - I3 * sine (final R3)		; 25-29
+	yfmaddpd ymm3, ymm7, ymm4, ymm3		;; B3 = I3 * cosine + B3 (final I3)		; 25-29
+
+	yfnmaddpd ymm11, ymm10, ymm12, ymm11	;; A4 = A4 - I4 * sine (final R4)		; 26-30
+	yfmaddpd ymm1, ymm10, ymm14, ymm1	;; B4 = I4 * cosine + B4 (final I4)		; 26-30
+
+	ystore	[dstreg+e1], ymm0		;; Save R2					; 28
+	ystore	[dstreg+e1+32], ymm13		;; Save I2					; 28+1
+	ystore	[dstreg], ymm5			;; Save R1					; 29+1
+	ystore	[dstreg+32], ymm6		;; Save I1					; 29+2
+	ystore	[dstreg+e2], ymm2		;; Save R3					; 30+2
+	ystore	[dstreg+e2+32], ymm3		;; Save I3					; 30+3
+	ystore	[dstreg+e2+e1], ymm11		;; Save R4					; 31+3
+	ystore	[dstreg+e2+e1+32], ymm1		;; Save I4					; 31+4
+	bump	dstreg, dstinc
+
+	ENDM
+ENDIF
 ENDIF
 
 ENDIF
@@ -12444,7 +12571,7 @@ yr4_rsc_sg4cl_four_complex_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,
 
 	L1prefetch srcreg+d2+L1pd, L1pt
 
-	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm1, ymm7, ymm6, 0		;; Shuffle I1 and I2 to create I1/I2 low
 	vshufpd	ymm7, ymm7, ymm6, 15		;; Shuffle I1 and I2 to create I1/I2 hi
@@ -12475,7 +12602,7 @@ yr4_rsc_sg4cl_four_complex_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,
 	ystore	[dstreg+e1+32], ymm0		;; Save I2
 	ystore	[dstreg+e2+e1+32], ymm7		;; Save I4
 
-	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm0, ymm3, ymm6, 0		;; Shuffle R1 and R2 to create R1/R2 low
 	vshufpd	ymm3, ymm3, ymm6, 15		;; Shuffle R1 and R2 to create R1/R2 hi
@@ -13010,6 +13137,125 @@ yr4_rsc_sg4cl_2sc_eight_reals_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2
 	bump	screg2, scinc2
 	ENDM
 
+;; Haswell FMA3 version
+
+IF (@INSTR(,%yarch,<FMA3>) NE 0)
+
+yr4_rsc_sg4cl_2sc_eight_reals_fft4_preload MACRO
+	vmovapd	ymm14, YMM_ONE
+	vmovapd	ymm15, YMM_SQRTHALF
+	ENDM
+
+yr4_rsc_sg4cl_2sc_eight_reals_fft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,screg1,scinc1,screg2,scinc2,maxrpt,L1pt,L1pd
+	vmovapd	ymm1, [srcreg]			;; R1
+	vmovapd	ymm7, [srcreg+d1]		;; R2
+	vshufpd	ymm0, ymm1, ymm7, 15		;; Shuffle R1 and R2 to create R1/R2 hi			; 1  (Skylake & Haswell timings)
+	vshufpd	ymm1, ymm1, ymm7, 0		;; Shuffle R1 and R2 to create R1/R2 low		; 2
+
+	vmovapd	ymm3, [srcreg+d2]		;; R3
+	vmovapd	ymm7, [srcreg+d2+d1]		;; R4
+	vshufpd	ymm2, ymm3, ymm7, 15		;; Shuffle R3 and R4 to create R3/R4 hi			; 3
+	vshufpd	ymm3, ymm3, ymm7, 0		;; Shuffle R3 and R4 to create R3/R4 low		; 4
+
+	vmovapd	ymm5, [srcreg+32]		;; R5
+	vmovapd	ymm7, [srcreg+d1+32]		;; R6
+	vshufpd	ymm4, ymm5, ymm7, 15		;; Shuffle R5 and R6 to create R5/R6 hi			; 5
+	vshufpd	ymm5, ymm5, ymm7, 0		;; Shuffle R5 and R6 to create R5/R6 low		; 6
+
+	vmovapd	ymm7, [srcreg+d2+32]		;; R7
+	vmovapd	ymm8, [srcreg+d2+d1+32]		;; R8
+	vshufpd	ymm6, ymm7, ymm8, 15		;; Shuffle R7 and R8 to create R7/R8 hi			; 7
+	vshufpd	ymm7, ymm7, ymm8, 0		;; Shuffle R7 and R8 to create R7/R8 low		; 8
+	L1prefetch srcreg+L1pd, L1pt
+
+	yhigh128s ymm8, ymm0, ymm2		;; Shuffle R1/R2 hi and R3/R4 hi (new R4)		; 9-11
+	yhigh128s ymm9, ymm4, ymm6		;; Shuffle R5/R6 hi and R7/R8 hi (new R8)		; 10-12
+	L1prefetch srcreg+d1+L1pd, L1pt
+
+	ylow128s ymm0, ymm0, ymm2		;; Shuffle R1/R2 hi and R3/R4 hi (new R2)		; 11-13
+	ylow128s ymm4, ymm4, ymm6		;; Shuffle R5/R6 hi and R7/R8 hi (new R6)		; 12-14
+	L1prefetch srcreg+d2+L1pd, L1pt
+
+	yfmsubpd ymm2, ymm8, ymm14, ymm9	;; new R8 = R4 - R8					; 13-16	13-17
+	yfmaddpd ymm8, ymm8, ymm14, ymm9	;; new R4 = R4 + R8					; 13-16	13-17
+	L1prefetch srcreg+d2+d1+L1pd, L1pt
+
+	ylow128s ymm6, ymm1, ymm3		;; Shuffle R1/R2 low and R3/R4 low (new R1)		; 13-15
+	ylow128s ymm9, ymm5, ymm7		;; Shuffle R5/R6 low and R7/R8 low (new R5)		; 14-16
+	L1prefetchw dstreg+L1pd, L1pt - L1PREFETCH_DEST_NONE
+
+	yhigh128s ymm1, ymm1, ymm3		;; Shuffle R1/R2 low and R3/R4 low (new R3)		; 15-17
+	yhigh128s ymm5, ymm5, ymm7		;; Shuffle R5/R6 low and R7/R8 low (new R7)		; 16-18
+	L1prefetchw dstreg+e1+L1pd, L1pt - L1PREFETCH_DEST_NONE
+
+	yfmsubpd ymm10, ymm0, ymm14, ymm4	;; new R6 = R2 - R6					; 15-18	15-19
+	yfmaddpd ymm0, ymm0, ymm14, ymm4	;; new R2 = R2 + R6					; 15-18	15-19
+
+	yfmaddpd ymm7, ymm6, ymm14, ymm9	;; new R1 = R1 + R5					; 17-20	17-21
+	yfmsubpd ymm6, ymm6, ymm14, ymm9	;; new R5 = R1 - R5					; 17-20	17-21
+	L1prefetchw dstreg+e2+L1pd, L1pt - L1PREFETCH_DEST_NONE
+
+	yfmaddpd ymm9, ymm1, ymm14, ymm5	;; new R3 = R3 + R7					; 19-22	19-23
+	yfmsubpd ymm1, ymm1, ymm14, ymm5	;; new R7 = R3 - R7					; 19-22	19-23
+	L1prefetchw dstreg+e2+e1+L1pd, L1pt - L1PREFETCH_DEST_NONE
+
+	yfmsubpd ymm3, ymm10, ymm14, ymm2	;; R6 = R6 - R8 (Real part)				; 20-23 20-24
+	yfmaddpd ymm10, ymm10, ymm14, ymm2	;; R8 = R6 + R8 (Imaginary part)			; 20-23	20-24
+
+	yfmsubpd ymm5, ymm0, ymm14, ymm8	;; R2 - R4 (final I2)					; 21-24	21-25
+	yfmaddpd ymm0, ymm0, ymm14, ymm8	;; R2 + R4 (final I1, a.k.a 2nd real result)		; 21-24	21-25
+	vmovapd	ymm12, [screg1+64]		;; sine for R2/I2
+
+	yfmsubpd ymm4, ymm7, ymm14, ymm9	;; R1 - R3 (final R2)					; 23-26	24-28
+	yfmaddpd ymm7, ymm7, ymm14, ymm9	;; R1 + R3 (final R1)					; 23-26	24-28
+	vmovapd	ymm13, [screg2+64+32]		;; cosine/sine for R4/I4
+
+	yfnmaddpd ymm8, ymm3, ymm15, ymm6	;; R5 - R6 * SQRTHALF (final R4)			; 24-27	25-29
+	yfmaddpd ymm6, ymm3, ymm15, ymm6	;; R5 + R6 * SQRTHALF (final R3)			; 24-27	25-29
+	vmovapd	ymm9, [screg2+32]		;; cosine/sine for R3/I3
+
+	yfnmaddpd ymm2, ymm10, ymm15, ymm1	;; R7 - R8 * SQRTHALF (final I4)			; 25-28	26-30
+	yfmaddpd ymm1, ymm10, ymm15, ymm1	;; R7 + R8 * SQRTHALF (final I3)			; 25-28	26-30
+
+	ystore	[dstreg+32], ymm0		;; Save final I1					; 25	26
+	ystore	[dstreg], ymm7			;; Save final R1					; 27	29
+	bump	srcreg, srcinc
+
+	vmulpd	ymm0, ymm5, ymm12		;; C2 = I2 * sine					; 27-30 29-33
+	vmulpd	ymm7, ymm4, ymm12		;; D2 = R2 * sine					; 27-30	29-33
+	vmovapd	ymm11, [screg1+64+32]		;; cosine for R2/I2
+
+	yfmsubpd ymm10, ymm8, ymm13, ymm2	;; A4 = R4 * cosine/sine - I4				; 29-32	31-35
+	yfmaddpd ymm13, ymm2, ymm13, ymm8	;; B4 = I4 * cosine/sine + R4				; 29-32	31-35
+	vmovapd	ymm3, [screg2+64]		;; sine for R4/I4
+
+	yfmsubpd ymm2, ymm6, ymm9, ymm1		;; A3 = R3 * cosine/sine - I3				; 30-33	32-36
+	yfmaddpd ymm12, ymm1, ymm9, ymm6	;; B3 = I3 * cosine/sine + R3				; 30-33	32-36
+	vmovapd	ymm1, [screg2]			;; sine for R3/I3
+
+	yfmsubpd ymm4, ymm4, ymm11, ymm0	;; A2 = R2 * cosine - C2 (final R2)			; 31-34	34-38
+	yfmaddpd ymm5, ymm5, ymm11, ymm7	;; B2 = I2 * cosine + D2 (final I2)			; 31-34	34-38
+	bump	screg1, scinc1
+
+	vmulpd	ymm10, ymm10, ymm3		;; A4 = A4 * sine (final R4)				; 33-36	36-40
+	vmulpd	ymm13, ymm13, ymm3		;; B4 = B4 * sine (final I4)				; 33-36	36-40
+
+	vmulpd	ymm2, ymm2, ymm1		;; A3 = A3 * sine (final R3)				; 34-37	37-41
+	vmulpd	ymm12, ymm12, ymm1		;; B3 = B3 * sine (final I3)				; 34-37	37-41
+	bump	screg2, scinc2
+
+	ystore	[dstreg+e1], ymm4		;; Save R2						; 35	39
+	ystore	[dstreg+e1+32], ymm5		;; Save I2						; 36	40
+	ystore	[dstreg+e2+e1], ymm10		;; Save R4						; 37	41
+	ystore	[dstreg+e2+e1+32], ymm13	;; Save I4						; 38	42
+	ystore	[dstreg+e2], ymm2		;; Save R3						; 39	43
+	ystore	[dstreg+e2+32], ymm12		;; Save I3						; 40	44
+
+	bump	dstreg, dstinc
+	ENDM
+
+ENDIF
+
 ENDIF
 
 ;;
@@ -13098,7 +13344,7 @@ yr4_rsc_sg4cl_2sc_eight_reals_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,
 	vsubpd	ymm5, ymm7, ymm1		;; R3 - R7 (final R7)
 	vaddpd	ymm7, ymm7, ymm1		;; R3 + R7 (final R3)
 
-	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm1, ymm3, ymm6, 0		;; Shuffle R1 and R2 to create R1/R2 low
 	vshufpd	ymm3, ymm3, ymm6, 15		;; Shuffle R1 and R2 to create R1/R2 hi
@@ -13121,7 +13367,7 @@ yr4_rsc_sg4cl_2sc_eight_reals_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,
 	ystore	[dstreg+e1], ymm6		;; Save R2
 	ystore	[dstreg+e2+e1], ymm3		;; Save R4
 
-	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 2 clocks each on port 5, throughput 1)
+	;; Swizzle using 4 shufpds and 4 perm2f128  (1 or 3 clocks each on port 5, throughput 1)
 
 	vshufpd	ymm0, ymm4, ymm2, 0		;; Shuffle R5 and R6 to create R5/R6 low
 	vshufpd	ymm4, ymm4, ymm2, 15		;; Shuffle R5 and R6 to create R5/R6 hi
@@ -13272,5 +13518,108 @@ yr4_rsc_sg4cl_2sc_eight_reals_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,
 	bump	screg1, scinc1
 	bump	screg2, scinc2
 	ENDM
+
+;; Haswell FMA3 version
+
+IF (@INSTR(,%yarch,<FMA3>) NE 0)
+
+yr4_rsc_sg4cl_2sc_eight_reals_unfft4_preload MACRO
+	vmovapd	ymm14, YMM_ONE
+	vmovapd	ymm15, YMM_SQRTHALF
+	ENDM
+yr4_rsc_sg4cl_2sc_eight_reals_unfft4 MACRO srcreg,srcinc,d1,d2,dstreg,dstinc,e1,e2,screg1,scinc1,screg2,scinc2,maxrpt,L1pt,L1pd
+
+	vmovapd	ymm0, [screg2+64+32]		;; cosine/sine for R4/I4
+	vmovapd	ymm1, [srcreg+d2+d1]		;; R4
+	vmovapd ymm2, [srcreg+d2+d1+32]		;; I4
+	yfmaddpd ymm3, ymm1, ymm0, ymm2		;; A4 = R4 * cosine/sine + I4			; 1-4	1-5 (Skylake & Haswell timings)
+	yfmsubpd ymm2, ymm2, ymm0, ymm1		;; B4 = I4 * cosine/sine - R4			; 1-4	1-5
+
+	vmovapd	ymm0, [screg1+64]		;; sine for R2/I2
+	vmovapd	ymm1, [srcreg+d1+32]		;; I2
+	vmulpd	ymm5, ymm1, ymm0		;; C2 = I2 * sine				; 2-5	2-6
+	vmovapd	ymm4, [srcreg+d1]		;; R2
+	vmulpd	ymm6, ymm4, ymm0		;; D2 = R2 * sine				; 2-5	2-6
+
+	vmovapd	ymm0, [screg2+32]		;; cosine/sine for R3/I3
+	vmovapd	ymm7, [srcreg+d2]		;; R3
+	vmovapd	ymm8, [srcreg+d2+32]		;; I3
+	yfmaddpd ymm9, ymm7, ymm0, ymm8		;; A3 = R3 * cosine/sine + I3 (new R5/sine)	; 3-6	3-7
+	yfmsubpd ymm8, ymm8, ymm0, ymm7		;; B3 = I3 * cosine/sine - R3 (new R6/sine)	; 3-6	3-7
+
+	vmovapd	ymm0, [screg2+64]		;; sine for R4/I4
+	vmulpd	ymm3, ymm3, ymm0		;; A4 = A4 * sine (new R7)			; 5-8	6-10
+	vmulpd	ymm2, ymm2, ymm0		;; B4 = B4 * sine (new R8)			; 5-8	6-10
+
+	vmovapd	ymm0, [screg1+64+32]		;; cosine for R2/I2
+	yfmaddpd ymm4, ymm4, ymm0, ymm5		;; A2 = R2 * cosine + C2 (new R3)		; 6-9	7-11
+	yfmsubpd ymm1, ymm1, ymm0, ymm6		;; B2 = I2 * cosine - D2 (new R4)		; 6-9	7-11
+
+	vmovapd	ymm0, [screg2]			;; sine for original R3/I3 (new R5/R6)
+	yfmsubpd ymm5, ymm9, ymm0, ymm3		;; R5/sine * sine - R7 (newer R6)		; 9-12	11-15
+	yfmaddpd ymm9, ymm9, ymm0, ymm3		;; R5/sine * sine + R7 (newer R5)		; 9-12	11-15
+
+	yfmsubpd ymm3, ymm8, ymm0, ymm2		;; R6/sine * sine - R8 (newer R8)		; 10-13	12-16
+	yfmaddpd ymm8, ymm8, ymm0, ymm2		;; R6/sine * sine + R8 (newer R7)		; 10-13	12-16
+
+	vmovapd	ymm2, [srcreg]			;; R1
+	yfmaddpd ymm0, ymm2, ymm14, ymm4	;; R1 + R3 (newer R1)				; 11-14	13-17
+	yfmsubpd ymm2, ymm2, ymm14, ymm4	;; R1 - R3 (newer R3)				; 11-14	13-17
+
+	vmovapd	ymm4, [srcreg+32]		;; I1 (a.k.a new R2)
+	yfmaddpd ymm6, ymm4, ymm14, ymm1	;; R2 + R4 (newer R2)				; 12-15	14-18
+	yfmsubpd ymm4, ymm4, ymm14, ymm1	;; R2 - R4 (newer R4)				; 12-15	14-18
+	L1prefetch srcreg+L1pd, L1pt
+
+	yfmaddpd ymm1, ymm5, ymm14, ymm3	;; R6 = R6 + R8					; 14-17	17-21
+	yfmsubpd ymm3, ymm3, ymm14, ymm5	;; R8 = R8 - R6					; 14-17	17-21
+	L1prefetch srcreg+d1+L1pd, L1pt
+
+	yfmaddpd ymm5, ymm0, ymm14, ymm9	;; R1 + R5 (final R1)				; 15-18	18-22
+	yfmsubpd ymm0, ymm0, ymm14, ymm9	;; R1 - R5 (final R5)				; 15-18	18-22
+	L1prefetch srcreg+d2+L1pd, L1pt
+
+	yfmaddpd ymm9, ymm2, ymm14, ymm8	;; R3 + R7 (final R3)				; 16-19	19-23
+	yfmsubpd ymm2, ymm2, ymm14, ymm8	;; R3 - R7 (final R7)				; 16-19	19-23
+	L1prefetch srcreg+d2+d1+L1pd, L1pt
+
+	yfmaddpd ymm8, ymm1, ymm15, ymm6	;; R2 + R6 * SQRTHALF (final R2)		; 18-21	22-26
+	yfnmaddpd ymm1, ymm1, ymm15, ymm6	;; R2 - R6 * SQRTHALF (final R6)		; 18-21	22-26
+	yfmaddpd ymm6, ymm3, ymm15, ymm4	;; R4 + R8 * SQRTHALF (final R4)		; 19-22	23-27
+	yfnmaddpd ymm3, ymm3, ymm15, ymm4	;; R4 - R8 * SQRTHALF (final R8)		; 19-22	23-27
+
+	vshufpd	ymm4, ymm5, ymm8, 0		;; Shuffle R1 and R2 to create R1/R2 low	; 22	27
+	vshufpd	ymm5, ymm5, ymm8, 15		;; Shuffle R1 and R2 to create R1/R2 hi		; 23	28
+	vshufpd	ymm8, ymm9, ymm6, 0		;; Shuffle R3 and R4 to create R3/R4 low	; 24	29
+	vshufpd	ymm9, ymm9, ymm6, 15		;; Shuffle R3 and R4 to create R3/R4 hi		; 25	30
+	vshufpd	ymm6, ymm0, ymm1, 0		;; Shuffle R5 and R6 to create R5/R6 low	; 26	31
+	vshufpd	ymm0, ymm0, ymm1, 15		;; Shuffle R5 and R6 to create R5/R6 hi		; 27	32
+	vshufpd	ymm1, ymm2, ymm3, 0		;; Shuffle R7 and R8 to create R7/R8 low	; 28	33
+	vshufpd	ymm2, ymm2, ymm3, 15		;; Shuffle R7 and R8 to create R7/R8 hi		; 29	34
+
+	ylow128s ymm3, ymm4, ymm8		;; Shuffle R1/R2 low and R3/R4 low (final R1)	; 30-32	35-37
+	yhigh128s ymm4, ymm4, ymm8		;; Shuffle R1/R2 low and R3/R4 low (final R3)	; 31-33	36-38
+	ystore	[dstreg], ymm3			;; Save R1					; 33	38
+	ylow128s ymm8, ymm5, ymm9		;; Shuffle R1/R2 hi and R3/R4 hi (final R2)	; 32-34	37-39
+	ystore	[dstreg+e2], ymm4		;; Save R3					; 34	39
+	yhigh128s ymm5, ymm5, ymm9		;; Shuffle R1/R2 hi and R3/R4 hi (final R4)	; 33-35	38-40
+	ystore	[dstreg+e1], ymm8		;; Save R2					; 35	40
+	ylow128s ymm9, ymm6, ymm1		;; Shuffle R5/R6 low and R7/R8 low (final R5)	; 34-36	39-41
+	ystore	[dstreg+e2+e1], ymm5		;; Save R4					; 36	41
+	yhigh128s ymm6, ymm6, ymm1		;; Shuffle R5/R6 low and R7/R8 low (final R7)	; 35-37	40-42
+	ystore	[dstreg+32], ymm9		;; Save R5					; 37	42
+	ylow128s ymm1, ymm0, ymm2		;; Shuffle R5/R6 hi and R7/R8 hi (final R6)	; 36-38	41-43
+	ystore	[dstreg+e2+32], ymm6		;; Save R7					; 38	43
+	yhigh128s ymm0, ymm0, ymm2		;; Shuffle R5/R6 hi and R7/R8 hi (final R8)	; 37-39	42-44
+	ystore	[dstreg+e1+32], ymm1		;; Save R6					; 39	44
+	ystore	[dstreg+e2+e1+32], ymm0		;; Save R8					; 40	45
+
+	bump	srcreg, srcinc
+	bump	dstreg, dstinc
+	bump	screg1, scinc1
+	bump	screg2, scinc2
+	ENDM
+
+ENDIF
 
 ENDIF

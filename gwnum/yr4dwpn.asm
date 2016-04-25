@@ -1,4 +1,4 @@
-; Copyright 2011-2014 Mersenne Research, Inc.  All rights reserved
+; Copyright 2011-2016 Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -198,33 +198,33 @@ buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc448 336K, 768, 2
 buildfor           FMA3_64,	yr4dwpn_pass1sc448 448K, 10, 4
 buildfor CORE             ,	yr4dwpn_pass1sc448 448K, 10, 2
 buildfor                  ,	yr4dwpn_pass1sc448 448K, 10, 1
-buildfor CORE             ,	yr4dwpn_pass1sc448 560K, 1280, 2
+buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc448 560K, 1280, 2
 
 buildfor                  ,	yr4dwpn_pass1sc512 384K, 768, 2
 buildfor                  ,	yr4dwpn_pass1sc512 384K, 768, 1
 buildfor                  ,	yr4dwpn_pass1sc512 512K, 10, 4
-buildfor CORE_64          ,	yr4dwpn_pass1sc512 512K, 10, 2
+buildfor                  ,	yr4dwpn_pass1sc512 512K, 10, 2
 buildfor                  ,	yr4dwpn_pass1sc512 512K, 10, 1
 buildfor                  ,	yr4dwpn_pass1sc512 640K, 1280, 2
 buildfor                  ,	yr4dwpn_pass1sc512 640K, 1280, 1
 
 buildfor                  ,	yr4dwpn_pass1sc640 480K, 768, 2
 buildfor                  ,	yr4dwpn_pass1sc640 640K, 10, 4
-buildfor CORE             ,	yr4dwpn_pass1sc640 640K, 10, 2
+buildfor CORE_32          ,	yr4dwpn_pass1sc640 640K, 10, 2
 buildfor                  ,	yr4dwpn_pass1sc640 640K, 10, 1
-buildfor CORE             ,	yr4dwpn_pass1sc640 800K, 1280, 2
+buildfor CORE_32          ,	yr4dwpn_pass1sc640 800K, 1280, 2
 
 buildfor                  ,	yr4dwpn_pass1sc768 576K, 768, 2
 buildfor                  ,	yr4dwpn_pass1sc768 768K, 10, 4
-buildfor CORE             ,	yr4dwpn_pass1sc768 768K, 10, 2
+buildfor CORE_32          ,	yr4dwpn_pass1sc768 768K, 10, 2
 buildfor                  ,	yr4dwpn_pass1sc768 768K, 10, 1
-buildfor CORE_64          ,	yr4dwpn_pass1sc768 960K, 1280, 2
+buildfor                  ,	yr4dwpn_pass1sc768 960K, 1280, 2
 
 buildfor                  ,	yr4dwpn_pass1sc896 672K, 768, 2
 buildfor                  ,	yr4dwpn_pass1sc896 896K, 10, 4
-buildfor CORE             ,	yr4dwpn_pass1sc896 896K, 10, 2
+buildfor CORE_32          ,	yr4dwpn_pass1sc896 896K, 10, 2
 buildfor                  ,	yr4dwpn_pass1sc896 896K, 10, 1
-buildfor CORE             ,	yr4dwpn_pass1sc896 1120K, 1280, 2
+buildfor CORE_32          ,	yr4dwpn_pass1sc896 1120K, 1280, 2
 
 buildfor                  ,	yr4dwpn_pass1sc1024 768K, 768, 4
 buildfor                  ,	yr4dwpn_pass1sc1024 1M, 10, 4
@@ -274,44 +274,44 @@ buildfor                  ,	yr4dwpn_pass1sc128 320K, 2560, 2
 
 buildfor                  ,	yr4dwpn_pass1sc256 384K, 1536, 2
 buildfor           FMA3_64,	yr4dwpn_pass1sc256 384K, 1536, 1
-buildfor                  ,	yr4dwpn_pass1sc256 512K, 11, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc256 512K, 11, 1
+buildfor CORE_64 + FMA3_64,	yr4dwpn_pass1sc256 512K, 11, 2
+buildfor                  ,	yr4dwpn_pass1sc256 512K, 11, 1
 buildfor                  ,	yr4dwpn_pass1sc256 640K, 2560, 2
 buildfor                  ,	yr4dwpn_pass1sc256 640K, 2560, 1
 
 buildfor           FMA3_64,	yr4dwpn_pass1sc320 480K, 1536, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc320 640K, 11, 2
-buildfor CORE_32 + FMA3_64,	yr4dwpn_pass1sc320 800K, 2560, 2
+buildfor CORE_64 + FMA3_64,	yr4dwpn_pass1sc320 640K, 11, 2
+buildfor CORE_64 + FMA3_64,	yr4dwpn_pass1sc320 800K, 2560, 2
 
-buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc384 576K, 1536, 2
-buildfor                  ,	yr4dwpn_pass1sc384 576K, 1536, 1
+buildfor CORE_32 + FMA3_64,	yr4dwpn_pass1sc384 576K, 1536, 2
+buildfor CORE_64          ,	yr4dwpn_pass1sc384 576K, 1536, 1
 buildfor           FMA3_64,	yr4dwpn_pass1sc384 768K, 11, 2
-buildfor                  ,	yr4dwpn_pass1sc384 768K, 11, 1
+buildfor CORE_64          ,	yr4dwpn_pass1sc384 768K, 11, 1
 buildfor CORE_32          ,	yr4dwpn_pass1sc384 960K, 2560, 2
-buildfor                  ,	yr4dwpn_pass1sc384 960K, 2560, 1
+buildfor CORE_64          ,	yr4dwpn_pass1sc384 960K, 2560, 1
 
 buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc448 672K, 1536, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc448 896K, 11, 2
+buildfor CORE_64 + FMA3_64,	yr4dwpn_pass1sc448 896K, 11, 2
 buildfor           FMA3_64,	yr4dwpn_pass1sc448 1120K, 2560, 2
 
 buildfor                  ,	yr4dwpn_pass1sc512 768K, 1536, 2
 buildfor                  ,	yr4dwpn_pass1sc512 768K, 1536, 1
-buildfor CORE_64 + FMA3_64,	yr4dwpn_pass1sc512 1M, 11, 2
+buildfor                  ,	yr4dwpn_pass1sc512 1M, 11, 2
 buildfor                  ,	yr4dwpn_pass1sc512 1M, 11, 1
-buildfor CORE_64          ,	yr4dwpn_pass1sc512 1280K, 2560, 2
+buildfor                  ,	yr4dwpn_pass1sc512 1280K, 2560, 2
 buildfor                  ,	yr4dwpn_pass1sc512 1280K, 2560, 1
 
-buildfor           FMA3_64,	yr4dwpn_pass1sc640 960K, 1536, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc640 1280K, 11, 2
-buildfor CORE_64 + FMA3_64,	yr4dwpn_pass1sc640 1600K, 2560, 2
+buildfor                  ,	yr4dwpn_pass1sc640 960K, 1536, 2
+buildfor                  ,	yr4dwpn_pass1sc640 1280K, 11, 2
+buildfor CORE_64          ,	yr4dwpn_pass1sc640 1600K, 2560, 2
 
-buildfor CORE_64 + FMA3_64,	yr4dwpn_pass1sc768 1152K, 1536, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc768 1536K, 11, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc768 1920K, 2560, 2
+buildfor                  ,	yr4dwpn_pass1sc768 1152K, 1536, 2
+buildfor                  ,	yr4dwpn_pass1sc768 1536K, 11, 2
+buildfor CORE_64          ,	yr4dwpn_pass1sc768 1920K, 2560, 2
 
-buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc896 1344K, 1536, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc896 1792K, 11, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc896 2240K, 2560, 2
+buildfor CORE_32          ,	yr4dwpn_pass1sc896 1344K, 1536, 2
+buildfor                  ,	yr4dwpn_pass1sc896 1792K, 11, 2
+buildfor                  ,	yr4dwpn_pass1sc896 2240K, 2560, 2
 
 buildfor                  ,	yr4dwpn_pass1sc1024 1536K, 1536, 4
 buildfor                  ,	yr4dwpn_pass1sc1024 2M, 11, 4
@@ -456,22 +456,22 @@ buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc384ac 480K, 1280, 2
 buildfor                  ,	yr4dwpn_pass1sc384ac 480K, 1280, 1
 
 buildfor           FMA3_64,	yr4dwpn_pass1sc512ac 384K, 768, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc512ac 512K, 10, 4
-buildfor CORE_32          ,	yr4dwpn_pass1sc512ac 512K, 10, 2
+buildfor                  ,	yr4dwpn_pass1sc512ac 512K, 10, 4
+buildfor CORE_32 + FMA3_64,	yr4dwpn_pass1sc512ac 512K, 10, 2
 buildfor                  ,	yr4dwpn_pass1sc512ac 512K, 10, 1
-buildfor CORE          ,	yr4dwpn_pass1sc512ac 640K, 1280, 2
+buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc512ac 640K, 1280, 2
 
 buildfor                  ,	yr4dwpn_pass1sc640ac 480K, 768, 2
 buildfor                  ,	yr4dwpn_pass1sc640ac 640K, 10, 4
 buildfor                  ,	yr4dwpn_pass1sc640ac 640K, 10, 2
 buildfor                  ,	yr4dwpn_pass1sc640ac 640K, 10, 1
-buildfor CORE_32 + FMA3_64,	yr4dwpn_pass1sc640ac 800K, 1280, 2
+buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc640ac 800K, 1280, 2
 
 buildfor                  ,	yr4dwpn_pass1sc768ac 576K, 768, 2
 buildfor                  ,	yr4dwpn_pass1sc768ac 768K, 10, 4
-buildfor CORE             ,	yr4dwpn_pass1sc768ac 768K, 10, 2
+buildfor CORE_32          ,	yr4dwpn_pass1sc768ac 768K, 10, 2
 buildfor                  ,	yr4dwpn_pass1sc768ac 768K, 10, 1
-buildfor CORE_64          ,	yr4dwpn_pass1sc768ac 960K, 1280, 2
+buildfor                  ,	yr4dwpn_pass1sc768ac 960K, 1280, 2
 
 buildfor                  ,	yr4dwpn_pass1sc1024ac 768K, 768, 4
 buildfor                  ,	yr4dwpn_pass1sc1024ac 1M, 10, 4
@@ -523,20 +523,20 @@ buildfor                  ,	yr4dwpn_pass1sc256ac 640K, 2560, 2
 buildfor                  ,	yr4dwpn_pass1sc256ac 640K, 2560, 1
 
 buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc384ac 576K, 1536, 2
-buildfor                  ,	yr4dwpn_pass1sc384ac 768K, 11, 2
-buildfor CORE_32 + FMA3_64,	yr4dwpn_pass1sc384ac 960K, 2560, 2
+buildfor CORE_64 + FMA3_64,	yr4dwpn_pass1sc384ac 768K, 11, 2
+buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc384ac 960K, 2560, 2
 
-buildfor           FMA3_64,	yr4dwpn_pass1sc512ac 768K, 1536, 2
-buildfor CORE_32 + FMA3_64,	yr4dwpn_pass1sc512ac 1M, 11, 2
-buildfor CORE_32 + FMA3_64,	yr4dwpn_pass1sc512ac 1280K, 2560, 2
+buildfor                  ,	yr4dwpn_pass1sc512ac 768K, 1536, 2
+buildfor CORE_32          ,	yr4dwpn_pass1sc512ac 1M, 11, 2
+buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc512ac 1280K, 2560, 2
 
 buildfor                  ,	yr4dwpn_pass1sc640ac 960K, 1536, 2
 buildfor                  ,	yr4dwpn_pass1sc640ac 1280K, 11, 2
-buildfor CORE_32 + FMA3_64,	yr4dwpn_pass1sc640ac 1600K, 2560, 2
+buildfor CORE    + FMA3_64,	yr4dwpn_pass1sc640ac 1600K, 2560, 2
 
-buildfor CORE_64 + FMA3_64,	yr4dwpn_pass1sc768ac 1152K, 1536, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc768ac 1536K, 11, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc768ac 1920K, 2560, 2
+buildfor                  ,	yr4dwpn_pass1sc768ac 1152K, 1536, 2
+buildfor                  ,	yr4dwpn_pass1sc768ac 1536K, 11, 2
+buildfor                  ,	yr4dwpn_pass1sc768ac 1920K, 2560, 2
 
 buildfor                  ,	yr4dwpn_pass1sc1024ac 1536K, 1536, 4
 buildfor                  ,	yr4dwpn_pass1sc1024ac 2M, 11, 4
@@ -544,7 +544,7 @@ buildfor                  ,	yr4dwpn_pass1sc1024ac 2560K, 2560, 4
 
 buildfor                  ,	yr4dwpn_pass1sc1280ac 1920K, 1536, 2
 buildfor                  ,	yr4dwpn_pass1sc1280ac 2560K, 11, 2
-buildfor           FMA3_64,	yr4dwpn_pass1sc1280ac 3200K, 2560, 2
+buildfor                  ,	yr4dwpn_pass1sc1280ac 3200K, 2560, 2
 
 ;; Some small FFTs fit completely in a large L2 cache and thus do
 ;; not need to be prefetched.

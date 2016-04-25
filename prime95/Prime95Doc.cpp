@@ -1,6 +1,6 @@
 // Prime95Doc.cpp : implementation of the CPrime95Doc class
 //
-// Copyright 1995-2015 Mersenne Research, Inc.  All rights reserved
+// Copyright 1995-2016 Mersenne Research, Inc.  All rights reserved
 //
 
 #include "stdafx.h"
@@ -344,7 +344,7 @@ again:	if (dlg.DoModal () == IDOK) {
 		total_num_threads = 0;
 		for (i = 0; i < dlg.m_num_thread; i++)
 			total_num_threads += dlg.m_numcpus[i];
-		if (total_num_threads > NUM_CPUS * CPU_HYPERTHREADS &&
+		if (total_num_threads > NUM_CPUS * user_configurable_hyperthreads () &&
 		    AfxMessageBox (MSG_THREADS, MB_YESNO | MB_ICONQUESTION) == IDYES)
 			goto again;
 
@@ -691,7 +691,8 @@ void CPrime95Doc::OnCpu()
 	dlg.m_end_time = buf;
 	getCpuDescription (buf, 0);
 	dlg.m_cpu_info = buf;
-again:	if (dlg.DoModal () == IDOK) {
+//again:
+	if (dlg.DoModal () == IDOK) {
 		unsigned int new_day_start_time, new_day_end_time;
 
 		if (CPU_HOURS != dlg.m_hours) {
@@ -719,12 +720,14 @@ again:	if (dlg.DoModal () == IDOK) {
 		}
 		spoolMessage (PRIMENET_PROGRAM_OPTIONS, NULL);
 
-		if (!IniGetInt (INI_FILE, "AskedAboutMemory", 0)) {
-			IniWriteInt (INI_FILE, "AskedAboutMemory", 1);
-			if (dlg.m_day_memory == 8 && dlg.m_night_memory == 8 &&
-			    AfxMessageBox (MSG_MEMORY, MB_YESNO | MB_ICONQUESTION) == IDYES)
-				goto again;
-		}
+// Now that Primenet almost always hands out LL assignments that are P-1'ed,
+// there is little reason to prompt user into allowing us to use more memory.
+//		if (!IniGetInt (INI_FILE, "AskedAboutMemory", 0)) {
+//			IniWriteInt (INI_FILE, "AskedAboutMemory", 1);
+//			if (dlg.m_day_memory == 8 && dlg.m_night_memory == 8 &&
+//			    AfxMessageBox (MSG_MEMORY, MB_YESNO | MB_ICONQUESTION) == IDYES)
+//				goto again;
+//		}
 	} else
 		STARTUP_IN_PROGRESS = 0;
 }

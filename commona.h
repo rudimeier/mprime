@@ -1,4 +1,4 @@
-/* Copyright 1995-2009 Mersenne Research, Inc.  All rights reserved */
+/* Copyright 1995-2016 Mersenne Research, Inc.  All rights reserved */
 
 /* Common strings */
 
@@ -12,3 +12,5 @@
 
 void sanitizeString (char *);
 void rangeStatusMessage (char *, unsigned int);
+unsigned int user_configurable_hyperthreads ();
+int min_cores_for_work_type (int work_type);

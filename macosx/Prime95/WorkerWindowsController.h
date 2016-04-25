@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/26/09.
-//  Copyright 2009 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2016 Mersenne Research, Inc. All rights reserved.
 //
 
 #import <Cocoa/Cocoa.h>

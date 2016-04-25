@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="4514" systemVersion="13A3017" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none">
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="6751" systemVersion="13F1603" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none">
     <dependencies>
-        <deployment version="1050" defaultVersion="1080" identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="4514"/>
+        <deployment version="1050" identifier="macosx"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="6751"/>
     </dependencies>
     <objects>
         <customObject id="-2" userLabel="File's Owner" customClass="WorkerWindowsController">
@@ -12,7 +12,7 @@
             </connections>
         </customObject>
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
-        <customObject id="-3" userLabel="Application"/>
+        <customObject id="-3" userLabel="Application" customClass="NSObject"/>
         <window title="Worker Windows" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" hidesOnDeactivate="YES" oneShot="NO" animationBehavior="default" id="1" customClass="NSPanel">
             <windowStyleMask key="styleMask" titled="YES" closable="YES" miniaturizable="YES" resizable="YES" utility="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" bottomStrut="YES"/>
@@ -35,28 +35,23 @@
                         <rect key="frame" x="254" y="451" width="44" height="22"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" drawsBackground="YES" id="7">
-                            <numberFormatter key="formatter" formatterBehavior="custom10_4" positiveFormat="#" negativeFormat="#" allowsFloats="NO" usesGroupingSeparator="NO" groupingSize="0" minimumIntegerDigits="0" maximumIntegerDigits="4" minimumFractionDigits="0" maximumFractionDigits="0" id="12">
-                                <real key="roundingIncrement" value="0.0"/>
-                                <nil key="nilSymbol"/>
+                            <numberFormatter key="formatter" formatterBehavior="custom10_4" positiveFormat="#" negativeFormat="#" allowsFloats="NO" usesGroupingSeparator="NO" paddingCharacter="*" groupingSize="0" minimumIntegerDigits="0" maximumIntegerDigits="4" decimalSeparator="." groupingSeparator="," currencyDecimalSeparator="." plusSign="+" minusSign="-" notANumberSymbol="NaN" perMillSymbol="‰" percentSymbol="%" exponentSymbol="E" positivePrefix="" positiveSuffix="" negativePrefix="-" negativeSuffix="" id="12">
                                 <nil key="negativeInfinitySymbol"/>
                                 <nil key="positiveInfinitySymbol"/>
                                 <real key="minimum" value="1"/>
-                                <metadata>
-                                    <bool key="localizesFormat" value="YES"/>
-                                </metadata>
                             </numberFormatter>
                             <font key="font" metaFont="system"/>
                             <color key="textColor" name="textColor" catalog="System" colorSpace="catalog"/>
                             <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                         </textFieldCell>
                         <connections>
-                            <binding destination="-2" name="enabled" keyPath="numWorkersEnabled" id="77"/>
-                            <binding destination="-2" name="maxValue" keyPath="numWorkersMax" id="80"/>
                             <binding destination="-2" name="value" keyPath="numWorkers" previousBinding="80" id="81">
                                 <dictionary key="options">
                                     <bool key="NSConditionallySetsEnabled" value="YES"/>
                                 </dictionary>
                             </binding>
+                            <binding destination="-2" name="enabled" keyPath="numWorkersEnabled" id="77"/>
+                            <binding destination="-2" name="maxValue" keyPath="numWorkersMax" id="80"/>
                             <outlet property="nextKeyView" destination="10" id="49"/>
                         </connections>
                     </textField>
@@ -73,16 +68,11 @@
                         <rect key="frame" x="224" y="419" width="39" height="22"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" state="on" borderStyle="bezel" drawsBackground="YES" id="11">
-                            <numberFormatter key="formatter" formatterBehavior="custom10_4" positiveFormat="#" negativeFormat="#" allowsFloats="NO" usesGroupingSeparator="NO" groupingSize="0" minimumIntegerDigits="0" maximumIntegerDigits="2" minimumFractionDigits="0" maximumFractionDigits="0" id="13">
-                                <real key="roundingIncrement" value="0.0"/>
-                                <nil key="nilSymbol"/>
+                            <numberFormatter key="formatter" formatterBehavior="custom10_4" positiveFormat="#" negativeFormat="#" allowsFloats="NO" usesGroupingSeparator="NO" paddingCharacter="*" groupingSize="0" minimumIntegerDigits="0" maximumIntegerDigits="2" decimalSeparator="." groupingSeparator="," currencyDecimalSeparator="." plusSign="+" minusSign="-" notANumberSymbol="NaN" perMillSymbol="‰" percentSymbol="%" exponentSymbol="E" positivePrefix="" positiveSuffix="" negativePrefix="-" negativeSuffix="" id="13">
                                 <nil key="negativeInfinitySymbol"/>
                                 <nil key="positiveInfinitySymbol"/>
                                 <real key="minimum" value="1"/>
                                 <real key="maximum" value="10"/>
-                                <metadata>
-                                    <bool key="localizesFormat" value="YES"/>
-                                </metadata>
                             </numberFormatter>
                             <font key="font" metaFont="system"/>
                             <color key="textColor" name="textColor" catalog="System" colorSpace="catalog"/>
@@ -111,7 +101,7 @@
                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                             <subviews>
                                 <tableView verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" columnSelection="YES" multipleSelection="NO" autosaveColumns="NO" headerView="63" id="62">
-                                    <rect key="frame" x="0.0" y="0.0" width="593" height="228"/>
+                                    <rect key="frame" x="0.0" y="0.0" width="593" height="19"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                     <size key="intercellSpacing" width="3" height="2"/>
                                     <color key="backgroundColor" white="1" alpha="1" colorSpace="calibratedWhite"/>
@@ -139,7 +129,7 @@
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" white="0.33333299" alpha="1" colorSpace="calibratedWhite"/>
                                             </tableHeaderCell>
-                                            <popUpButtonCell key="dataCell" type="bevel" title="Trial factoring to low limits" bezelStyle="rounded" alignment="left" controlSize="small" lineBreakMode="truncatingTail" state="on" borderStyle="bezel" imageScaling="proportionallyDown" inset="2" arrowPosition="arrowAtCenter" preferredEdge="maxY" selectedItem="157" id="109">
+                                            <popUpButtonCell key="dataCell" type="bevel" title="100,000,000 digit numbers to test" bezelStyle="rounded" alignment="left" controlSize="small" lineBreakMode="truncatingTail" state="on" borderStyle="bezel" imageScaling="proportionallyDown" inset="2" arrowPosition="arrowAtCenter" preferredEdge="maxY" selectedItem="157" id="109">
                                                 <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
                                                 <font key="font" metaFont="smallSystem"/>
                                                 <menu key="menu" title="OtherViews" id="110">
@@ -150,7 +140,7 @@
                                                         <menuItem title="Double-check tests" id="129"/>
                                                         <menuItem title="Trial factoring" id="130"/>
                                                         <menuItem title="P-1 factoring" id="131"/>
-                                                        <menuItem title="Trial factoring to low limits" state="on" id="132"/>
+                                                        <menuItem title="Trial factoring to low limits" id="132"/>
                                                         <menuItem title="ECM on small Mersenne numbers" id="155"/>
                                                         <menuItem title="ECM on Fermat numbers" id="156"/>
                                                         <menuItem title="100,000,000 digit numbers to test" state="on" id="157"/>
@@ -185,26 +175,21 @@
                                             </popUpButtonCell>
                                             <tableColumnResizingMask key="resizingMask" resizeWithTable="YES" userResizable="YES"/>
                                             <connections>
-                                                <binding destination="85" name="enabled" keyPath="arrangedObjects.affinityEnabled" id="166"/>
                                                 <binding destination="85" name="selectedIndex" keyPath="arrangedObjects.affinity" id="154"/>
+                                                <binding destination="85" name="enabled" keyPath="arrangedObjects.affinityEnabled" id="166"/>
                                             </connections>
                                         </tableColumn>
-                                        <tableColumn width="190" minWidth="10" maxWidth="3.4028229999999999e+38" id="70">
+                                        <tableColumn width="170" minWidth="10" maxWidth="3.4028229999999999e+38" id="70">
                                             <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" alignment="left" title="CPUs to use (multithreading)">
                                                 <font key="font" metaFont="smallSystem"/>
                                                 <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
                                                 <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
                                             </tableHeaderCell>
                                             <textFieldCell key="dataCell" lineBreakMode="truncatingTail" selectable="YES" editable="YES" alignment="left" title="Text Cell" id="71">
-                                                <numberFormatter key="formatter" formatterBehavior="custom10_4" positiveFormat="#" negativeFormat="#" allowsFloats="NO" usesGroupingSeparator="NO" groupingSize="0" minimumIntegerDigits="0" maximumIntegerDigits="4" minimumFractionDigits="0" maximumFractionDigits="0" id="72">
-                                                    <real key="roundingIncrement" value="0.0"/>
-                                                    <nil key="nilSymbol"/>
+                                                <numberFormatter key="formatter" formatterBehavior="custom10_4" positiveFormat="#" negativeFormat="#" allowsFloats="NO" usesGroupingSeparator="NO" paddingCharacter="*" groupingSize="0" minimumIntegerDigits="0" maximumIntegerDigits="4" decimalSeparator="." groupingSeparator="," currencyDecimalSeparator="." plusSign="+" minusSign="-" notANumberSymbol="NaN" perMillSymbol="‰" percentSymbol="%" exponentSymbol="E" positivePrefix="" positiveSuffix="" negativePrefix="-" negativeSuffix="" id="72">
                                                     <nil key="negativeInfinitySymbol"/>
                                                     <nil key="positiveInfinitySymbol"/>
                                                     <real key="minimum" value="1"/>
-                                                    <metadata>
-                                                        <bool key="localizesFormat" value="YES"/>
-                                                    </metadata>
                                                 </numberFormatter>
                                                 <font key="font" metaFont="system"/>
                                                 <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
@@ -212,13 +197,13 @@
                                             </textFieldCell>
                                             <tableColumnResizingMask key="resizingMask" resizeWithTable="YES" userResizable="YES"/>
                                             <connections>
-                                                <binding destination="85" name="enabled" keyPath="arrangedObjects.multithreadingEnabled" id="165"/>
-                                                <binding destination="85" name="maxValue" keyPath="arrangedObjects.multithreadingMax" id="172"/>
                                                 <binding destination="85" name="value" keyPath="arrangedObjects.multithreading" previousBinding="172" id="173">
                                                     <dictionary key="options">
                                                         <bool key="NSConditionallySetsEnabled" value="YES"/>
                                                     </dictionary>
                                                 </binding>
+                                                <binding destination="85" name="enabled" keyPath="arrangedObjects.multithreadingEnabled" id="165"/>
+                                                <binding destination="85" name="maxValue" keyPath="arrangedObjects.multithreadingMax" id="172"/>
                                             </connections>
                                         </tableColumn>
                                     </tableColumns>
@@ -230,7 +215,7 @@
                             </subviews>
                             <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
                         </clipView>
-                        <scroller key="horizontalScroller" verticalHuggingPriority="750" horizontal="YES" id="61">
+                        <scroller key="horizontalScroller" hidden="YES" verticalHuggingPriority="750" horizontal="YES" id="61">
                             <rect key="frame" x="1" y="229" width="575" height="16"/>
                             <autoresizingMask key="autoresizingMask"/>
                         </scroller>

@@ -1,5 +1,7 @@
 // WorkerDlg.h : header file
 //
+// Copyright 1995-2016 Mersenne Research, Inc.  All rights reserved
+//
 
 /////////////////////////////////////////////////////////////////////////////
 // CWorkerDlg dialog
@@ -63,3 +65,4 @@ protected:
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 };
+

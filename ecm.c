@@ -10,7 +10,7 @@
  *	Other important ideas courtesy of Peter Montgomery.
  *
  *	c. 1997 Perfectly Scientific, Inc.
- *	c. 1998-2015 Mersenne Research, Inc.
+ *	c. 1998-2016 Mersenne Research, Inc.
  *	All Rights Reserved.
  *
  *************************************************************/
@@ -1032,6 +1032,63 @@ int setN (
 	bits = (unsigned long) (w->n * log ((double) w->b) / log ((double) 2.0));
 	*N = allocgiant ((bits >> 5) + 5);
 	if (*N == NULL) return (OutOfMemory (thread_num));
+
+/* This special code comes from Serge Batalov */
+
+	if (IniGetInt (INI_FILE, "PhiExtensions", 0) &&
+	    w->k == 1.0 && w->b == 2 && w->c == -1) {		/*=== this input means Phi(n,2) with n semiprime ===*/
+		unsigned int i,k,q,knownSmallMers[] = {3, 5, 7, 13, 17, 19, 31, 61, 89, 107, 127, 521, 607, 1279, 2203, 2281, 3217,
+						       4253, 4423, 9689, 9941, 11213, 19937, 999999999}; /* for now, just the cases where w->n = p * q, and 2^q-1 is prime */
+		for (i=0; (q=knownSmallMers[i]) < w->n || q*q <= w->n; i++) if ((w->n%q) == 0) {
+			giant tmp = allocgiant ((bits >> 5) + 5);
+			if (!tmp) return (OutOfMemory (thread_num));
+			ultog (1, tmp);
+			ultog (1, *N);
+			gshiftleft (w->n-w->n/q, *N);
+			for (k=2; k < q; k++) {
+				gshiftleft (w->n/q, tmp);
+				addg (tmp, *N);
+			}
+			iaddg (1, *N);
+			if (q != w->n/q) {
+				ultog (w->b, tmp);
+				power (tmp, w->n/q);
+				iaddg (w->c, tmp);
+				divg (tmp, *N);
+			}
+			free (tmp);
+			/* w->forced_fftlen = w->n; */ /*=== too late to do this here. Moved before gwsetup() --SB. */
+			if (!w->known_factors || !strcmp (w->known_factors, "1")) {
+				p = sprintf (buf, "M%lu", w->n/q); if(q != w->n/q) p += sprintf (buf+p, "/M%d", q);
+				w->known_factors = (char *) malloc (p+1);
+				memcpy (w->known_factors, buf, p+1);
+			}
+			return (0);
+		}
+        }
+
+	if (IniGetInt (INI_FILE, "PhiExtensions", 0) &&
+	    w->k == 1.0 && abs(w->c) == 1 && (w->n%3) == 0) {		/*=== this input means Phi(3,-b^(n/3)) ===*/
+		giant	tmp = allocgiant ((bits >> 5) + 5);
+		if (tmp == NULL) return (OutOfMemory (thread_num));
+		ultog (w->b, tmp);
+		power (tmp, w->n/3);
+		gtog (tmp, *N);
+		squareg (*N);
+		if (w->c == 1) subg (tmp, *N); else addg (tmp, *N);
+		iaddg (1, *N);
+		free (tmp);
+		/* w->forced_fftlen = w->n; */ /*=== too late to do this here. Moved before gwsetup() --SB. */
+		if (!w->known_factors) {
+			p = sprintf (buf, "(%lu^%lu%+ld)", w->b, w->n/3, w->c);
+			w->known_factors = (char *) malloc (p+1);
+			memcpy (w->known_factors, buf, p+1);
+		}
+		return (0);
+	}
+
+/* Standard code for working on k*b^n+c */
+
 	ultog (w->b, *N);
 	power (*N, w->n);
 	dblmulg (w->k, *N);

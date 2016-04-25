@@ -1,5 +1,7 @@
 // WorkerDlg.cpp : implementation file
 //
+// Copyright 1995-2016 Mersenne Research, Inc.  All rights reserved
+//
 
 #include "stdafx.h"
 #include "Prime95.h"
@@ -19,7 +21,7 @@ static char THIS_FILE[] = __FILE__;
 
 unsigned int max_num_workers (void)
 {
-	return (max (NUM_WORKER_THREADS, NUM_CPUS * CPU_HYPERTHREADS));
+	return (max (NUM_WORKER_THREADS, NUM_CPUS * user_configurable_hyperthreads ()));
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -68,15 +70,15 @@ void CWorkerDlg::DoDataExchange(CDataExchange* pDX)
 	//}}AFX_DATA_MAP
 	c_num_thread_text.EnableWindow (max_num_workers () > 1);
 	c_num_thread.EnableWindow (max_num_workers () > 1);
-	c_workgroup.EnableWindow (USE_PRIMENET || NUM_CPUS * CPU_HYPERTHREADS > 1);
+	c_workgroup.EnableWindow (USE_PRIMENET || NUM_CPUS * user_configurable_hyperthreads () > 1);
 	c_threadnum_text.EnableWindow (m_num_thread > 1);
 	c_threadnum.EnableWindow (m_num_thread > 1);
 	c_work_pref_text.EnableWindow (USE_PRIMENET);
 	c_work_pref.EnableWindow (USE_PRIMENET);
-	c_affinity_text.EnableWindow (NUM_CPUS * CPU_HYPERTHREADS > 1);
-	c_affinity.EnableWindow (NUM_CPUS * CPU_HYPERTHREADS > 1);
-	c_numcpus_text.EnableWindow (m_num_thread < NUM_CPUS * CPU_HYPERTHREADS || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
-	c_numcpus.EnableWindow (m_num_thread < NUM_CPUS * CPU_HYPERTHREADS || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
+	c_affinity_text.EnableWindow (NUM_CPUS * user_configurable_hyperthreads () > 1);
+	c_affinity.EnableWindow (NUM_CPUS * user_configurable_hyperthreads () > 1);
+	c_numcpus_text.EnableWindow (m_num_thread < NUM_CPUS * user_configurable_hyperthreads () || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
+	c_numcpus.EnableWindow (m_num_thread < NUM_CPUS * user_configurable_hyperthreads () || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
 }
 
 
@@ -249,8 +251,8 @@ void CWorkerDlg::InitComboBoxText (void)
 	} else {
 		c_numcpus.SetWindowText ("Mixed");
 	}
-	c_numcpus_text.EnableWindow (m_num_thread < NUM_CPUS * CPU_HYPERTHREADS || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
-	c_numcpus.EnableWindow (m_num_thread < NUM_CPUS * CPU_HYPERTHREADS || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
+	c_numcpus_text.EnableWindow (m_num_thread < NUM_CPUS * user_configurable_hyperthreads () || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
+	c_numcpus.EnableWindow (m_num_thread < NUM_CPUS * user_configurable_hyperthreads () || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
 }
 
 
@@ -312,22 +314,40 @@ void CWorkerDlg::OnCbnKillfocusThreadNum()
 
 void CWorkerDlg::OnCbnKillfocusWorkType()
 {
-	int	sel, i, work_pref;
+	int	sel, i, work_pref, min_cores;
+	char	buf[10];
 
 	sel = c_work_pref.GetCurSel ();
 	if (thread_num) {
 		work_pref = map_sel_to_work_pref (sel);
-		if (work_pref != -1) m_work_pref[thread_num-1] = work_pref;
+		min_cores = min_cores_for_work_type (work_pref);
+		if (work_pref != -1) {
+			m_work_pref[thread_num-1] = work_pref;
+			if (m_numcpus[thread_num-1] < min_cores) {
+				m_numcpus[thread_num-1] = min_cores;
+				sprintf (buf, "%d", m_numcpus[thread_num-1]);
+				c_numcpus.SetWindowText (buf);
+			}
+		}
 	}
 	else if (AreAllTheSame (m_work_pref)) {
 		work_pref = map_sel_to_work_pref (sel);
-		if (work_pref != -1)
-			for (i = 0; i < MAX_NUM_WORKER_THREADS; i++)
+		min_cores = min_cores_for_work_type (work_pref);
+		if (work_pref != -1) {
+			for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
 				m_work_pref[i] = work_pref;
+				if (m_numcpus[i] < min_cores) m_numcpus[i] = min_cores;
+			}
+			InitComboBoxText ();
+		}
 	} else if (sel) {
 		work_pref = map_sel_to_work_pref (sel-1);
-		for (i = 0; i < MAX_NUM_WORKER_THREADS; i++)
+		min_cores = min_cores_for_work_type (work_pref);
+		for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
 			m_work_pref[i] = work_pref;
+			if (m_numcpus[i] < min_cores) m_numcpus[i] = min_cores;
+		}
+		InitComboBoxText ();
 	}
 }
 
@@ -357,24 +377,35 @@ void CWorkerDlg::OnCbnKillfocusAffinity()
 void CWorkerDlg::OnEnKillfocusNumCpus()
 {
 	char	buf[80];
-	unsigned int num_cpus;
+	unsigned int num_cpus, min_cores;
 	int	i;
 
 	c_numcpus.GetWindowText (buf, sizeof (buf));
 	if (buf[0] >= '0' && buf[0] <= '9') {
 		num_cpus = atoi (buf);
 		if (num_cpus < 1) num_cpus = 1;
-		if (num_cpus > NUM_CPUS * CPU_HYPERTHREADS)
-			num_cpus = NUM_CPUS * CPU_HYPERTHREADS;
-		sprintf (buf, "%d", num_cpus);
-		c_numcpus.SetWindowText (buf);
-		if (thread_num)
+		if (num_cpus > NUM_CPUS * user_configurable_hyperthreads ())
+			num_cpus = NUM_CPUS * user_configurable_hyperthreads ();
+		if (thread_num) {
+			min_cores = min_cores_for_work_type (m_work_pref[thread_num-1]);
+			if (num_cpus < min_cores) num_cpus = min_cores;
 			m_numcpus[thread_num-1] = num_cpus;
-		else
-			for (i = 0; i < MAX_NUM_WORKER_THREADS; i++)
-				m_numcpus[i] = num_cpus;
+			sprintf (buf, "%d", num_cpus);
+			c_numcpus.SetWindowText (buf);
+		} else {
+			for (i = 0; i < MAX_NUM_WORKER_THREADS; i++) {
+				min_cores = min_cores_for_work_type (m_work_pref[i]);
+				m_numcpus[i] = (num_cpus > min_cores ? num_cpus : min_cores);
+			}
+			if (AreAllTheSame (m_numcpus)) {
+				sprintf (buf, "%d", m_numcpus[0]);
+				c_numcpus.SetWindowText (buf);
+			} else {
+				c_numcpus.SetWindowText ("Mixed");
+			}
+		}
 	}
-	c_numcpus_text.EnableWindow (m_num_thread < NUM_CPUS * CPU_HYPERTHREADS || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
-	c_numcpus.EnableWindow (m_num_thread < NUM_CPUS * CPU_HYPERTHREADS || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
+	c_numcpus_text.EnableWindow (m_num_thread < NUM_CPUS * user_configurable_hyperthreads () || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
+	c_numcpus.EnableWindow (m_num_thread < NUM_CPUS * user_configurable_hyperthreads () || !AreAllTheSame (m_numcpus) || m_numcpus[0] != 1);
 }
 

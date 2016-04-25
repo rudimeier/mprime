@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2015 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2016 Mersenne Research, Inc.  All rights reserved
 | Author:  George Woltman
 | Email: woltman@alum.mit.edu
 |
@@ -404,13 +404,15 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 			CPU_FLAGS |= CPU_FMA3;
 	}
 
-/* Get more feature flags.  Specifically the AVX2 flag. */
+/* Get more feature flags.  Specifically the AVX2 and PREFETCHWT1 flags. */
 
 	if (max_cpuid_value >= 7) {
 		reg.ECX = 0;
 		Cpuid (7, &reg);
 		if (((reg.EBX >> 5) & 0x1) && (CPU_FLAGS & CPU_AVX))
 			CPU_FLAGS |= CPU_AVX2;
+		if (reg.ECX & 0x1)
+			CPU_FLAGS |= CPU_PREFETCHWT1;
 	}
 
 /* Call CPUID with 0x80000000 argument.  It tells us how many extended CPU */
@@ -419,10 +421,16 @@ static	char *	BRAND_NAMES[] = {	/* From Intel Ap-485 */
 	Cpuid (0x80000000, &reg);
 	max_extended_cpuid_value = reg.EAX;
 
-/* Get more feature flags.  Specifically the flag that says */
+/* Get more feature flags.  Specifically the PREFETCHW flag and the flag that says */
 /* RDTSC counts independently of CPU clock ticks Intel did this so that RDTSC */
 /* would keep accurate real time regardless of the CPU core speed controlled by SpeedStep. */
 
+	if (max_extended_cpuid_value >= 0x80000001) {
+		reg.ECX = 0;
+		Cpuid (0x80000001, &reg);
+		if ((reg.ECX >> 8) & 0x1)
+			CPU_FLAGS |= CPU_PREFETCHW;
+	}
 	if (max_extended_cpuid_value >= 0x80000007) {
 		Cpuid (0x80000007, &reg);
 		if ((reg.EDX >> 8) & 0x1)

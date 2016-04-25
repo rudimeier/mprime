@@ -3,7 +3,7 @@
 //  Prime95
 //
 //  Created by George Woltman on 4/26/09.
-//  Copyright 2009-2010 Mersenne Research, Inc. All rights reserved.
+//  Copyright 2009-2016 Mersenne Research, Inc. All rights reserved.
 //
 
 #import "WorkerWindowsController.h"
@@ -138,7 +138,7 @@ int AreAllTheSame (
 // We must let the user manipulate the options on these worker threads that
 // don't have a CPU to run on.
 
-	[self setNumWorkersMax:max (NUM_WORKER_THREADS, NUM_CPUS * CPU_HYPERTHREADS)];
+	[self setNumWorkersMax:max (NUM_WORKER_THREADS, NUM_CPUS * user_configurable_hyperthreads ())];
 	[self setNumWorkersEnabled:(numWorkersMax > 1)];
 
 // delete old rows
@@ -156,7 +156,7 @@ int AreAllTheSame (
 		[newRow setAffinity:map_affinity_to_sel(CPU_AFFINITY[i])];
 		[newRow setAffinityEnabled:(numWorkersMax > 1)];
 		[newRow setMultithreading:THREADS_PER_TEST[i]];
-		[newRow setMultithreadingMax:(NUM_CPUS * CPU_HYPERTHREADS)];
+		[newRow setMultithreadingMax:(NUM_CPUS * user_configurable_hyperthreads ())];
 		[newRow setMultithreadingEnabled:(THREADS_PER_TEST[i] > 1 || numWorkers < numWorkersMax)];
 		[workerDataArrayController addObject:newRow];
 		[newRow release];
@@ -195,7 +195,7 @@ int AreAllTheSame (
 			[newRow setAffinity:map_affinity_to_sel(100)];
 			[newRow setAffinityEnabled:(numWorkersMax > 1)];
 			[newRow setMultithreading:1];
-			[newRow setMultithreadingMax:(NUM_CPUS * CPU_HYPERTHREADS)];
+			[newRow setMultithreadingMax:(NUM_CPUS * user_configurable_hyperthreads ())];
 			[newRow setMultithreadingEnabled:(_value < numWorkersMax)];
 			[workerDataArrayController addObject:newRow];
 			[newRow release];
@@ -209,12 +209,28 @@ int AreAllTheSame (
 
 - (IBAction)ok:(id)sender
 {
-	int	i, work_prefs[MAX_NUM_WORKER_THREADS], affinities[MAX_NUM_WORKER_THREADS];
+	int	i, tot_threads, work_prefs[MAX_NUM_WORKER_THREADS], affinities[MAX_NUM_WORKER_THREADS];
 	int	num_cpus[MAX_NUM_WORKER_THREADS];
 	int	restart = FALSE;
 	int	new_options = FALSE;
 
 	[[self window] makeFirstResponder:nil];			// End any active text field edits
+
+/* Make sure user has not allocated too many threads */
+
+	for (i = 0, tot_threads = 0; i < numWorkers; i++) {	// examine each worker row
+		WorkerData *row = [workerData objectAtIndex:i];
+		tot_threads += [row multithreading];
+	}
+	if (tot_threads > NUM_CPUS * user_configurable_hyperthreads ()) {
+		NSAlert *alert = [[NSAlert alloc] init];
+		[alert addButtonWithTitle:@"OK"];
+		[alert setMessageText:@"More threads allocated than number of CPU cores.  Reduce the number of workers or CPUs to use."];
+		[alert setAlertStyle:NSWarningAlertStyle];
+		[alert runModal];
+		[alert release];
+		return;
+	}
 
 /* If user is changing the number of worker threads, then make the */
 /* necessary changes.  Restart worker threads so that we are running */
@@ -311,11 +327,37 @@ int AreAllTheSame (
 
 @implementation WorkerData
 
+- (int)typeOfWork
+{
+	return typeOfWork;
+}
+
+- (void)setTypeOfWork:(int) _value
+{
+	int	min_cores;
+
+	min_cores = min_cores_for_work_type (map_sel_to_work_pref (_value));
+	if (multithreading < min_cores) [self setMultithreading:min_cores];
+	typeOfWork = _value;
+}
+
+- (int)multithreading
+{
+	return multithreading;
+}
+
+- (void)setMultithreading:(int) _value
+{
+	int	min_cores;
+
+	min_cores = min_cores_for_work_type (map_sel_to_work_pref (typeOfWork));
+	if (_value < min_cores) _value = min_cores;
+	multithreading = _value;
+}
+
 @synthesize workerNumber;
-@synthesize typeOfWork;
 @synthesize affinity;
 @synthesize affinityEnabled;
-@synthesize multithreading;
 @synthesize multithreadingMax;
 @synthesize multithreadingEnabled;
 

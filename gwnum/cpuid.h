@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2013 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2016 Mersenne Research, Inc.  All rights reserved
 | Author:  George Woltman
 | Email: woltman@alum.mit.edu
 |
@@ -56,6 +56,8 @@ extern double CPU_SPEED;		/* Actual CPU Speed in MHz */
 #define CPU_FMA3		0x8000	/* Intel fused multiply-add instructions supported */
 #define CPU_FMA4		0x10000	/* AMD fused multiply-add instructions supported */
 #define CPU_AVX2		0x20000	/* AVX2 instructions supported */
+#define CPU_PREFETCHW		0x40000	/* PREFETCHW (the Intel version) instruction supported */
+#define CPU_PREFETCHWT1		0x80000	/* PREFETCHWT1 instruction supported */
 extern unsigned int CPU_FLAGS;		/* Cpu capabilities */
 extern unsigned int CPU_CORES;		/* Number CPU cores */
 extern unsigned int CPU_HYPERTHREADS;	/* Number of virtual processors that each CPU core supports. */

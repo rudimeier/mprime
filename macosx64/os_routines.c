@@ -2,7 +2,7 @@
 /* so that they can be included in both the command-line mprime version as */
 /* well as the Mac OS X GUI version. */
 
-/* Copyright 1995-2014 Mersenne Research, Inc. */
+/* Copyright 1995-2016 Mersenne Research, Inc. */
 /* Author:  George Woltman */
 /* Email: woltman@alum.mit.edu */
 
@@ -322,16 +322,20 @@ void setThreadPriorityAndAffinity (
 /* (linux's lowest priority).  Map eight (prime95's normal priority) to */
 /* 0 (linux's normal priority). */
 
-	linux_priority = (8 - (int) priority) * 19 / 7;
-	errcode = setpriority (PRIO_PROCESS, thread_id, linux_priority);
+	if (IniGetInt (INI_FILE, "EnableLinuxSetPriority", 1)) {
+		linux_priority = (8 - (int) priority) * 19 / 7;
+		errcode = setpriority (PRIO_PROCESS, thread_id, linux_priority);
+	}
 
 /* Set affinity for this thread.  It is the callers responsibility to */
 /* determine which logical hyperthreaded CPUs map to a single physical CPU. */
 
-	CPU_ZERO (&linux_mask);
-	for (i = 0; i < MAX_NUM_WORKER_THREADS && i < CPU_SETSIZE; i++)
-		if (mask[i/32] & (1 << (i & 31))) CPU_SET (i, &linux_mask);
-	errcode = sched_setaffinity (thread_id, sizeof (linux_mask), &linux_mask);
+	if (IniGetInt (INI_FILE, "EnableLinuxSetAffinity", 1)) {
+		CPU_ZERO (&linux_mask);
+		for (i = 0; i < MAX_NUM_WORKER_THREADS && i < CPU_SETSIZE; i++)
+			if (mask[i/32] & (1 << (i & 31))) CPU_SET (i, &linux_mask);
+		errcode = sched_setaffinity (thread_id, sizeof (linux_mask), &linux_mask);
+	}
 #endif
 
 #if defined (__APPLE__) || defined (__FreeBSD__)

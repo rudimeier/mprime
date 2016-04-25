@@ -1,5 +1,5 @@
 /*----------------------------------------------------------------------
-| Copyright 1995-2015 Mersenne Research, Inc.  All rights reserved
+| Copyright 1995-2016 Mersenne Research, Inc.  All rights reserved
 |
 | This file contains routines and global variables that are common for
 | all operating systems the program has been ported to.  It is included
@@ -11,7 +11,7 @@
 | Commonc contains information used during setup and execution
 +---------------------------------------------------------------------*/
 
-static const char JUNK[]="Copyright 1996-2015 Mersenne Research, Inc. All rights reserved";
+static const char JUNK[]="Copyright 1996-2016 Mersenne Research, Inc. All rights reserved";
 
 char	INI_FILE[80] = {0};
 char	LOCALINI_FILE[80] = {0};
@@ -377,6 +377,12 @@ void getCpuInfo (void)
 	temp = IniGetInt (LOCALINI_FILE, "CpuSupportsPrefetch", 99);
 	if (temp == 0) CPU_FLAGS &= ~CPU_PREFETCH;
 	if (temp == 1) CPU_FLAGS |= CPU_PREFETCH;
+	temp = IniGetInt (LOCALINI_FILE, "CpuSupportsPrefetchw", 99);
+	if (temp == 0) CPU_FLAGS &= ~CPU_PREFETCHW;
+	if (temp == 1) CPU_FLAGS |= CPU_PREFETCHW;
+	temp = IniGetInt (LOCALINI_FILE, "CpuSupportsPrefetchwt1", 99);
+	if (temp == 0) CPU_FLAGS &= ~CPU_PREFETCHWT1;
+	if (temp == 1) CPU_FLAGS |= CPU_PREFETCHWT1;
 	temp = IniGetInt (LOCALINI_FILE, "CpuSupportsSSE", 99);
 	if (temp == 0) CPU_FLAGS &= ~CPU_SSE;
 	if (temp == 1) CPU_FLAGS |= CPU_SSE;
@@ -473,6 +479,7 @@ void getCpuDescription (
 //		if (CPU_FLAGS & CPU_MMX) strcat (buf, "MMX, ");
 		if (CPU_FLAGS & CPU_3DNOW) strcat (buf, "3DNow!, ");
 		else if (CPU_FLAGS & CPU_3DNOW_PREFETCH) strcat (buf, "3DNow! Prefetch, ");
+		else if (CPU_FLAGS & CPU_PREFETCHW) strcat (buf, "Prefetchw, ");
 		else if (CPU_FLAGS & CPU_PREFETCH) strcat (buf, "Prefetch, ");
 		if (CPU_FLAGS & CPU_SSE) strcat (buf, "SSE, ");
 		if (CPU_FLAGS & CPU_SSE2) strcat (buf, "SSE2, ");
@@ -742,7 +749,7 @@ void nameAndReadIniFiles (
 	calc_windows_guid ();
 
 /* A stress tester ceases to be a stress tester if he ever turns on */
-/* primenet or has work in his worktodo.ini file */
+/* primenet or has work in his worktodo.txt file */
 
 	if (STRESS_TESTER == 1 && (USE_PRIMENET || WORKTODO_COUNT)) {
 		STRESS_TESTER = 0;
@@ -859,7 +866,7 @@ int readIniFiles (void)
 	sanitizeString (COMPID);
 	USE_PRIMENET = (int) IniGetInt (INI_FILE, "UsePrimenet", 0);
 	DIAL_UP = (int) IniGetInt (INI_FILE, "DialUp", 0);
-	DAYS_OF_WORK = (unsigned int) IniGetInt (INI_FILE, "DaysOfWork", 5);
+	DAYS_OF_WORK = (unsigned int) IniGetInt (INI_FILE, "DaysOfWork", 3);
 	if (DAYS_OF_WORK > 180) DAYS_OF_WORK = 180;
 
 	CPU_HOURS = (unsigned int) IniGetInt (LOCALINI_FILE, "CPUHours", 24);
@@ -911,7 +918,7 @@ int readIniFiles (void)
 	ERRCHK = (temp != 0);
 	temp = (int) IniGetInt (INI_FILE, "SumInputsErrorCheck", 0);
 	SUM_INPUTS_ERRCHK = (temp != 0);
-	NUM_WORKER_THREADS = IniGetInt (LOCALINI_FILE, "WorkerThreads", NUM_CPUS);
+	NUM_WORKER_THREADS = IniGetInt (LOCALINI_FILE, "WorkerThreads", (NUM_CPUS <= 6) ? 1 : ((NUM_CPUS + 3) / 4));
 	if (NUM_WORKER_THREADS < 1) NUM_WORKER_THREADS = 1;
 	if (NUM_WORKER_THREADS > MAX_NUM_WORKER_THREADS) NUM_WORKER_THREADS = MAX_NUM_WORKER_THREADS;
 	PRIORITY = (unsigned int) IniGetInt (INI_FILE, "Priority", 1);
@@ -919,7 +926,7 @@ int readIniFiles (void)
 	if (PRIORITY > 10) PRIORITY = 10;
 	PTOGetAll (INI_FILE, "WorkPreference", WORK_PREFERENCE, 0);
 	PTOGetAll (LOCALINI_FILE, "Affinity", CPU_AFFINITY, 100);
-	PTOGetAll (LOCALINI_FILE, "ThreadsPerTest", THREADS_PER_TEST, 1);
+	PTOGetAll (LOCALINI_FILE, "ThreadsPerTest", THREADS_PER_TEST, NUM_CPUS / NUM_WORKER_THREADS);
 	MANUAL_COMM = (int) IniGetInt (INI_FILE, "ManualComm", 0);
 	HIDE_ICON = (int) IniGetInt (INI_FILE, "HideIcon", 0);
 	TRAY_ICON = (int) IniGetInt (INI_FILE, "TrayIcon", 1);
@@ -2010,7 +2017,7 @@ void incorporateIniAddFiles (void)
 	}
 }
 
-/* Merge optional worktodo.add file into their worktodo.ini file */
+/* Merge optional worktodo.add file into their worktodo.txt file */
 
 int incorporateWorkToDoAddFile (void)
 {
@@ -2026,7 +2033,7 @@ static	int	worktodo_add_disabled = FALSE;
 
 	if (worktodo_add_disabled) return (0);
 
-/* Merge additions to worktodo.ini */
+/* Merge additions to worktodo.txt */
 
 	strcpy (filename, WORKTODO_FILE);
 	dot = strrchr (filename, '.');
@@ -2043,7 +2050,7 @@ static	int	worktodo_add_disabled = FALSE;
 	}
 
 /* As an ugly kludge, we append lines from worktodo.add as comments in the */
-/* in-memory version of worktodo.ini.  Later we will write worktodo.ini to */
+/* in-memory version of worktodo.txt.  Later we will write worktodo.txt to */
 /* disk and reprocess it entirely.  Loop processing each worktodo.add line */
 
 	gwmutex_lock (&WORKTODO_MUTEX);
@@ -2060,7 +2067,7 @@ static	int	worktodo_add_disabled = FALSE;
 		if (line[0] == 0) continue;
 
 /* If this is a section header find the matching section header in */
-/* worktodo.ini.  If no match is found, add this to the first empty thread */
+/* worktodo.txt.  If no match is found, add this to the first empty thread */
 /* or the very last thread */
 
 		if (line[0] == '[') {
@@ -2089,7 +2096,7 @@ static	int	worktodo_add_disabled = FALSE;
 		memset (w, 0, sizeof (struct work_unit));
 
 /* Save new line as a comment.  It will be properly parsed when we re-read */
-/* the worktodo.ini file. */
+/* the worktodo.txt file. */
 
 		w->work_type = WORK_NONE;
 		w->comment = (char *) malloc (strlen (line) + 1);
@@ -2107,7 +2114,7 @@ static	int	worktodo_add_disabled = FALSE;
 	fclose (fd);
 	gwmutex_unlock (&WORKTODO_MUTEX);
 
-/* Write the combined worktodo.ini file */
+/* Write the combined worktodo.txt file */
 
 	WORKTODO_CHANGED = TRUE;
 	rc = writeWorkToDoFile (TRUE);
@@ -2124,7 +2131,7 @@ static	int	worktodo_add_disabled = FALSE;
 		worktodo_add_disabled = TRUE;
 	}
 
-/* Now reprocess the combined and freshly written worktodo.ini file */
+/* Now reprocess the combined and freshly written worktodo.txt file */
 
 	return (readWorkToDoFile ());
 
@@ -2393,7 +2400,7 @@ int OutOfMemory (
 }
 
 /****************************************************************************/
-/*               Routines to process worktodo.ini files                     */
+/*               Routines to process worktodo.txt files                     */
 /****************************************************************************/
 
 /* The worktodo structures are accessed by worker threds, the communication */
@@ -2436,7 +2443,7 @@ unsigned int countCommas (
 }
 
 /* Do some more initialization of work_unit fields.  These values do */
-/* not appear in the worktodo.ini file, but need initializing in a */
+/* not appear in the worktodo.txt file, but need initializing in a */
 /* common place. */
 
 void auxiliaryWorkUnitInit (
@@ -2526,7 +2533,13 @@ int addToWorkUnitArray (
 {
 	struct work_unit *insertion_point;
 
-/* If add_to_end is set, then we are reading the worktodo.ini file. */
+/* When there are more worker sections than workers (as can happen when the shrinks the */
+/* number of worker windows), redistribute lines from those worker sections to the */
+/* active sections. */
+
+	tnum = tnum % NUM_WORKER_THREADS;
+
+/* If add_to_end is set, then we are reading the worktodo.txt file. */
 /* Add the entry to the end of the array */
 
 	if (add_to_end)
@@ -2587,7 +2600,7 @@ int addToWorkUnitArray (
 	return (0);
 }
 
-/* Read the entire worktodo.ini file into memory.  Return error_code */
+/* Read the entire worktodo.txt file into memory.  Return error_code */
 /* if we have a memory or file I/O error. */
 
 int readWorkToDoFile (void)
@@ -2629,7 +2642,7 @@ int readWorkToDoFile (void)
 	WORKTODO_COUNT = 0;
 
 /* Free old work_units for each worker thread. */
-/* We sometimes reread the worktodo.ini file in case the user */
+/* We sometimes reread the worktodo.txt file in case the user */
 /* manually edits the file while the program is running. */
 
 	for (tnum = 0; tnum < MAX_NUM_WORKER_THREADS; tnum++) {
@@ -2644,7 +2657,7 @@ int readWorkToDoFile (void)
 		WORK_UNITS[tnum].last = NULL;
 	}
 
-/* Read the lines of the work file.  It is OK if the worktodo.ini file */
+/* Read the lines of the work file.  It is OK if the worktodo.txt file */
 /* does not exist. */
 
 	mangleIniFileName (WORKTODO_FILE, newFileName, &mangled);
@@ -2676,15 +2689,16 @@ int readWorkToDoFile (void)
 
 	    if (line[0] == '[' && linenum > 1) {
 		tnum++;
-		if (tnum == NUM_WORKER_THREADS) {
+		if (tnum >= NUM_WORKER_THREADS) {
 		    char	buf[100];
 		    sprintf (buf,
-			     "Too many sections in worktodo.txt.  Line #%u\n",
-			     linenum);
+			     "Too many sections in worktodo.txt.  Moving work from section #%u to #%u.\n",
+			     tnum + 1, tnum % NUM_WORKER_THREADS + 1);
 		    OutputSomewhere (MAIN_THREAD_NUM, buf);
+		    safe_strcpy (line + 9, line);
+		    memcpy (line, ";;MOVED;;", 9);
+		    WORKTODO_CHANGED = TRUE;
 		}
-		if (tnum >= MAX_NUM_WORKER_THREADS)
-			tnum = MAX_NUM_WORKER_THREADS - 1;
 	    }
 
 /* All lines other than keyword=value are saved as comment lines. */
@@ -3024,7 +3038,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 		}
 	    }
 
-/* Uh oh.  We have a worktodo.ini line we cannot process. */
+/* Uh oh.  We have a worktodo.txt line we cannot process. */
 
 	    else if (_stricmp (keyword, "AdvancedFactor") == 0) {
 		OutputSomewhere (MAIN_THREAD_NUM, "Worktodo error: AdvancedFactor no longer supported\n");
@@ -3050,7 +3064,8 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 /* should never be asked to factor a number more than we are capable of. */
 
 	    if (w->k == 1.0 && w->b == 2 && !isPrime (w->n) && w->c == -1 &&
-	        w->work_type != WORK_ECM && w->work_type != WORK_PMINUS1) {
+		w->work_type != WORK_ECM && w->work_type != WORK_PMINUS1 &&
+		!(w->work_type == WORK_PRP && IniGetInt (INI_FILE, "PhiExtensions", 0))) {
 		char	buf[80];
 		sprintf (buf, "Error: Worktodo.txt file contained composite exponent: %ld\n", w->n);
 		OutputBoth (MAIN_THREAD_NUM, buf);
@@ -3082,7 +3097,7 @@ illegal_line:	sprintf (buf, "Illegal line in worktodo.txt file: %s\n", line);
 
 /* A user discovered a case where a computer that dual boots between 32-bit prime95 */
 /* and 64-bit prime95 can run into problems.  If near the FFT limit an FFT length is */
-/* picked and written to worktodo.ini.  When running the other executable, that FFT */
+/* picked and written to worktodo.txt.  When running the other executable, that FFT */
 /* length may not be supported leading to a "cannot initialize FFT error".  For */
 /* example, the 2800K FFT length is implemented in 64-bit prime95, but not 32-bit prime95. */
 /* The quick workaround here is to ignore FFT lengths from the worktodo file if that FFT */
@@ -3183,10 +3198,14 @@ next_wu:	first_real_work_line = FALSE;
 	fclose (fd);
 done:	gwmutex_unlock (&WORKTODO_MUTEX);
 
+/* If the worktodo file changed, write the changed worktodo file */
+
+	writeWorkToDoFile (FALSE);
+	
 /* Almost done.  Incorporate the optional worktodo.add file. */
 
 	return (incorporateWorkToDoAddFile ());
-	
+
 /* Close the file, free the lock and return error from routine we called */
 
 retrc:	fclose (fd);
@@ -3200,7 +3219,7 @@ nomem:	fclose (fd);
 	return (OutOfMemory (MAIN_THREAD_NUM));
 }
 
-/* Write the updated worktodo.ini to disk */
+/* Write the updated worktodo.txt to disk */
 
 int writeWorkToDoFile (
 	int	force)		/* Force writing file even if WELL_BEHAVED */
@@ -3231,7 +3250,7 @@ int writeWorkToDoFile (
 
 	gwmutex_lock (&WORKTODO_MUTEX);
 
-/* Create the WORKTODO.INI file */
+/* Create the WORKTODO.TXT file */
 
 	mangleIniFileName (WORKTODO_FILE, newFileName, &mangled);
 	fd = _open (newFileName, _O_CREAT | _O_TRUNC | _O_WRONLY | _O_TEXT, CREATE_FILE_ACCESS);
@@ -3405,7 +3424,7 @@ write_error:		OutputBoth (MAIN_THREAD_NUM,
 	return (0);
 }
 
-/* Return a worktodo.ini entry for the given worker thread */
+/* Return a worktodo.txt entry for the given worker thread */
 
 struct work_unit *getNextWorkToDoLine (
 	int	thread_num,		/* Thread number starting from 0 */
@@ -3472,7 +3491,7 @@ struct work_unit *getNextWorkToDoLine (
 	return (next);
 }
 
-/* Return a worktodo.ini entry for the given worker thread */
+/* Return a worktodo.txt entry for the given worker thread */
 
 void decrementWorkUnitUseCount (
 	struct work_unit *w,		/* WorkToDo entry */
@@ -3529,7 +3548,7 @@ int addWorkToDoLine (
 
 	WORKTODO_CHANGED = TRUE;
 
-/* Unlock and write the worktodo.ini file to disk */
+/* Unlock and write the worktodo.txt file to disk */
 
 	gwmutex_unlock (&WORKTODO_MUTEX);
 	return (writeWorkToDoFile (FALSE));
@@ -3552,7 +3571,7 @@ int updateWorkToDoLine (
 
 	WORKTODO_CHANGED = TRUE;
 
-/* Write the worktodo.ini file to disk */
+/* Write the worktodo.txt file to disk */
 
 	return (writeWorkToDoFile (FALSE));
 }
@@ -3600,7 +3619,7 @@ int deleteWorkToDoLine (
 
 	WORKTODO_CHANGED = TRUE;
 
-/* Unlock and write the worktodo.ini file to disk */
+/* Unlock and write the worktodo.txt file to disk */
 
 	gwmutex_unlock (&WORKTODO_MUTEX);
 	return (writeWorkToDoFile (FALSE));
@@ -3978,7 +3997,7 @@ void rolling_average_work_unit_complete (
 			work_estimate (thread_num, second_w);
 	}
 
-/* Unlock access to the worktodo.ini structures */
+/* Unlock access to the worktodo.txt structures */
 
 	gwmutex_unlock (&WORKTODO_MUTEX);
 
@@ -4024,7 +4043,7 @@ void adjust_rolling_average (void)
 		time_to_complete += (unsigned long) work_estimate (tnum, w);
 	}
 
-/* Unlock access to the worktodo.ini structures */
+/* Unlock access to the worktodo.txt structures */
 
 	gwmutex_unlock (&WORKTODO_MUTEX);
 
@@ -4034,7 +4053,7 @@ void adjust_rolling_average (void)
 	time (&current_time);
 
 /* Make sure hash codes match.  This protects us against making incorrect */
-/* rolling average adjustments when user manually edits worktodo.ini. */
+/* rolling average adjustments when user manually edits worktodo.txt. */
 
 	if (hash != IniGetInt (LOCALINI_FILE, "RollingHash", 0))
 		goto no_update;
@@ -4171,7 +4190,7 @@ void tempFileName (
 
 /* Prior to version 25.9 build 4, we did not use k or c in generating the */
 /* filename.  Thus, 10223*2^11111111+1 and 67607*2^11111111+1 would both */
-/* use the save save file -- a definite problem for Seventeen or Bust. */
+/* use the same save file -- a definite problem for Seventeen or Bust. */
 /* From now on, we will use k and c to generate the filename.  To reduce */
 /* upgrading problems, old save file names are renamed. */
 
@@ -4585,6 +4604,11 @@ int writeResults (
 static	time_t	last_time = 0;
 	time_t	this_time;
 	int	fd;
+	int	write_interval;
+
+/* Get the interval user-settable parameter for seconds that must have elapsed since the last time the date was output */
+
+	write_interval = IniGetInt (INI_FILE, "ResultsFileTimestampInterval", 300);
 
 /* Open file, position to end */
 
@@ -4597,11 +4621,11 @@ static	time_t	last_time = 0;
 		return (FALSE);
 	}
 
-/* If it has been at least 5 minutes since the last time stamp */
+/* If it has been at least 5 minutes (a user-adjustable value) since the last time stamp */
 /* was output, then output a new timestamp */
 
 	time (&this_time);
-	if (this_time - last_time > 300) {
+	if (write_interval && this_time - last_time > (time_t) write_interval) {
 		char	buf[32];
 		last_time = this_time;
 		buf[0] = '[';
@@ -4968,7 +4992,7 @@ int unreserve (
 	unsigned int tnum;
 	int	rc, found_one;
 
-/* Find exponent in worktodo.ini and delete it if present */
+/* Find exponent in worktodo.txt and delete it if present */
 
 	found_one = FALSE;
 	for (tnum = 0; tnum < NUM_WORKER_THREADS; tnum++) {
@@ -4999,7 +5023,7 @@ int unreserve (
 		}
 
 /* Delete the line.  The work unit will immediately be removed from the */
-/* worktodo.ini file and will be deleted from the in-memory structures */
+/* worktodo.txt file and will be deleted from the in-memory structures */
 /* once the last in-use lock is released. */
 
 		rc = deleteWorkToDoLine (tnum, w, TRUE);
@@ -6172,7 +6196,7 @@ retry:
 		stop_reason = addWorkToDoLine (tnum, &w);
 		if (stop_reason) goto error_exit;
 
-//bug Can we somehow verify that the worktodo.ini line got written???
+//bug Can we somehow verify that the worktodo.txt line got written???
 //bug (The rogue 'cat' problem)  If not, turn off USE_PRIMENET.
 //bug Or rate limit get assignments to N per day (where N takes into account unreserves?)
 //bug or have uc return the number of active assignments and ga the capability

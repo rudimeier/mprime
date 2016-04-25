@@ -362,18 +362,13 @@ ENDIF
 ; Macros to prefetch a 64-byte line into the L1 cache
 
 L1PREFETCH_NONE		EQU	0		; No L1 prefetching
-L1PREFETCH_EVEN		EQU	1		; L1 prefetching half the time
-L1PREFETCH_ODD		EQU	2		; L1 prefetching half the time
 L1PREFETCH_ALL		EQU	3		; L1 prefetching on
 L1PREFETCH_DEST_NONE	EQU	1000		; No L1 prefetching for destination
 L1PREFETCH_DEST_ALL	EQU	1003		; L1 prefetching on for destination
 
-L1prefetch_toggle = 1
-
 L1prefetch MACRO addr, type
 	IFNB <type>
-	L1prefetch_toggle = 1 - L1prefetch_toggle
-	IF (type EQ L1PREFETCH_ALL) OR (type EQ L1PREFETCH_EVEN AND L1prefetch_toggle EQ 0) OR (type EQ L1PREFETCH_ODD AND L1prefetch_toggle EQ 1)
+	IF (type EQ L1PREFETCH_ALL)
 	IF (@INSTR(,%yarch,<BULL>) NE 0)
 	prefetch [addr]
 	ELSE
@@ -384,8 +379,7 @@ L1prefetch MACRO addr, type
 	ENDM
 L1prefetchw MACRO addr, type
 	IFNB <type>
-	L1prefetch_toggle = 1 - L1prefetch_toggle
-	IF (type EQ L1PREFETCH_ALL) OR (type EQ L1PREFETCH_EVEN AND L1prefetch_toggle EQ 0) OR (type EQ L1PREFETCH_ODD AND L1prefetch_toggle EQ 1)
+	IF (type EQ L1PREFETCH_ALL)
 	IF (@INSTR(,%yarch,<BULL>) NE 0)
 	prefetchw [addr]
 	ELSE

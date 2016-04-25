@@ -1,4 +1,4 @@
-; Copyright 1995-2014 - Mersenne Research, Inc.  All rights reserved
+; Copyright 1995-2016 - Mersenne Research, Inc.  All rights reserved
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -27,25 +27,16 @@ IFDEF	X86_64
 INCLUDE ksamd64.inc
 ENDIF
 
-;; MSVC 2005's MASM does not recognize the ROUNDPD instruction.  When I upgrade
-;; to a later version, this macro can be deleted.
+; MASM version 14 (MSVC 2015) does not recognize the PREFETCHWT1 instruction
+; Trick the assembler to output the proper instruction.
 
-IFDEF MSVC2005
-roundpd	MACRO arg1, arg2, arg3
+prefetchwt1 MACRO ops:vararg
 	LOCAL	x, y
-x:	nop				;; Roundpd is 3-byte opcode vs addpd 2 bytes
-	addpd	arg1, arg2		;; Get register byte written in proper spot
-	org	x
-	addpd	arg1, arg2		;; Get prefix byte(s) written in proper spot
-y:
-	org	y-3
-	DB	00Fh			;; Output roundpd's 3 byte opcode
-	DB	03Ah
-	DB	009h
-	org	y+1
-	DB	arg3			;; Output roundpd's immediate byte
+x:	prefetcht1 &ops
+y:	org x+1
+	DB	0Dh
+	org y
 	ENDM
-ENDIF
 
 ;; We must be very careful to obey the various ABIs on the OSes we run.
 ;; These macros help us do just that.

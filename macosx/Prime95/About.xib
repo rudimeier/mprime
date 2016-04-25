@@ -113,7 +113,7 @@
 							<object class="NSTextFieldCell" key="NSCell" id="31801427">
 								<int key="NSCellFlags">68288064</int>
 								<int key="NSCellFlags2">138413056</int>
-								<string key="NSContents">Copyright ©1995-2015</string>
+								<string key="NSContents">Copyright ©1995-2016</string>
 								<reference key="NSSupport" ref="222409550"/>
 								<reference key="NSControlView" ref="883290379"/>
 								<reference key="NSBackgroundColor" ref="557964846"/>

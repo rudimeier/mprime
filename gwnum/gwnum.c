@@ -5,7 +5,7 @@
 | in the multi-precision arithmetic routines.  That is, all routines
 | that deal with the gwnum data type.
 | 
-|  Copyright 2002-2015 Mersenne Research, Inc.  All rights reserved.
+|  Copyright 2002-2016 Mersenne Research, Inc.  All rights reserved.
 +---------------------------------------------------------------------*/
 
 /* Include files */
@@ -22,6 +22,16 @@
 #include "gwtables.h"
 #include "gwutil.h"
 #include "gwdbldbl.h"
+
+//#define GDEBUG_MEM	1			// Print out memory used
+
+/* Option to share sin/cos data where possible amongst several gwnum callers */
+/* There is little downside to enabling this option (more memory allocated) and */
+/* little upside (very slight decrease in working set size and needed memory bandwidth). */
+
+#ifndef GDEBUG_MEM
+#define SHARE_SINCOS_DATA
+#endif
 
 /* Include a random number generator.  For reasons we'll discuss later */
 /* we do not want to use the C runtime library's random number generator */
@@ -1248,7 +1258,9 @@ next2:		while (jmptab->flags & 0x80000000) INC_JMPTAB_1 (jmptab);
 /* Handle benchmarking case that selects the nth FFT implementation */
 /* without regard to any other consideration.  NOTE: Due to the extreme */
 /* penalty a K8 pays for using the movaps instruction that the Core and P4 */
-/* implementations use, we will not benchmark these on a K8. */
+/* implementations use, we will not benchmark these on a K8.  Also, since */
+/* FMA3 FFTs always outperform their non-FMA3 alternatives, we'll skip the */
+/* non-FMA3 FFTs. */
 
 		if (gwdata->bench_pick_nth_fft) {
 			if (jmptab->proc_ptr == prev_proc_ptrs[0]) goto next3;
@@ -1259,6 +1271,8 @@ next2:		while (jmptab->flags & 0x80000000) INC_JMPTAB_1 (jmptab);
 			if (CPU_ARCHITECTURE == CPU_ARCHITECTURE_AMD_K8 &&
 			    (jmptab->flags & 0x1FF) != 0 &&
 			    (arch == ARCH_P4 || arch == ARCH_CORE))
+				goto next3;
+			if (gwdata->cpu_flags & CPU_FMA3 && (arch == ARCH_P4 || arch == ARCH_CORE))
 				goto next3;
 			gwdata->bench_pick_nth_fft--;
 			if (gwdata->bench_pick_nth_fft) goto next3;
@@ -1538,6 +1552,113 @@ next3:		prev_proc_ptrs[4] = prev_proc_ptrs[3];
 	return (0);
 }
 
+/* Code to manage sharing sin/cos data where possible amongst several gwnum callers */
+
+#define FIXED_PASS1_SINCOS_DATA			1
+#define PASS2_REAL_SINCOS_DATA			2
+#define PASS2_COMPLEX_SINCOS_DATA		3
+
+struct shareable_sincos_data {
+	struct shareable_sincos_data *next;	/* Next in linked list of shareable data blocks */
+	double	*data;				/* Shareable data */
+	size_t	data_size;			/* Size of the shareable data */
+	int	use_count;			/* Count of times data is shared */
+};
+struct shareable_sincos_data *shareable_data = NULL;  /* Linked list of shareable data blocks */
+gwmutex	shareable_lock;				/* This mutex limits one caller into sharing routines */
+int	shareable_lock_initialized = FALSE;	/* Whether shareable mutex is initialized */
+
+/* Share sin/cos data where possible amongst several gwnum callers */
+
+double *share_sincos_data (
+	gwhandle *gwdata,	/* Placeholder for gwnum global data */
+	int	table_type,	/* Type of the sin/cos table defined above */
+	double *table,		/* Sin/cos data to share */
+	size_t	table_size)	/* Size of the sin/cos data */
+{
+#ifdef SHARE_SINCOS_DATA
+	struct shareable_sincos_data *p;	/* Ptr to a shareable data block */
+
+/* Initialize the mutex if necessary, then grab the lock */
+
+	if (!shareable_lock_initialized) {
+		gwmutex_init (&shareable_lock);
+		shareable_lock_initialized = TRUE;
+	}
+	gwmutex_lock (&shareable_lock);
+
+/* Look through the list of shareable blocks looking for a match */
+/* If we find a match, use it! */
+
+	for (p = shareable_data; p != NULL; p = p->next) {
+		if (p->data_size == table_size && !memcmp (p->data, table, table_size)) {
+			p->use_count++;
+			gwmutex_unlock (&shareable_lock);
+			return (p->data);
+		}
+	}
+
+/* Unfortunately, no match.  Copy the data so that a future gwnum caller can share the data */
+
+	p = (struct shareable_sincos_data *) malloc (sizeof (struct shareable_sincos_data));
+	if (p == NULL) {
+		gwmutex_unlock (&shareable_lock);
+		return (table);
+	}
+	p->data = (double *) aligned_malloc (table_size, 4096);
+	if (p->data == NULL) {
+		free (p);
+		gwmutex_unlock (&shareable_lock);
+		return (table);
+	}
+	memcpy (p->data, table, table_size);
+	p->data_size = table_size;
+	p->use_count = 1;
+	p->next = shareable_data;
+	shareable_data = p;
+	gwmutex_unlock (&shareable_lock);
+	return (p->data);
+#else
+	return (table);
+#endif
+}
+
+/* Free shared sin/cos data */
+
+void unshare_sincos_data (
+	double *table)		/* Possibly shared sin/cos data */
+{
+#ifdef SHARE_SINCOS_DATA
+	struct shareable_sincos_data *p;		/* Ptr to a shareable data block */
+	struct shareable_sincos_data **ptr_to_p;	/* Linked list pointer to patch */
+
+/* Ignore NULL table.  Should only happen when there are errors during gwsetup. */
+
+	if (table == NULL) return;
+
+/* Grab the lock */
+
+	if (!shareable_lock_initialized) return;
+	gwmutex_lock (&shareable_lock);
+
+/* Look through the list of shareable blocks to find this shareable block */
+/* Decrement the use count and when it reaches zero, free the memory */
+
+	for (ptr_to_p = &shareable_data; (p = *ptr_to_p) != NULL; ptr_to_p = &p->next) {
+		if (p->data != table) continue;
+		if (--p->use_count == 0) {
+			aligned_free (p->data);
+			*ptr_to_p = p->next;
+			free (p);
+		}
+		break;
+	}
+
+/* Free the lock and return */
+
+	gwmutex_unlock (&shareable_lock);
+#endif
+}
 
 /* Initialize gwhandle for a future gwsetup call. */
 /* The gwinit function has been superceeded by gwinit2.  By passing in the */
@@ -2370,6 +2491,7 @@ int internal_gwsetup (
 			ASSERTG (((tables - gwdata->gwnum_memory) & 7) == 0);
 			asm_data->sincos2 = tables;
 			tables = yr4dwpn_build_fixed_pass1_table (gwdata, tables);
+			asm_data->sincos2 = share_sincos_data (gwdata, FIXED_PASS1_SINCOS_DATA, asm_data->sincos2, (char *) tables - (char *) asm_data->sincos2);
 
 /* Build the sin/cos table used in complex pass 2 blocks */
 /* The pass 2 tables are the same as for a traditional radix-4 FFT */		
@@ -2377,9 +2499,11 @@ int internal_gwsetup (
 			ASSERTG (((tables - gwdata->gwnum_memory) & 7) == 0);
 			asm_data->xsincos_complex = tables;
 			tables = yr4_build_pass2_complex_table (gwdata, tables);
+			asm_data->xsincos_complex = share_sincos_data (gwdata, PASS2_COMPLEX_SINCOS_DATA, asm_data->xsincos_complex, (char *) tables - (char *) asm_data->xsincos_complex);
 			ASSERTG (((tables - gwdata->gwnum_memory) & 7) == 0);
 			asm_data->sincos3 = tables;
 			tables = yr4_build_pass2_real_table (gwdata, tables);
+			asm_data->sincos3 = share_sincos_data (gwdata, PASS2_REAL_SINCOS_DATA, asm_data->sincos3, (char *) tables - (char *) asm_data->sincos3);
 
 /* Allocate a table for carries.  Init with YMM_BIGVAL.  For better distribution of data */
 /* in the L2 cache, make this table contiguous with all other data used in the first pass */
@@ -2415,8 +2539,7 @@ int internal_gwsetup (
 				tables = (double *) ((char *) tables + gwdata->SCRATCH_SIZE);
 			}
 
-/* Build the table of big vs. little flags.  This cannot be last table */
-/* built as xnorm_2d macro reads 2 bytes past the end of the array. */
+/* Build the table of big vs. little flags. */
 
 			ASSERTG (((tables - gwdata->gwnum_memory) & 7) == 0);
 			asm_data->norm_biglit_array = tables;
@@ -2614,9 +2737,11 @@ int internal_gwsetup (
 			ASSERTG (((tables - gwdata->gwnum_memory) & 15) == 0);
 			asm_data->sincos1 = tables;
 			tables = r4delay_build_fixed_premult_table (gwdata, tables);
+			asm_data->sincos1 = share_sincos_data (gwdata, FIXED_PASS1_SINCOS_DATA, asm_data->sincos1, (char *) tables - (char *) asm_data->sincos1);
 			ASSERTG (((tables - gwdata->gwnum_memory) & 15) == 0);
 			asm_data->sincos2 = tables;
 			tables = r4delay_build_fixed_pass1_table (gwdata, tables);
+			asm_data->sincos2 = share_sincos_data (gwdata, FIXED_PASS1_SINCOS_DATA, asm_data->sincos2, (char *) tables - (char *) asm_data->sincos2);
 
 /* Build the sin/cos table used in complex pass 2 blocks */
 /* The pass 2 tables are the same as for a traditional radix-4 FFT */		
@@ -2624,9 +2749,11 @@ int internal_gwsetup (
 			ASSERTG (((tables - gwdata->gwnum_memory) & 15) == 0);
 			asm_data->xsincos_complex = tables;
 			tables = r4_build_pass2_complex_table (gwdata, tables);
+			asm_data->xsincos_complex = share_sincos_data (gwdata, PASS2_COMPLEX_SINCOS_DATA, asm_data->xsincos_complex, (char *) tables - (char *) asm_data->xsincos_complex);
 			ASSERTG (((tables - gwdata->gwnum_memory) & 15) == 0);
 			asm_data->sincos3 = tables;
 			tables = r4_build_pass2_real_table (gwdata, tables);
+			asm_data->sincos3 = share_sincos_data (gwdata, PASS2_REAL_SINCOS_DATA, asm_data->sincos3, (char *) tables - (char *) asm_data->sincos3);
 
 /* Allocate a table for carries.  Init with XMM_BIGVAL.  For best */
 /* distribution of data in the L2 cache, make this table contiguous */
@@ -5375,6 +5502,11 @@ void gwdone (
 
 	term_ghandle (&gwdata->gdata);
 	if (gwdata->asm_data != NULL) {
+		struct gwasm_data *asm_data = (struct gwasm_data *) gwdata->asm_data;
+		unshare_sincos_data (asm_data->sincos1);			// SSE2
+		unshare_sincos_data (asm_data->sincos2);			// SSE2 & AVX
+		unshare_sincos_data (asm_data->xsincos_complex);		// SSE2 & AVX
+		unshare_sincos_data (asm_data->sincos3);			// SSE2 & AVX
 		aligned_free ((char *) gwdata->asm_data - NEW_STACK_SIZE);
 		gwdata->asm_data = NULL;
 	}
@@ -8075,7 +8207,7 @@ void gwsquare_carefully (
 	gwnum	s)		/* Source and destination */
 {
 	struct gwasm_data *asm_data;
-	gwnum	tmp1, tmp2;
+	gwnum	tmp1;
 	double	saved_addin_value;
 	unsigned long saved_extra_bits;
 
@@ -8086,11 +8218,10 @@ void gwsquare_carefully (
 		gw_random_number (gwdata, gwdata->GW_RANDOM);
 	}
 
-/* Save and clear the addin value */
+/* Save the addin value */
 
 	asm_data = (struct gwasm_data *) gwdata->asm_data;
 	saved_addin_value = asm_data->ADDIN_VALUE;
-	asm_data->ADDIN_VALUE = 0.0;
 
 /* Make sure we do not do addquick when computing s+random. */
 /* If we do not do this, then the non-randomness of s can swamp */
@@ -8105,46 +8236,19 @@ void gwsquare_carefully (
 /* Now do the squaring using two multiplies and several adds. */
 
 	tmp1 = gwalloc (gwdata);
-	tmp2 = gwalloc (gwdata);
 	gwstartnextfft (gwdata, 0);			/* Disable POSTFFT */
-	gwfft (gwdata, gwdata->GW_RANDOM, tmp2);
-	gwfftfftmul (gwdata, tmp2, tmp2, tmp2);		/* Compute random^2 (we could compute this once and save it) */
 	gwaddsub4 (gwdata, s, gwdata->GW_RANDOM, tmp1, s); /* Compute s+random and s-random */
-	asm_data->ADDIN_VALUE = saved_addin_value;	/* Restore the addin value */
-	gwfft (gwdata, tmp1, tmp1);
-	gwfftmul (gwdata, tmp1, s);			/* Compute (s+random)(s-random) */
-	gwadd3 (gwdata, s, tmp2, s);			/* Calc s^2 from 2 results */
-
-/* Now do the squaring using three multiplies and adds */
-/* Note that during the calculation of s*random we must relax the */
-/* SUMINP != SUMOUT limit.  This is because s may be non-random. */
-/* For example, in the first iterations of 2*3^500327-1, s is mostly */
-/* large positive values.  This means we lose some of the lower bits */
-/* of precision when we calculate SUMINP.  To combat this problem we */
-/* increase MAXDIFF during the s*random calculation. */
-
-#ifdef OLD_METHOD_OF_SQUARING_CAREFULLY
-	tmp1 = gwalloc (gwdata);
-	tmp2 = gwalloc (gwdata);
-	gwstartnextfft (gwdata, 0);		/* Disable POSTFFT */
-	gwadd3 (gwdata, s, gwdata->GW_RANDOM, tmp1); /* Compute s+random */
-	gwfft (gwdata, gwdata->GW_RANDOM, tmp2);
-	gwdata->MAXDIFF *= 1024.0;
-	gwfftmul (gwdata, tmp2, s);		/* Compute s*random */
-	gwdata->MAXDIFF /= 1024.0;
-	gwfftfftmul (gwdata, tmp2, tmp2, tmp2);	/* Compute random^2 */
-	asm_data->ADDIN_VALUE = saved_addin_value;/* Restore the addin value */
-	gwsquare (gwdata, tmp1);		/* Compute (s+random)^2 */
-	gwsubquick (gwdata, tmp2, tmp1);	/* Calc s^2 from 3 results */
-	gwaddquick (gwdata, s, s);
-	gwsub3 (gwdata, tmp1, s, s);
-#endif
+	gwmul (gwdata, tmp1, s);			/* Compute (s+random)(s-random) */
+	asm_data->ADDIN_VALUE = 0.0;			/* Clear the addin value */
+	gwfft (gwdata, gwdata->GW_RANDOM, tmp1);
+	gwfftfftmul (gwdata, tmp1, tmp1, tmp1);		/* Compute random^2 (we could compute this once and save it) */
+	gwadd3 (gwdata, s, tmp1, s);			/* Calc s^2 from 2 results */
 
 /* Restore state, free memory and return */
 
+	asm_data->ADDIN_VALUE = saved_addin_value;	/* Restore the addin value */
 	gwdata->EXTRA_BITS = saved_extra_bits;
 	gwfree (gwdata, tmp1);
-	gwfree (gwdata, tmp2);
 }
 
 /* Multiply numbers using a slower method that will have reduced */
@@ -8157,7 +8261,7 @@ void gwmul_carefully (
 	gwnum	t)		/* Source and destination */
 {
 	struct gwasm_data *asm_data;
-	gwnum	tmp1, tmp2, tmp3, tmp4;
+	gwnum	tmp1, tmp3, tmp4;
 	double	saved_addin_value;
 	unsigned long saved_extra_bits;
 
@@ -8172,9 +8276,8 @@ void gwmul_carefully (
 
 	asm_data = (struct gwasm_data *) gwdata->asm_data;
 	saved_addin_value = asm_data->ADDIN_VALUE;
-	asm_data->ADDIN_VALUE = 0.0;
 
-/* Make sure we do not do addquick when computing s+random. */
+/* Make sure we do not do addquick when computing s+random and t+random. */
 
 	saved_extra_bits = gwdata->EXTRA_BITS;
 	gwdata->EXTRA_BITS = 0;
@@ -8182,60 +8285,32 @@ void gwmul_carefully (
 /* Now do the multiply using three multiplies and several adds */
 
 	tmp1 = gwalloc (gwdata);
-	tmp2 = gwalloc (gwdata);
 	tmp3 = gwalloc (gwdata);
 	tmp4 = gwalloc (gwdata);
-
-	gwstartnextfft (gwdata, 0);			/* Disable POSTFFT */
-	gwfft (gwdata, gwdata->GW_RANDOM, tmp2);
-	gwfftfftmul (gwdata, tmp2, tmp2, tmp2);		/* Compute random^2 (we could compute this once and save it) */
 
 	gwadd3 (gwdata, s, gwdata->GW_RANDOM, tmp1);	/* Compute s+random */
 	gwadd3 (gwdata, t, gwdata->GW_RANDOM, t);	/* Compute t+random */
-	asm_data->ADDIN_VALUE = saved_addin_value;	/* Restore addin value */
 	gwadd3 (gwdata, tmp1, gwdata->GW_RANDOM, tmp3);	/* Compute s+2*random */
 	gwadd3 (gwdata, t, gwdata->GW_RANDOM, tmp4);	/* Compute t+2*random */
 
-	gwfft (gwdata, tmp1, tmp1);
-	gwfftmul (gwdata, tmp1, t);			/* Compute (s+r)*(t+r) = st + rs + rt + rr + addin */
+	gwstartnextfft (gwdata, 0);			/* Disable POSTFFT */
+	gwmul (gwdata, tmp1, t);			/* Compute (s+r)*(t+r) = st + rs + rt + rr + addin */
+	gwmul (gwdata, tmp3, tmp4);			/* Compute (s+2r)*(t+2r) = st + 2rs + 2rt + 4rr + addin */
+
+	asm_data->ADDIN_VALUE = 0.0;
+	gwfft (gwdata, gwdata->GW_RANDOM, tmp1);
+	gwfftfftmul (gwdata, tmp1, tmp1, tmp1);		/* Compute random^2 (we could compute this once and save it) */
+
 	gwaddquick (gwdata, t, t);			/* Compute 2st + 2rs + 2rt + 2rr + 2addin */
-
-	gwfft (gwdata, tmp3, tmp3);
-	gwfftmul (gwdata, tmp3, tmp4);			/* Compute (s+2r)*(t+2r) = st + 2rs + 2rt + 4rr + addin */
-
 	gwsubquick (gwdata, tmp4, t);			/* Compute st - 2rr + addin */
-	gwaddquick (gwdata, tmp2, t);			/* Compute st - rr + addin */
-	gwadd (gwdata, tmp2, t);			/* Compute st + addin */
-
-/* Now do the multiply using four multiplies and adds */
-
-#ifdef OLD_WAY_TO_MUL_CAREFULLY
-	tmp1 = gwalloc (gwdata);
-	tmp2 = gwalloc (gwdata);
-	tmp3 = gwalloc (gwdata);
-	tmp4 = gwalloc (gwdata);
-	gwcopy (gwdata, s, tmp4);
-	gwstartnextfft (gwdata, 0);		/* Disable POSTFFT */
-	gwadd3 (gwdata, s, gwdata->GW_RANDOM, tmp1); /* Compute s+random */
-	gwadd3 (gwdata, t, gwdata->GW_RANDOM, tmp3); /* Compute t+random */
-	gwfft (gwdata, gwdata->GW_RANDOM, tmp2);
-	gwdata->MAXDIFF *= 1024.0;
-	gwfftmul (gwdata, tmp2, tmp4);		/* Compute s*random */
-	gwfftmul (gwdata, tmp2, t);		/* Compute t*random */
-	gwdata->MAXDIFF /= 1024.0;
-	gwfftfftmul (gwdata, tmp2, tmp2, tmp2);	/* Compute random^2 */
-	asm_data->ADDIN_VALUE = saved_addin_value; /* Restore addin value */
-	gwmul (gwdata, tmp1, tmp3);	/* Compute (s+random)*(t+random) */
-	gwsub (gwdata, tmp2, tmp3);		/* Subtract random^2 */
-	gwsub (gwdata, t, tmp3);
-	gwsub3 (gwdata, tmp3, tmp4, t);
-#endif
+	gwaddquick (gwdata, tmp1, t);			/* Compute st - rr + addin */
+	gwadd (gwdata, tmp1, t);			/* Compute st + addin */
 
 /* Restore state, free memory and return */
 
 	gwdata->EXTRA_BITS = saved_extra_bits;
+	asm_data->ADDIN_VALUE = saved_addin_value;
 	gwfree (gwdata, tmp1);
-	gwfree (gwdata, tmp2);
 	gwfree (gwdata, tmp3);
 	gwfree (gwdata, tmp4);
 }

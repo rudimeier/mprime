@@ -1,4 +1,4 @@
-; Copyright 2011-2015 - Mersenne Research, Inc.  All rights reserved.
+; Copyright 2011-2016 - Mersenne Research, Inc.  All rights reserved.
 ; Author:  George Woltman
 ; Email: woltman@alum.mit.edu
 ;
@@ -3075,18 +3075,19 @@ ENDIF
 ;; Rearranging:  value = x - next carry * base + BIGVAL * base - BIGVAL
 ;; And:  value = x - (next_carry - (BIGVAL - BIGVAL / base)) * base
 
-;;; BUG - need 3rd basereg indexed set of constants
+;;; BUG - need 3rd basereg indexed set of constants.  This increases load pressure.
+;;; normalization code is already under serious load pressure.
 
 IF (@INSTR(,%yarch,<FMA3>) NE 0)
-;; Timings indicate this takes 20.4 clocks vs. 22.0 clocks for the existing code
+;; Timings indicate this takes ??? clocks vs. 22.0 clocks for the existing code
 new_ynorm_wpn_nobase2_noconst MACRO basereg, basereg2, basereg3, basereg4
 	vmovapd ymm4, YMM_LIMIT_BIGMAX[basereg]			;; Load constant for creating next carry
 	yfmaddpd ymm2, ymm0, YMM_LIMIT_INVERSE[basereg], ymm4	;; next carry = x / base + BIGVAL	; 6-10
 	vmovapd ymm5, YMM_LIMIT_BIGMAX[basereg2]		;; Load constant for creating next carry
 	yfmaddpd ymm3, ymm1, YMM_LIMIT_INVERSE[basereg2], ymm5	;; next carry = x / base + BIGVAL	; 7-11
-	vmovapd ymm11, YMM_LIMIT_BIGMAX[basereg2]		;; Load constant for creating next carry
+	vmovapd ymm11, YMM_LIMIT_BIGMAX[basereg3]		;; Load constant for creating next carry
 	yfmaddpd ymm9, ymm7, YMM_LIMIT_INVERSE[basereg3], ymm11	;; next carry = x / base + BIGVAL	; 8-12
-	vmovapd ymm12, YMM_LIMIT_BIGMAX[basereg2]		;; Load constant for creating next carry
+	vmovapd ymm12, YMM_LIMIT_BIGMAX[basereg4]		;; Load constant for creating next carry
 	yfmaddpd ymm10, ymm8, YMM_LIMIT_INVERSE[basereg4], ymm12 ;; next carry = x / base + BIGVAL	; 9-13
 	vsubpd ymm4, ymm2, ymm4					;; y = next carry - BIGVAL		; 11-13
 	vsubpd ymm5, ymm3, ymm5					;; y = next carry - BIGVAL		; 12-14
@@ -3095,8 +3096,8 @@ new_ynorm_wpn_nobase2_noconst MACRO basereg, basereg2, basereg3, basereg4
 ;; BUG - s.b. BASE not BIGMAX
 	yfnmaddpd ymm4, ymm4, YMM_LIMIT_BIGMAX[basereg], ymm0	;; new value = x - y * base		; 14-18
 	yfnmaddpd ymm5, ymm5, YMM_LIMIT_BIGMAX[basereg2], ymm1	;; new value = x - y * base		; 15-19
-	yfnmaddpd ymm11, ymm11, YMM_LIMIT_BIGMAX[basereg], ymm7	;; new value = x - y * base		; 16-20
-	yfnmaddpd ymm12, ymm12, YMM_LIMIT_BIGMAX[basereg2], ymm8 ;; new value = x - y * base		; 17-21
+	yfnmaddpd ymm11, ymm11, YMM_LIMIT_BIGMAX[basereg3], ymm7 ;; new value = x - y * base		; 16-20
+	yfnmaddpd ymm12, ymm12, YMM_LIMIT_BIGMAX[basereg4], ymm8 ;; new value = x - y * base		; 17-21
 ENDM
 ENDIF
 
